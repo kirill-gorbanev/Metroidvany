@@ -1,0 +1,30 @@
+# Unity — пересоздаётся
+MetroidvanyGame/[Ll]ibrary/
+MetroidvanyGame/[Tt]emp/
+MetroidvanyGame/[Ll]ogs/
+MetroidvanyGame/[Oo]bj/
+MetroidvanyGame/[Bb]uild/
+MetroidvanyGame/[Bb]uilds/
+MetroidvanyGame/[Uu]serSettings/
+MetroidvanyGame/Captures/
+MetroidvanyGame/*.csproj
+MetroidvanyGame/*.sln
+MetroidvanyGame/.vs/
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+sysinfo.txt
+crashlytics-build.properties
+
+# Тяжёлое вне проекта (исходники ассетов, рендеры, экспорт)
+assets_ext/
+renders/
+export/
+*.blend
+*.blend1
+*.blend2
+
+# Системное
+Thumbs.db
+desktop.ini
+.DS_Store

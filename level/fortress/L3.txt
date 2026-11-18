@@ -1,0 +1,84 @@
+# сгенерировано _gen.py — правь генератор, не карту
+room q name="Штаб" floor=wood walls=plaster ceiling=wood plain=1
+room l name="Пост лучника" floor=wood walls=stone ceiling=wood plain=1
+room u name="Лебёдочная" floor=wood walls=stone ceiling=wood plain=1
+map
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                     - - w - w - -
+                    |q q q q q q|H|
+                                 -
+                    |v q q q q qw
+
+                    |v q q q q q|
+
+                    |q q q q qr |
+
+                    wq q q q qr |
+                               r
+                    |q q q q q q|
+                     - w - - w -
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                               - w - -
+                                             #     u u|
+                                               r r
+                                            |^ u u u uw
+       w - - -
+      |l > > lw                             |^ u u u u|
+
+      wl l l l|                             |u u u u u|
+                                             - w w w -
+      |l l l l|
+         r r
+      |l    rl|
+       w - - -
+
+
+
+
+
+

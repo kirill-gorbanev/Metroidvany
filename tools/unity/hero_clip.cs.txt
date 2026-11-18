@@ -1,0 +1,6 @@
+var h = UnityEngine.GameObject.Find("Hero"); var c = h.GetComponent<Fortress.Hero.HeroController>(); var b = h.GetComponentInChildren<Fortress.Hero.HeroBody>();
+var crate = UnityEngine.GameObject.Find("Ящик 15 кг"); var col = crate.GetComponentInChildren<UnityEngine.Collider>();
+var hp = b.HandPosition; var inside = col.ClosestPoint(hp) == hp;
+var p = h.transform.position;
+global::FortressSetup.Shot("D:/Metroidvany/renders/hero/t_clip.png", p + new UnityEngine.Vector3(1.0f, 0.8f, 0.2f), p + new UnityEngine.Vector3(-0.1f, 0.4f, 0.6f));
+return "hand=" + hp.ToString("F2") + " insideCrate=" + inside + " crateBounds=" + col.bounds.min.ToString("F2") + ".." + col.bounds.max.ToString("F2");

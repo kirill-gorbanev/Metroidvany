@@ -1,0 +1,46 @@
+# сгенерировано _gen.py из _guards.py — правь их, не этот файл
+guard G1 role=jailer L0 18,29 face=N walk=1.5 run=5.8 mask=walk,door,stair
+route G1 loop
+wp G1 L0 18,29 wait=4 look=E do=take:kitchen_bowls
+wp G1 L-1 20,27
+wp G1 L-1 14,27 wait=3 look=W do=put:bowls
+wp G1 L-1 9,27 wait=4 look=N do=check:cell1_bed
+wp G1 L-1 11,27 wait=3 look=S
+wp G1 L-1 14,29 wait=8 look=S sit=jail_post
+guard G2 role=wounded L-1 16,28 face=E
+sleep G2 bed=inf_bed1 wake=12 on_wake=shout
+guard G3 role=patrol L0 13,25 face=W walk=2.0 run=5.8 mask=walk,door,stair
+route G3 loop
+wp G3 L0 13,25 wait=20 look=W sit=hall_post
+wp G3 L0 9,25
+wp G3 L0 8,23
+wp G3 L0 8,17
+wp G3 L0 14,15 wait=4 look=S
+wp G3 L0 24,11 wait=5 look=S
+wp G3 L0 21,19 wait=3 look=E
+wp G3 L0 12,23
+wp G3 L0 13,25 wait=20 look=W sit=hall_post
+wp G3 L0 17,29
+wp G3 L0 18,27
+wp G3 L0 24,26 wait=2 look=N
+wp G3 L0 30,24 wait=3 look=E
+wp G3 L0 22,20 wait=3 look=S
+wp G3 L0 13,23
+guard G4 role=sleeper L2 10,24 face=E
+sleep G4 bed=bar_bed_g4 wake=12 on_wake=get_up
+guard G5 role=watch L4 12,25 face=S walk=1.2 mask=walk,door,stair
+route G5 loop
+wp G5 L4 12,25 wait=8 look=S sit=watch_stool
+wp G5 L4 14,28 wait=6 look=E
+wp G5 L4 12,28 wait=4 look=N
+wp G5 L4 11,26 wait=4 look=W
+guard G6 role=archer L3 3,4 face=S walk=1.6 run=5.8 mask=walk,door,stair
+route G6 back
+wp G6 L3 3,4 wait=6 look=S
+wp G6 L2 6,4
+wp G6 L2 14,6
+wp G6 L2 24,7 wait=4 look=N do=take:arrows
+wp G6 L2 34,6
+wp G6 L2 44,5 wait=3 look=E
+wp G6 L2 42,11
+wp G6 L2 42,17 wait=5 look=E

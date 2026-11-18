@@ -1,0 +1,14 @@
+var sb = new System.Text.StringBuilder();
+var bench = UnityEngine.Object.FindFirstObjectByType<Fortress.Rig.Tests.RigTestBench>();
+var fl = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+sb.Append("t=" + UnityEngine.Time.time.ToString("F1") + " fps=" + (1f / UnityEngine.Time.smoothDeltaTime).ToString("F0") + " ev='" + bench.GetType().GetField("lastEvent", fl).GetValue(bench) + "' ");
+var ar = UnityEngine.GameObject.Find("Ситуация");
+if (ar != null) foreach (var r in ar.GetComponentsInChildren<Fortress.Rig.V3.HumanReaction>()) {
+  var m = r.Motor; var a = r.Animate;
+  var v = m.Velocity;
+  sb.Append("| " + r.name.Substring(0, 4) + (r.Npc != null ? "[" + r.Npc.Say + "]" : "") + " p=" + m.transform.position.ToString("F2") + " v=" + v.magnitude.ToString("F2") + " in=" + m.Intent.magnitude.ToString("F2") + " kn=" + m.Knock.magnitude.ToString("F2"));
+  sb.Append(" st=" + a.StepWeight.ToString("F1") + "/" + a.Steps + " sw=" + r.SwayHold.ToString("F1") + " pk=" + r.PeakHold.ToString("F0") + " lean=" + a.LeanPitch.ToString("F0") + "," + a.LeanRoll.ToString("F0") + " an=" + a.AnimSpeed.ToString("F2") + " hits=" + r.Hits);
+  if (r.Events.Count > 0) { sb.Append(" EV[" + string.Join(" ; ", r.Events) + "]"); r.Events.Clear(); }
+  r.PeakHold = 0f; r.SwayHold = 0f;
+}
+return sb.ToString();

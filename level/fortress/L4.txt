@@ -1,0 +1,82 @@
+# сгенерировано _gen.py — правь генератор, не карту
+room o name="Дозорная" floor=wood walls=plaster ceiling=wood plain=1
+map
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                     - - W - - - -
+                    |o o o o o o|H|
+                     r           -
+                    | ro o o o oW
+
+                    | ro o o o o|
+
+                    |o o o o o v|
+
+                    Wo o o o o v|
+
+                    |o o o o o o|
+                     - W - W - -
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                             P P P P P
+                                            P: : : : :P
+
+                                            P p: : : :P
+       P P P P
+      P:p    :P                             P p: : : :P
+         p p                                 p
+      P: : : :P                             P: : : : :P
+                                             P P P P P
+      P: : : :P
+
+      P: : : :P
+       P P P P
+
+
+
+
+
+

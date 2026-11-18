@@ -1,0 +1,84 @@
+# сгенерировано _gen.py — правь генератор, не карту
+room h name="Зал, галерея" floor=wood walls=stone ceiling=wood plain=1
+room g name="Стенная галерея" floor=stone walls=stone ceiling=stone plain=1
+room t name="Башня лучника, нижний ярус" floor=wood walls=stone ceiling=wood plain=1
+map
+
+
+
+
+
+
+
+                                                                                     # # # #
+
+                                                                                     # # # #
+
+           # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+           # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+           # #                  p: : : : : : : : : : : ^p                            # #
+
+           # #                  p: : : : : : : : : : : ^p                            # #
+               r r r - - - - w - -
+           # # = = =Dh h h h h h|H|: : : : : : : : : : ^p                            # #
+                       r r r r   -
+          |g gD= = =|vr       rhD: : : : : : : : : : : :p                            # #
+               r r r             p p p p p p p p p p p p
+          |g g|     |vr       rh|                                                    # #
+
+          |g g|     |           |                                                    # #
+
+          |g g|     w           |                                                    # #
+
+          wg g|     |           w                                                    # #
+             r       - w - w - -
+          |gr |                                                                      # #
+
+          |gr |                                                                      # #
+
+          |g g|                                                                      # #
+
+          |g g|                                                                      # #
+
+          |g g|                                                                      # #
+
+          |g gw                                                                   !^ # #
+
+          wg g|                                                                   !^ # #
+
+          |g g|                                                                   r= # #
+
+          |g gw                                                                      # #
+
+          |g g|                                                                      # #
+
+          |g g|                                                                      # #
+
+          |g gw                                                                      # #
+
+          wg g|                                                                      # #
+
+          |g g|                                                                      # #
+
+          |g gw                                                                      # #
+
+          |g g|                              # # # # #                               # #
+                                                               p ! ! !
+          |g g|                              # # # # #         : > > > #             # #
+       w w D -
+      |t t t t # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+      |^ t t t # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+      |^ t t tw                                                                      # # # #
+
+      |t t t tw                                                                      # # # #
+       - - - -
+
+
+
+
+
+

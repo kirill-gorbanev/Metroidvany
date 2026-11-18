@@ -1,0 +1,19 @@
+room a name="Камера" floor=stone walls=stone narrow=1
+room b name="Коридор" floor=stone walls=stone narrow=1
+room k name="Цистерна" floor=stone walls=stone narrow=1
+map
+                     
+ # # # # # # # # # # 
+                     
+ # a a # # # # # # # 
+   X B               
+ # b b b bDk k # # # 
+                     
+ # # # # H|k L # # # 
+                     
+ # # # # # # # # # # 
+                     
+ # # # # # # # # # # 
+                     
+ # # # # # # # # # # 
+                     

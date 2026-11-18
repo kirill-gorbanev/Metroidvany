@@ -1,0 +1,165 @@
+            else if (mode == Mode.Free || mode == Mode.Carry)
+            {
+                Vector3 want;
+                contact = false;
+                Vector3 cursorP = hit ? rh.point : ray.GetPoint(3f);
+                if (mode == Mode.Free && reachTo.HasValue)
+                {
+                    // перехват: рука сама переставляется к следующей точке по жесту
+                    want = reachTo.Value + reachToN * 0.025f;
+                    contact = true; contactPoint = reachTo.Value; contactN = reachToN; lastContactT = Time.time;
+                }
+                else if (mode == Mode.Free && Vector3.Distance(S, cursorP) <= reachMax + assistRadius
+                         && FindGrip(cursorP, assistRadius, out var ap, out var an, out _) && Vector3.Distance(S, ap) <= reachMax)
+                {
+                    // автонаведение: ближайший выступ/поверхность у курсора (выступы важнее плоскостей)
+                    want = ap + an * 0.025f;
+                    contact = true; contactN = an; contactPoint = ap; lastContactT = Time.time;
+                }
+                else
+                {
+                    Vector3 p = cursorP;
+                    if (mode == Mode.Carry) p += Vector3.up * carryLift;
+                    // курсор на голове (луч сквозь своё тело) — ношу к макушке
+                    Vector3 top = body.HeadTop;
+                    if (mode == Mode.Carry && Vector3.Cross(ray.direction, top - ray.origin).magnitude < 0.22f)
+                        p = top + Vector3.up * 0.10f;
+                    want = S + Vector3.ClampMagnitude(p - S, reachMax);
+                    float gy = GroundY() + 0.03f;
+                    if (want.y < gy) want.y = gy;
+                }
+                want = ShoulderCone(S, want);
+                want = ClipByPlanes(S, want);
+                handPos = Vector3.SmoothDamp(handPos, want, ref handVel, reachTo.HasValue ? handSmooth * 0.6f : handSmooth, handMaxSpeed, dt);
+
+                if (mode == Mode.Free)
+                {
+                    if (reachTo.HasValue)
+                    {
+                        // перехват долетел — схватиться (ЛКМ всё ещё держится)
+                        if (!hold || Time.time > reachUntil) reachTo = null;
+                        else if (Vector3.Distance(handPos, reachTo.Value) < 0.06f)
+                        {
+                            var rt = reachTo.Value; reachTo = null;
+                            if (FindGrip(rt, grabRadius, out var gp2, out var gn2, out var gc2)) BeginGrip(gp2, gn2, gc2);
+                            else BeginGrip(rt, reachToN, null);
+                        }
+                    }
+                    // хват: нажатие (или буфер нажатия) + рука у поверхности/выступа (автозацеп r) или «койот»
+                    else if (hold && (down || Time.time - pressT <= grabBuffer))
+                    {
+                        if (FindGrip(handPos, grabRadius, out var gp, out var gn, out var gc))
+                            BeginGrip(gp, gn, gc);
+                        else if (Time.time - lastContactT <= coyoteTime)
+                            BeginGrip(contactPoint, contactN, null);
+                    }
+                    if (click && pressHit) TurnToward(pressPoint);       // клик по земле вне досягаемости — развернуться
+                }
+                else if (carried)
+                {
+                    // несём: предмет в руке
+                    carried.MovePosition(handPos + carryOffset);
+                    carried.MoveRotation(carryRot);
+                    if (up)
+                    {
+                        float sp = handVelS.magnitude;
+                        if (sp > throwSpeed) Throw(handVelS * throwGain);
+                        else if (Vector3.Distance(handPos, body.HeadTop) < headLockRadius && !onHead) PutOnHead();
+                        else Place();
+                    }
+                }
+            }
+            else // Mode.Grab
+            {
+                Vector3 anchor = anchorT ? anchorT.TransformPoint(anchorLocal) : anchorLocal;
+                handPos = anchor + anchorN * 0.025f;
+                Vector3 toR = Vector3.ProjectOnPlane(anchor - transform.position, Vector3.up);
+                Vector3 dirA = toR.sqrMagnitude > 1e-3f ? toR.normalized : transform.forward;
+                Vector3 sideA = Vector3.Cross(Vector3.up, dirA);
+                Vector3 toA = Vector3.ProjectOnPlane(anchor - S, Vector3.up);
+                float along = Vector3.Dot(-dragW, dirA) * pullGain;            // мышь на себя → тело вперёд (зеркально)
+                float side = Vector3.Dot(-dragW, sideA) * pullGain;            // вбок → разворот вокруг руки
+                float swipe = -along / dt;                                       // >0 — жест от себя
+                float vmax = vmaxBody * dt;
+                bool held = heldRb != null;                                      // держим подвижный предмет
+
+                if (held && swipe > swipeSpeed)
+                {
+                    // толчок: предмет отпускается с импульсом по силе жеста, дальше — физика (масса, трение)
+                    float J = Mathf.Min(maxPushImpulse, pushImpulsePerSpeed * swipe);
+                    var rb = heldRb; ReleaseHeld();
+                    rb.AddForceAtPosition(dirA * J, anchor, ForceMode.Impulse);
+                    Log($"толчок {rb.name}: свайп {swipe:F1} м/с → импульс {J:F1} Н·с");
+                    EndGrip();
+                }
+                else
+                {
+                    along = Mathf.Clamp(along, -vmax * backFrac, vmax);
+                    float dist = Vector3.Dot(toA, dirA);
+                    float distR = toR.magnitude;
+                    float wantAlong = along;
+                    if (held)
+                    {
+                        // предмет в руке: смещение делится по массам (лёгкий едет к нам/от нас, тяжёлый — мы к нему)
+                        float mb = bodyMass, mo = heldRb.mass;
+                        float bodyShare = mo / (mo + mb);
+                        float objMove = -along * (1f - bodyShare);
+                        if (distR + objMove < minPelvisToHand) objMove = Mathf.Max(objMove, minPelvisToHand - distR);
+                        if (dist + objMove > reachMax) objMove = Mathf.Min(objMove, reachMax - dist);
+                        heldRb.MovePosition(heldRb.position + dirA * objMove);
+                        along *= bodyShare;
+                    }
+                    if (distR - along < minPelvisToHand) along = Mathf.Max(0f, distR - minPelvisToHand);
+                    if (dist - along > reachMax) along = Mathf.Min(0f, dist - reachMax);
+                    move = dirA * along;
+                    pullSpeed = Mathf.Abs(along) / dt;
+
+                    // свободный разворот: боковой жест поворачивает тело вокруг руки (ладонь — опора)
+                    if (Mathf.Abs(side) > 1e-5f && !held)
+                    {
+                        float ang = Mathf.Clamp(side * turnPerMeter, -turnRate * dt * 2f, turnRate * dt * 2f);
+                        var q = Quaternion.AngleAxis(ang, Vector3.up);
+                        Vector3 piv = new Vector3(anchor.x, transform.position.y, anchor.z);
+                        move += (piv + q * (transform.position - piv)) - transform.position;
+                        transform.rotation = q * transform.rotation;
+                        pullSpeed = Mathf.Max(pullSpeed, Mathf.Abs(ang) * 0.01f / dt);
+                    }
+
+                    // подъём из сгиба руки: край выше пола, не выше предела
+                    float dh = anchor.y - transform.position.y;
+                    if (along > 0f && dh > cc.stepOffset && distR < 0.55f)
+                    {
+                        if (dh <= maxClimb)
+                        {
+                            move += Vector3.up * Mathf.Min(dh + 0.02f, along * 2.2f + 0.002f);
+                            climbing = true;
+                        }
+                        else strain = 1f;                                           // не залезть — только напрягается
+                    }
+
+                    // перехват: тянем дальше, а рука уже согнута до предела — переставить руку вперёд по жесту
+                    bool pinned = wantAlong > 1e-4f && along < wantAlong * 0.2f && !held && !climbing;
+                    bentT = pinned ? bentT + dt : 0f;
+                    if (hold && bentT > 0.08f && autoReach)
+                    {
+                        Vector3 g = (dirA + sideA * Mathf.Clamp(side / Mathf.Max(wantAlong, 1e-4f), -0.8f, 0.8f)).normalized;
+                        if (NextReach(S, g, reachMax, out var np, out var nn))
+                        {
+                            EndGrip(); reachTo = np; reachToN = nn; reachUntil = Time.time + 0.8f; bentT = 0f;
+                            Log($"перехват → {np}");
+                        }
+                    }
+                }
+                if (mode == Mode.Grab && (up || Vector3.Distance(S, anchor) > reachMax + 0.12f))
+                {
+                    var hitRb = anchorRb;
+                    EndGrip();
+                    if (click && hooked && hitRb == hooked) Unhook();
+                    else if (click && pressHit && !hitRb) TurnToward(pressPoint);
+                }
+            }
+
+            // ---- выталкивание: голова/грудь упёрлись в предмет — тело отъезжает
+            Vector3 push = Vector3.ProjectOnPlane(body.Penetration, Vector3.up);
+            if (push.sqrMagnitude > 1e-6f) move += Vector3.ClampMagnitude(push, 0.6f * dt + push.magnitude * 0.5f);
+

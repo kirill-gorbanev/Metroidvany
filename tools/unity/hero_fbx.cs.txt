@@ -1,0 +1,4 @@
+var g = UnityEditor.AssetDatabase.LoadAssetAtPath<UnityEngine.GameObject>("Assets/Characters/Hero/Hero.fbx");
+var sb = new System.Text.StringBuilder();
+foreach (var t in g.GetComponentsInChildren<UnityEngine.Transform>(true)) if (System.Array.IndexOf(new[]{"Hero","Hero_Rig","root","pelvis","spine_03","Head","eye_r","upperarm_r","lowerarm_r","hand_r","upperarm_l","thigh_l","calf_l","thigh_r"}, t.name) >= 0) sb.Append(t.name + "=" + t.position.ToString("F3") + " rot=" + t.rotation.eulerAngles.ToString("F0") + "\n");
+return sb.ToString();

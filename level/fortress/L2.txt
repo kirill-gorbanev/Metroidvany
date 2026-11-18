@@ -1,0 +1,86 @@
+# сгенерировано _gen.py — правь генератор, не карту
+room b name="Казарма" floor=wood walls=plaster ceiling=wood plain=1
+room t name="Башня лучника" floor=wood walls=stone ceiling=wood plain=1
+room s name="Башня ЮВ" floor=wood walls=stone ceiling=wood plain=1
+room u name="Надвратная" floor=wood walls=stone ceiling=wood plain=1
+roof Roof_Tower_RoundTiles at=44,5 rot=0 s=1.65 sy=1.05
+map
+
+
+
+
+
+
+                                                                                     P ! ! P
+                                                                                    P: : : :P
+
+                                                                                    P: : : :!
+           P P P P P P P P P P P P P P P P P P P P P P P P P P P P P P P P P P P P P
+          P: : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : :!
+
+          P: : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : : :P
+               p p p p p p p p p p p p p p p p p p p p   p p p p p p p p p p p p p p     P P
+          P: :p                                                                     p: :P
+
+          P: :p                                                                     p: :P
+                     - w - - w - -
+          P: :p     |b b b b b b|H|                                                 p: :P
+                     r           -
+          P: :p     w rb b b b bw                                                   p: :P
+
+          P: :p     | rb b b b b|                                                   p: :P
+
+          P: :p     |b b b b b ^|                                                   p: :P
+
+          P: :p     wb b b b b ^|                                                   p: :P
+
+          P: :p     |b b b b b b|                                                   p: :P
+                     - w - w - -
+          P: :p                                                                     p: :P
+
+          P: :p                                                                     p: :P
+
+          P: :p                                                                     p: :P
+
+          P: :p                                                                     p: :P
+                                                                                   r
+          P: :p                                                                   r= : :P
+
+          P: :p                                                                     p: :!
+
+          P: :p                                                                     p: :!
+
+          P: :p                                                                     p: :!
+
+          P: :p                                                                     p: :P
+
+          P: :p                                                                     p: :P
+
+          P: :p                                                                     p: :P
+
+          P: :p                                                                     p: :P
+
+          P: :p                                                                     p: :P
+
+          P: :p                                                                     p: :P
+
+          P: :p                                                                     p: :P
+                                             w - - W -
+          P: :p                             |u > > u u|                             p: :P
+                                                                       p
+          P: :p                             |u u u u u|                :p           p: :P
+       - w D - p p p p p p p p p p p p p p p           p p p p p p p p   p p p p p p - D - -
+      wt t t t|: : : : : : : : : : : : : : :Du u u u uD: : : : : : : : : : : : : : :|s s s s|
+
+      | rt t tD: : : : : : : : : : : : : : :|u u u u u|: : : : : : : : : : : : : : :Ds s s s|
+               P P P P P P P P P P P P P P P - w w w - P P P P P P P P P P P P P P P
+      | rt t t|                                                                     |s s s sw
+
+       # < < tw                                                                     ws s s s|
+         - - -                                                                       - - w -
+
+
+
+
+
+

@@ -1,0 +1,13 @@
+var h = UnityEngine.GameObject.Find("Hero");
+var b = h.GetComponentInChildren<Fortress.Hero.HeroBody>();
+var tr = b.GetComponentsInChildren<UnityEngine.Transform>();
+System.Func<string, UnityEngine.Transform> F = n => { foreach (var t in tr) if (t.name == n) return t; return null; };
+var sb = new System.Text.StringBuilder();
+foreach (var n in new[]{"pelvis","spine_03","Head","eye_r","upperarm_r","lowerarm_r","hand_r","upperarm_l","thigh_l","thigh_r","calf_l"}) { var t = F(n); sb.Append(n + "=" + (t ? t.position.ToString("F2") : "null") + " "); }
+sb.Append(" root=" + h.transform.position.ToString("F2") + " fwd=" + h.transform.forward.ToString("F2") + " arm=" + b.ArmLength.ToString("F2") + " target=" + b.handTarget.ToString("F2") + " prone=" + b.prone.ToString("F2"));
+var p = h.transform.position;
+global::FortressSetup.Shot("D:/Metroidvany/renders/hero/a_front34.png", p + new UnityEngine.Vector3(1.0f, 1.0f, 1.6f), p + new UnityEngine.Vector3(0, 0.45f, 0));
+global::FortressSetup.Shot("D:/Metroidvany/renders/hero/b_side.png", p + new UnityEngine.Vector3(2.0f, 0.6f, 0.2f), p + new UnityEngine.Vector3(0, 0.4f, 0.2f));
+var cam = UnityEngine.Camera.main.transform;
+global::FortressSetup.Shot("D:/Metroidvany/renders/hero/c_game.png", cam.position, cam.position + cam.forward);
+return sb.ToString();

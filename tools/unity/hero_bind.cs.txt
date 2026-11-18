@@ -1,0 +1,11 @@
+var h = UnityEngine.GameObject.Find("Hero");
+var b = h.GetComponentInChildren<Fortress.Hero.HeroBody>();
+b.enabled = false;
+h.GetComponent<Fortress.Hero.HeroController>().enabled = false;
+var tr = b.GetComponentsInChildren<UnityEngine.Transform>();
+var sb = new System.Text.StringBuilder();
+foreach (var t in tr) if (System.Array.IndexOf(new[]{"root","pelvis","Head","eye_r","upperarm_r","hand_r","upperarm_l","thigh_l","calf_l"}, t.name) >= 0) sb.Append(t.name + "=" + t.position.ToString("F2") + " ");
+var smr = b.GetComponentsInChildren<UnityEngine.SkinnedMeshRenderer>();
+foreach (var r in smr) { sb.Append("\n" + r.name + " subs=" + r.sharedMesh.subMeshCount + " mats=" + r.sharedMaterials.Length + " enabled=" + r.enabled + " :"); foreach (var m in r.sharedMaterials) sb.Append(" " + (m ? m.name : "null")); }
+sb.Append("\nmodel rot=" + b.transform.eulerAngles.ToString("F0"));
+return sb.ToString();

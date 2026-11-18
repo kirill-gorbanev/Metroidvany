@@ -1,0 +1,648 @@
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+namespace Fortress.Hero
+{
+    /// <summary>Управление героем одной рукой — по ТЗ автора (Figma «Метроидвания», Frame 5).
+    ///
+    /// Мышь:
+    ///   курсор — направление руки (сустав плеча гомологичный: вперёд, вправо, чуть назад, через грудь — немного);
+    ///   ЛКМ (держать) у поверхности/выступа — хват (автозацеп к выступам в радиусе r; буфер нажатия и «койот»-время);
+    ///   ЛКМ + мышь на себя — тело подтягивается к руке, от себя — отталкивается (зеркально мыши, в пределах сгиба руки);
+    ///   хват за край выше пола — подъём из сгиба руки (не выше maxClimb: «размер человека не даст залезть»);
+    ///   ЛКМ на подвижном предмете + резкий свайп от себя — толчок (импульс по силе жеста, дальше — физика с массой);
+    ///   ЛКМ на лёгком предмете — взять; отпустить на свайпе — бросок, плавно — положить, у головы — на голову (LOCK);
+    ///   короткий клик ЛКМ по земле — развернуться к точке (сам по себе герой не крутится);
+    ///   средняя кнопка — лечь/сесть (под низким потолком ложится сам).
+    /// Камера (HeroCamera): ПКМ — облёт вокруг тела, колесо — ближе/дальше.
+    /// Плечо+голова: подвижный предмет у культи плеча зацепляется (LOCK) и едет за ползущим телом; отцепляется, когда тело
+    /// отъезжает назад или по клику ЛКМ по этому предмету.</summary>
+    [RequireComponent(typeof(CharacterController))]
+    [DefaultExecutionOrder(100)]
+    public class HeroController : MonoBehaviour
+    {
+        public HeroBody body;
+        public Camera cam;
+
+        [Header("Рука")]
+        public float reachFrac = 0.97f;
+        [Tooltip("Дополнительная досягаемость за счёт наклона сидя (м).")]
+        public float leanReach = 0.28f;
+        public float handSmooth = 0.10f, handMaxSpeed = 3f;
+        [Tooltip("Плечо: насколько рука уходит через грудь влево / вправо-назад (градусы от «вперёд»).")]
+        public float shoulderAcross = 45f, shoulderOut = 150f;
+
+        [Header("Хват")]
+        [Tooltip("r — радиус автозацепа к выступам и поверхностям (м).")]
+        public float grabRadius = 0.15f;
+        [Tooltip("Буфер нажатия: ЛКМ, нажатая раньше касания, всё равно хватает (с).")]
+        public float grabBuffer = 0.20f;
+        [Tooltip("Койот: ЛКМ сразу после потери касания хватает последнюю точку (с).")]
+        public float coyoteTime = 0.12f;
+
+        [Header("Автонаведение и перехват")]
+        [Tooltip("Радиус, в котором рука сама наводится на выступ/поверхность у курсора (м).")]
+        public float assistRadius = 0.30f;
+        [Tooltip("Перехват: держишь ЛКМ и тянешь дальше, когда рука согнута до предела, — рука сама переставляется вперёд.")]
+        public bool autoReach = true;
+        [Tooltip("Градусов разворота на метр бокового жеста (вокруг руки).")]
+        public float turnPerMeter = 260f;
+        [Tooltip("Скорость отталкивания назад относительно тяги вперёд.")]
+        public float backFrac = 0.8f;
+
+        [Header("Подтягивание (зеркально мыши)")]
+        public float pullGain = 1.0f;
+        [Tooltip("Метров тяги на пиксель сдвига мыши.")]
+        public float mouseToMeters = 0.0022f;
+        public float maxSpeedSit = 0.55f, maxSpeedProne = 0.85f;
+        [Tooltip("Ближе этого центр тела к точке хвата не подтягивается (м).")]
+        public float minPelvisToHand = 0.30f;
+        [Tooltip("Предел подъёма: выше этого край не осилить (м).")]
+        public float maxClimb = 0.42f;
+        [Tooltip("Масса тела героя для толчков и тяги лёгких предметов (кг).")]
+        public float bodyMass = 45f;
+
+        [Header("Толчок")]
+        [Tooltip("Скорость свайпа (м/с), с которой жест — толчок, а не тяга.")]
+        public float swipeSpeed = 1.2f;
+        public float pushImpulsePerSpeed = 9f, maxPushImpulse = 40f;
+
+        [Header("Взять / бросить / на голову")]
+        public float liftMaxMass = 6f;
+        public float carryLift = 0.12f;
+        [Tooltip("Скорость руки (м/с) при отпускании, выше которой — бросок.")]
+        public float throwSpeed = 1.3f;
+        public float throwGain = 1.7f;
+        [Tooltip("Отпустить ближе этого к макушке — предмет на голове (LOCK).")]
+        public float headLockRadius = 0.32f;
+
+        [Header("Плечо+голова (LOCK)")]
+        public float hookRadius = 0.22f, hookMaxMass = 80f;
+
+        [Header("Разворот (клик по земле)")]
+        public float clickMaxTime = 0.35f, clickMaxPixels = 22f;
+        public float turnRate = 120f;
+
+        [Header("Положение тела")]
+        public float proneSpeed = 0.9f;
+        [Tooltip("Если над тазом потолок ниже — сидеть нельзя, ложится (м).")]
+        public float sitClearance = 0.95f;
+
+        [Header("Ввод из скрипта (тесты, катсцены): вместо мыши")]
+        public bool scripted;
+        [Tooltip("Мировая точка, на которую «наведён курсор».")]
+        public Vector3 scriptPoint;
+        public bool scriptHold;
+        [Tooltip("Однократно: лечь/сесть (сбрасывается сам).")]
+        public bool scriptToggleProne;
+        [Tooltip("Писать события руки в консоль (хват, толчок, бросок, зацеп).")]
+        public bool logEvents;
+
+        public enum Mode { Free, Grab, Carry }
+        public Mode State => mode;
+        public bool Grabbing => mode == Mode.Grab;
+        public float Prone => prone;
+        public Rigidbody Carried => carried;
+        public Rigidbody OnHead => onHead;
+        public Rigidbody Hooked => hooked;
+
+        CharacterController cc;
+        Mode mode;
+        Vector3 handPos, handVel, handVelS, prevHand;
+        Vector3 anchorLocal, anchorN;                 // точка хвата (в системе anchorT, если хват за предмет)
+        Transform anchorT; Rigidbody anchorRb;
+        Vector3 contactPoint, contactN = Vector3.up;
+        bool contact; float lastContactT = -9f;
+        Rigidbody carried; Vector3 carryOffset; Quaternion carryRot;
+        Rigidbody onHead; float headLift;
+        Rigidbody hooked; Vector3 hookLocal; Quaternion hookRot;
+        float prone, proneTarget, vy, effort;
+        bool prevHold; float pressT = -9f; Vector2 pressPx, lastPx; float pressMovedPx;
+        Vector3 pressPoint; bool pressHit;
+        Vector3 prevScript; bool hasPrevScript;
+        float? turnTo;
+        Vector3? reachTo; Vector3 reachToN = Vector3.up; float reachUntil, bentT;
+        Rigidbody heldRb;
+
+        void Awake()
+        {
+            cc = GetComponent<CharacterController>();
+            if (!body) body = GetComponentInChildren<HeroBody>();
+            Application.runInBackground = true;
+        }
+
+        void Start()
+        {
+            if (!cam) cam = Camera.main;
+            handPos = prevHand = body.Shoulder + transform.forward * 0.25f - transform.up * 0.4f;
+        }
+
+        bool Mine(Transform t) => t.IsChildOf(transform);
+
+        bool RayWorld(Ray ray, out RaycastHit best)
+        {
+            best = default;
+            float bd = float.MaxValue; bool ok = false;
+            foreach (var h in Physics.RaycastAll(ray, 50f, ~0, QueryTriggerInteraction.Ignore))
+            {
+                if (Mine(h.transform) || (carried && h.rigidbody == carried)) continue;
+                if (h.distance < bd) { bd = h.distance; best = h; ok = true; }
+            }
+            return ok;
+        }
+
+        float GroundY()
+        {
+            var o = transform.position + Vector3.up * 0.3f;
+            foreach (var h in Physics.RaycastAll(o, Vector3.down, 2f, ~0, QueryTriggerInteraction.Ignore))
+                if (!Mine(h.transform)) return h.point.y;
+            return transform.position.y;
+        }
+
+        /// <summary>Автозацеп: ближайшая точка поверхности/выступа в радиусе r от руки.</summary>
+        bool FindGrip(Vector3 p, float r, out Vector3 point, out Vector3 normal, out Collider col)
+        {
+            point = p; normal = Vector3.up; col = null;
+            float bd = float.MaxValue;
+            foreach (var c in Physics.OverlapSphere(p, r, ~0, QueryTriggerInteraction.Ignore))
+            {
+                if (Mine(c.transform) || (carried && c.attachedRigidbody == carried)) continue;
+                if (c is MeshCollider mc && !mc.convex)
+                {
+                    // невыпуклый меш: ClosestPoint не работает — луч вниз/вперёд
+                    if (Physics.Raycast(p + Vector3.up * r, Vector3.down, out var h, r * 2f) && h.collider == c)
+                    { float d0 = Vector3.Distance(p, h.point); if (d0 < bd) { bd = d0; point = h.point; normal = h.normal; col = c; } }
+                    continue;
+                }
+                Vector3 q = c.ClosestPoint(p);
+                float d = Vector3.Distance(p, q);
+                // выступ (брус, перила, край, лёгкий предмет) важнее плоскости рядом
+                var bs = c.bounds.size;
+                bool protr = Mathf.Min(bs.x, Mathf.Min(bs.y, bs.z)) < 0.15f || bs.x * bs.y * bs.z < 0.05f;
+                float dq = d;
+                d -= protr ? 0.25f : 0f;
+                if (d < bd)
+                {
+                    bd = d; point = q; col = c;
+                    normal = dq > 1e-4f ? (p - q) / dq : Vector3.up;
+                }
+            }
+            return col;
+        }
+
+        void Update()
+        {
+            float dt = Mathf.Max(Time.deltaTime, 1e-4f);
+            var m = Mouse.current;
+            if (!cam || (m == null && !scripted) || !body || !body.Ready) return;
+
+            // ---- ввод
+            Ray ray; bool hold, toggle; Vector2 px; Vector3 dragW;
+            Vector3 cr = Vector3.ProjectOnPlane(cam.transform.right, Vector3.up).normalized;
+            Vector3 cf = Vector3.ProjectOnPlane(cam.transform.forward, Vector3.up).normalized;
+            if (scripted)
+            {
+                ray = new Ray(cam.transform.position, (scriptPoint - cam.transform.position).normalized);
+                hold = scriptHold; toggle = scriptToggleProne; scriptToggleProne = false;
+                px = cam.WorldToScreenPoint(scriptPoint);
+                dragW = hasPrevScript ? Vector3.ProjectOnPlane(scriptPoint - prevScript, Vector3.up) : Vector3.zero;
+                prevScript = scriptPoint; hasPrevScript = true;
+            }
+            else
+            {
+                px = m.position.ReadValue();
+                ray = cam.ScreenPointToRay(px);
+                hold = m.leftButton.isPressed; toggle = m.middleButton.wasPressedThisFrame;
+                Vector2 md = m.delta.ReadValue();
+                dragW = (cr * md.x + cf * md.y) * mouseToMeters;
+            }
+            bool down = hold && !prevHold, up = !hold && prevHold;
+            prevHold = hold;
+            bool hit = RayWorld(ray, out var rh);
+            if (down) { pressT = Time.time; pressPx = px; pressMovedPx = 0f; pressHit = hit; pressPoint = hit ? rh.point : Vector3.zero; }
+            if (hold) pressMovedPx += (px - lastPx).magnitude;
+            lastPx = px;
+            bool click = up && Time.time - pressT < clickMaxTime && pressMovedPx < clickMaxPixels;
+
+            // ---- положение тела: средняя кнопка — лечь/сесть, низкий потолок — лечь
+            bool lowCeiling = false;
+            foreach (var h in Physics.RaycastAll(transform.position + Vector3.up * 0.2f, Vector3.up, sitClearance - 0.2f, ~0, QueryTriggerInteraction.Ignore))
+                if (!Mine(h.transform)) { lowCeiling = true; break; }
+            if (toggle) { proneTarget = proneTarget > 0.5f ? 0f : 1f; Unhook(); }
+            prone = Mathf.MoveTowards(prone, lowCeiling ? 1f : proneTarget, proneSpeed * dt);
+            float sm = Mathf.SmoothStep(0f, 1f, prone);
+            cc.height = Mathf.Lerp(0.9f, 0.5f, sm);
+            cc.radius = Mathf.Min(0.28f, cc.height * 0.5f);
+            cc.center = new Vector3(0f, cc.height * 0.5f, Mathf.Lerp(0f, 0.25f, sm));
+
+            Vector3 S = body.Shoulder;
+            float reach = body.ArmLength * reachFrac;
+            float reachMax = reach + leanReach * (1f - sm);
+            float vmaxBody = Mathf.Lerp(maxSpeedSit, maxSpeedProne, sm);
+            Vector3 move = Vector3.zero;
+            float pullSpeed = 0f, strain = 0f;
+            bool climbing = false;
+
+            // ---- рука (пока ПКМ — облёт камеры — рука замирает)
+            bool orbiting = !scripted && m.rightButton.isPressed;
+            if ((mode == Mode.Free || mode == Mode.Carry) && orbiting)
+            {
+                if (carried) { carried.MovePosition(handPos + carryOffset); carried.MoveRotation(carryRot); }
+            }
+            else if (mode == Mode.Free || mode == Mode.Carry)
+            {
+                Vector3 want;
+                contact = false;
+                Vector3 cursorP = hit ? rh.point : ray.GetPoint(3f);
+                if (mode == Mode.Free && reachTo.HasValue)
+                {
+                    // перехват: рука сама переставляется к следующей точке по жесту
+                    want = reachTo.Value + reachToN * 0.025f;
+                    contact = true; contactPoint = reachTo.Value; contactN = reachToN; lastContactT = Time.time;
+                }
+                else if (mode == Mode.Free && Vector3.Distance(S, cursorP) <= reachMax + assistRadius
+                         && FindGrip(cursorP, assistRadius, out var ap, out var an, out _) && Vector3.Distance(S, ap) <= reachMax)
+                {
+                    // автонаведение: ближайший выступ/поверхность у курсора (выступы важнее плоскостей)
+                    want = ap + an * 0.025f;
+                    contact = true; contactN = an; contactPoint = ap; lastContactT = Time.time;
+                }
+                else
+                {
+                    Vector3 p = cursorP;
+                    if (mode == Mode.Carry) p += Vector3.up * carryLift;
+                    // курсор на голове (луч сквозь своё тело) — ношу к макушке
+                    Vector3 top = body.HeadTop;
+                    if (mode == Mode.Carry && Vector3.Cross(ray.direction, top - ray.origin).magnitude < 0.22f)
+                        p = top + Vector3.up * 0.10f;
+                    want = S + Vector3.ClampMagnitude(p - S, reachMax);
+                    float gy = GroundY() + 0.03f;
+                    if (want.y < gy) want.y = gy;
+                }
+                want = ShoulderCone(S, want);
+                want = ClipByPlanes(S, want);
+                handPos = Vector3.SmoothDamp(handPos, want, ref handVel, reachTo.HasValue ? handSmooth * 0.6f : handSmooth, handMaxSpeed, dt);
+
+                if (mode == Mode.Free)
+                {
+                    if (reachTo.HasValue)
+                    {
+                        // перехват долетел — схватиться (ЛКМ всё ещё держится)
+                        if (!hold || Time.time > reachUntil) reachTo = null;
+                        else if (Vector3.Distance(handPos, reachTo.Value) < 0.06f)
+                        {
+                            var rt = reachTo.Value; reachTo = null;
+                            if (FindGrip(rt, grabRadius, out var gp2, out var gn2, out var gc2)) BeginGrip(gp2, gn2, gc2);
+                            else BeginGrip(rt, reachToN, null);
+                        }
+                    }
+                    // хват: нажатие (или буфер нажатия) + рука у поверхности/выступа (автозацеп r) или «койот»
+                    else if (hold && (down || Time.time - pressT <= grabBuffer))
+                    {
+                        if (FindGrip(handPos, grabRadius, out var gp, out var gn, out var gc))
+                            BeginGrip(gp, gn, gc);
+                        else if (Time.time - lastContactT <= coyoteTime)
+                            BeginGrip(contactPoint, contactN, null);
+                    }
+                    if (click && pressHit) TurnToward(pressPoint);       // клик по земле вне досягаемости — развернуться
+                }
+                else if (carried)
+                {
+                    // несём: предмет в руке
+                    carried.MovePosition(handPos + carryOffset);
+                    carried.MoveRotation(carryRot);
+                    if (up)
+                    {
+                        float sp = handVelS.magnitude;
+                        if (sp > throwSpeed) Throw(handVelS * throwGain);
+                        else if (Vector3.Distance(handPos, body.HeadTop) < headLockRadius && !onHead) PutOnHead();
+                        else Place();
+                    }
+                }
+            }
+            else // Mode.Grab
+            {
+                Vector3 anchor = anchorT ? anchorT.TransformPoint(anchorLocal) : anchorLocal;
+                handPos = anchor + anchorN * 0.025f;
+                Vector3 toR = Vector3.ProjectOnPlane(anchor - transform.position, Vector3.up);
+                Vector3 dirA = toR.sqrMagnitude > 1e-3f ? toR.normalized : transform.forward;
+                Vector3 sideA = Vector3.Cross(Vector3.up, dirA);
+                Vector3 toA = Vector3.ProjectOnPlane(anchor - S, Vector3.up);
+                float along = Vector3.Dot(-dragW, dirA) * pullGain;            // мышь на себя → тело вперёд (зеркально)
+                float side = Vector3.Dot(-dragW, sideA) * pullGain;            // вбок → разворот вокруг руки
+                float swipe = -along / dt;                                       // >0 — жест от себя
+                float vmax = vmaxBody * dt;
+                bool held = heldRb != null;                                      // держим подвижный предмет
+
+                if (held && swipe > swipeSpeed)
+                {
+                    // толчок: предмет отпускается с импульсом по силе жеста, дальше — физика (масса, трение)
+                    float J = Mathf.Min(maxPushImpulse, pushImpulsePerSpeed * swipe);
+                    var rb = heldRb; ReleaseHeld();
+                    rb.AddForceAtPosition(dirA * J, anchor, ForceMode.Impulse);
+                    Log($"толчок {rb.name}: свайп {swipe:F1} м/с → импульс {J:F1} Н·с");
+                    EndGrip();
+                }
+                else
+                {
+                    along = Mathf.Clamp(along, -vmax * backFrac, vmax);
+                    float dist = Vector3.Dot(toA, dirA);
+                    float distR = toR.magnitude;
+                    float wantAlong = along;
+                    if (held)
+                    {
+                        // предмет в руке: смещение делится по массам (лёгкий едет к нам/от нас, тяжёлый — мы к нему)
+                        float mb = bodyMass, mo = heldRb.mass;
+                        float bodyShare = mo / (mo + mb);
+                        float objMove = -along * (1f - bodyShare);
+                        if (distR + objMove < minPelvisToHand) objMove = Mathf.Max(objMove, minPelvisToHand - distR);
+                        if (dist + objMove > reachMax) objMove = Mathf.Min(objMove, reachMax - dist);
+                        heldRb.MovePosition(heldRb.position + dirA * objMove);
+                        along *= bodyShare;
+                    }
+                    if (distR - along < minPelvisToHand) along = Mathf.Max(0f, distR - minPelvisToHand);
+                    if (dist - along > reachMax) along = Mathf.Min(0f, dist - reachMax);
+                    move = dirA * along;
+                    pullSpeed = Mathf.Abs(along) / dt;
+
+                    // свободный разворот: боковой жест поворачивает тело вокруг руки (ладонь — опора)
+                    if (Mathf.Abs(side) > 1e-5f && !held)
+                    {
+                        float ang = Mathf.Clamp(side * turnPerMeter, -turnRate * dt * 2f, turnRate * dt * 2f);
+                        var q = Quaternion.AngleAxis(ang, Vector3.up);
+                        Vector3 piv = new Vector3(anchor.x, transform.position.y, anchor.z);
+                        move += (piv + q * (transform.position - piv)) - transform.position;
+                        transform.rotation = q * transform.rotation;
+                        pullSpeed = Mathf.Max(pullSpeed, Mathf.Abs(ang) * 0.01f / dt);
+                    }
+
+                    // подъём из сгиба руки: край выше пола, не выше предела
+                    float dh = anchor.y - transform.position.y;
+                    if (along > 0f && dh > cc.stepOffset && distR < 0.55f)
+                    {
+                        if (dh <= maxClimb)
+                        {
+                            move += Vector3.up * Mathf.Min(dh + 0.02f, along * 2.2f + 0.002f);
+                            climbing = true;
+                        }
+                        else strain = 1f;                                           // не залезть — только напрягается
+                    }
+
+                    // перехват: тянем дальше, а рука уже согнута до предела — переставить руку вперёд по жесту
+                    bool pinned = wantAlong > 1e-4f && along < wantAlong * 0.2f && !held && !climbing;
+                    bentT = pinned ? bentT + dt : 0f;
+                    if (hold && bentT > 0.08f && autoReach)
+                    {
+                        Vector3 g = (dirA + sideA * Mathf.Clamp(side / Mathf.Max(wantAlong, 1e-4f), -0.8f, 0.8f)).normalized;
+                        if (NextReach(S, g, reachMax, out var np, out var nn))
+                        {
+                            EndGrip(); reachTo = np; reachToN = nn; reachUntil = Time.time + 0.8f; bentT = 0f;
+                            Log($"перехват → {np}");
+                        }
+                    }
+                }
+                if (mode == Mode.Grab && (up || Vector3.Distance(S, anchor) > reachMax + 0.12f))
+                {
+                    var hitRb = anchorRb;
+                    EndGrip();
+                    if (click && hooked && hitRb == hooked) Unhook();
+                    else if (click && pressHit && !hitRb) TurnToward(pressPoint);
+                }
+            }
+
+            // ---- выталкивание: голова/грудь упёрлись в предмет — тело отъезжает
+            Vector3 push = Vector3.ProjectOnPlane(body.Penetration, Vector3.up);
+            if (push.sqrMagnitude > 1e-6f) move += Vector3.ClampMagnitude(push, 0.6f * dt + push.magnitude * 0.5f);
+
+            // ---- поворот (только по клику по земле — сам герой не крутится)
+            if (turnTo.HasValue)
+            {
+                float yaw = transform.eulerAngles.y;
+                float ny = Mathf.MoveTowardsAngle(yaw, turnTo.Value, turnRate * dt);
+                transform.rotation = Quaternion.Euler(0f, ny, 0f);
+                if (Mathf.Abs(Mathf.DeltaAngle(ny, turnTo.Value)) < 0.5f) turnTo = null;
+            }
+
+            // ---- движение тела + гравитация
+            if (climbing) vy = 0f;
+            else { if (cc.isGrounded && vy < 0f) vy = -1f; vy += Physics.gravity.y * dt; }
+            Vector3 before = transform.position;
+            cc.Move(move + Vector3.up * vy * dt);
+            Vector3 moved = transform.position - before;
+
+            // ---- плечо+голова: зацеп подвижного предмета у культи (LOCK), пока ползём
+            UpdateHook(moved);
+
+            // ---- предмет на голове
+            if (onHead && body.HeadBone)
+            {
+                // держится прямо, лишь немного клонится вслед за головой
+                Vector3 hup = Vector3.Slerp(Vector3.up, body.HeadBone.position - body.ChestPosition, 0.25f).normalized;
+                var rot = Quaternion.LookRotation(Vector3.ProjectOnPlane(transform.forward, hup), hup);
+                onHead.MovePosition(body.HeadTop + hup * (headLift + 0.01f));
+                onHead.MoveRotation(rot);
+                // снять с головы — взять рукой
+                if (mode == Mode.Free && down && carried == null && Vector3.Distance(handPos, onHead.position) < grabRadius + 0.2f)
+                {
+                    var rb = onHead; onHead = null; StartCarry(rb);
+                }
+            }
+
+            // ---- скорость руки (для броска)
+            handVelS = Vector3.Lerp(handVelS, (handPos - prevHand) / dt, 0.5f);
+            prevHand = handPos;
+
+            // ---- усилие: тяга, рука на пределе, подъём, «не осилить»
+            float stretch = Mathf.Clamp01((Vector3.Distance(S, handPos) - reach * 0.8f) / 0.35f);
+            float pullK = Mathf.Clamp01(pullSpeed / vmaxBody);
+            float load = carried ? Mathf.Clamp01(carried.mass / liftMaxMass) * 0.6f : 0f;
+            effort = Mathf.MoveTowards(effort, Mathf.Max(pullK, stretch * 0.6f, climbing ? 0.9f : 0f, strain, load), dt * 2f);
+
+            body.prone = sm;
+            body.handTarget = handPos;
+            body.handWeight = 1f;
+            body.handPlanted = mode == Mode.Grab || contact;
+            body.handNormal = mode == Mode.Grab ? anchorN : contactN;
+            body.lookTarget = mode == Mode.Grab ? handPos + Vector3.up * 0.1f : (hit ? rh.point : ray.GetPoint(4f));
+            body.effort = effort;
+        }
+
+        /// <summary>Рука не проходит сквозь предметы: вектор плечо→цель обрезается плоскостью первой встреченной поверхности
+        /// (цель за плоскостью проецируется на неё с отступом ладони), и так до 3 плоскостей (угол ящика).</summary>
+        Vector3 ClipByPlanes(Vector3 S, Vector3 want)
+        {
+            const float palm = 0.03f;
+            for (int i = 0; i < 3; i++)
+            {
+                Vector3 v = want - S;
+                float len = v.magnitude;
+                if (len < 1e-4f) break;
+                RaycastHit best = default; bool any = false; float bd = float.MaxValue;
+                foreach (var h in Physics.SphereCastAll(S, 0.035f, v / len, len, ~0, QueryTriggerInteraction.Ignore))
+                {
+                    if (Mine(h.transform) || (carried && h.rigidbody == carried) || h.distance <= 0f) continue;
+                    if (h.distance < bd) { bd = h.distance; best = h; any = true; }
+                }
+                if (!any) break;
+                Vector3 n = best.normal;
+                float depth = Vector3.Dot(want - best.point, n);                 // <0 — цель за плоскостью
+                if (depth >= palm) break;
+                want += n * (palm - depth);                                       // отсечь плоскостью
+            }
+            return want;
+        }
+
+        /// <summary>Плечо гомологичное: рука не уходит за спину и далеко через грудь.</summary>
+        Vector3 ShoulderCone(Vector3 S, Vector3 want)
+        {
+            Vector3 f = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
+            Vector3 v = want - S;
+            Vector3 flat = Vector3.ProjectOnPlane(v, Vector3.up);
+            if (flat.sqrMagnitude < 0.25f * 0.25f) return want;            // у самого тела (под себя) — без ограничения
+            float a = Vector3.SignedAngle(f, flat, Vector3.up);              // + вправо (сторона руки)
+            float c = Mathf.Clamp(a, -shoulderAcross, shoulderOut);
+            if (Mathf.Approximately(a, c)) return want;
+            Vector3 nf = Quaternion.AngleAxis(c - a, Vector3.up) * flat;
+            return S + nf + Vector3.up * v.y;
+        }
+
+        void BeginGrip(Vector3 point, Vector3 normal, Collider col)
+        {
+            var rb = col ? col.attachedRigidbody : null;
+            if (rb && rb == onHead) return;
+            if (rb && !rb.isKinematic && rb.mass <= liftMaxMass && rb != hooked) { StartCarry(rb); return; }
+            mode = Mode.Grab;
+            Log($"хват {(col ? col.name : "поверхность")} в {point}");
+            anchorRb = rb;
+            if (rb && !rb.isKinematic && rb != hooked && rb.mass < bodyMass * 4f)
+            {
+                heldRb = rb; rb.isKinematic = true; IgnoreBody(rb, true);       // держим рукой: едет вместе с рукой
+            }
+            anchorT = rb ? rb.transform : (col ? col.transform : null);
+            anchorLocal = anchorT ? anchorT.InverseTransformPoint(point) : point;
+            anchorN = normal.sqrMagnitude > 1e-4f ? normal.normalized : Vector3.up;
+        }
+
+        void EndGrip() { ReleaseHeld(); mode = Mode.Free; anchorRb = null; anchorT = null; }
+
+        void ReleaseHeld()
+        {
+            if (!heldRb) return;
+            heldRb.isKinematic = false; heldRb.linearVelocity = Vector3.zero;
+            IgnoreBody(heldRb, false);
+            heldRb = null;
+        }
+
+        /// <summary>Следующая точка хвата по направлению жеста: на досягаемости, выступы важнее пола.</summary>
+        bool NextReach(Vector3 S, Vector3 dir, float reachMax, out Vector3 point, out Vector3 normal)
+        {
+            point = default; normal = Vector3.up;
+            Vector3 P = S + dir * reachMax * 0.85f;
+            P = ClipByPlanes(S, P);
+            Vector3 probe = P;
+            if (Physics.Raycast(P + Vector3.up * 0.4f, Vector3.down, out var h, 1.5f, ~0, QueryTriggerInteraction.Ignore) && !Mine(h.transform))
+                probe = h.point;
+            return FindGrip(probe, assistRadius, out point, out normal, out _) && Vector3.Distance(S, point) <= reachMax;
+        }
+
+        void Log(string msg) { if (logEvents) Debug.Log("[Hero] " + msg, this); }
+
+        /// <summary>Своё тело (капсула) не сталкивается с ношей / предметом на голове / зацепленным.</summary>
+        void IgnoreBody(Rigidbody rb, bool ignore)
+        {
+            if (!rb) return;
+            foreach (var c in rb.GetComponentsInChildren<Collider>()) Physics.IgnoreCollision(cc, c, ignore);
+        }
+
+        void StartCarry(Rigidbody rb)
+        {
+            Log($"взял {rb.name}");
+            IgnoreBody(rb, true);
+            carried = rb; mode = Mode.Carry;
+            rb.isKinematic = true;
+            carryOffset = rb.position - handPos;
+            carryOffset = Vector3.ClampMagnitude(carryOffset, 0.15f) + Vector3.down * 0.05f;
+            carryRot = rb.rotation;
+        }
+
+        void Throw(Vector3 v)
+        {
+            var rb = carried; carried = null; mode = Mode.Free;
+            rb.isKinematic = false;
+            rb.linearVelocity = v + Vector3.up * 0.8f;
+            IgnoreBody(rb, false);
+            Log($"бросил {rb.name} со скоростью {rb.linearVelocity}");
+        }
+
+        void Place()
+        {
+            var rb = carried; carried = null; mode = Mode.Free;
+            rb.isKinematic = false;
+            rb.linearVelocity = Vector3.zero; rb.angularVelocity = Vector3.zero;
+            IgnoreBody(rb, false);
+            Log($"положил {rb.name}");
+        }
+
+        void PutOnHead()
+        {
+            onHead = carried; carried = null; mode = Mode.Free;
+            Log($"на голову: {onHead.name}");
+            onHead.isKinematic = true;
+            // дно ноши — на макушку: смещение от опорной точки предмета до низа его коллайдеров
+            onHead.rotation = Quaternion.LookRotation(Vector3.ProjectOnPlane(transform.forward, Vector3.up), Vector3.up);
+            Physics.SyncTransforms();
+            float bottom = float.MaxValue;
+            foreach (var c in onHead.GetComponentsInChildren<Collider>()) bottom = Mathf.Min(bottom, c.bounds.min.y);
+            headLift = onHead.position.y - bottom;
+        }
+
+        void TurnToward(Vector3 p)
+        {
+            Vector3 d = Vector3.ProjectOnPlane(p - transform.position, Vector3.up);
+            if (d.sqrMagnitude > 0.01f) turnTo = Quaternion.LookRotation(d).eulerAngles.y;
+        }
+
+        void UpdateHook(Vector3 moved)
+        {
+            Vector3 F = transform.forward;
+            if (!hooked && moved.sqrMagnitude > 1e-6f && Vector3.Dot(moved, F) > 0f && mode == Mode.Grab)
+            {
+                foreach (var c in Physics.OverlapSphere(body.StumpShoulder, hookRadius, ~0, QueryTriggerInteraction.Ignore))
+                {
+                    var rb = c.attachedRigidbody;
+                    if (!rb || rb.isKinematic || rb == carried || rb == onHead || rb == anchorRb || rb.mass > hookMaxMass) continue;
+                    hooked = rb; rb.isKinematic = true; IgnoreBody(rb, true);
+                    Log($"зацепил плечом: {rb.name}");
+                    hookLocal = transform.InverseTransformPoint(rb.position);
+                    hookRot = Quaternion.Inverse(transform.rotation) * rb.rotation;
+                    break;
+                }
+            }
+            if (hooked)
+            {
+                // отцепить, если тело отъезжает назад
+                if (Vector3.Dot(moved, F) < -0.002f) { Unhook(); return; }
+                hooked.MovePosition(transform.TransformPoint(hookLocal));
+                hooked.MoveRotation(transform.rotation * hookRot);
+            }
+        }
+
+        void Unhook()
+        {
+            if (!hooked) return;
+            hooked.isKinematic = false; hooked.linearVelocity = Vector3.zero;
+            IgnoreBody(hooked, false);
+            Log($"отцепил {hooked.name}");
+            hooked = null;
+        }
+
+        void OnDrawGizmos()
+        {
+            if (!Application.isPlaying) return;
+            Gizmos.color = mode == Mode.Grab ? Color.red : mode == Mode.Carry ? Color.cyan : (contact ? Color.green : Color.yellow);
+            Gizmos.DrawWireSphere(handPos, 0.04f);
+            Gizmos.color = new Color(1f, 1f, 1f, 0.3f);
+            Gizmos.DrawWireSphere(handPos, grabRadius);
+        }
+    }
+}

@@ -1,0 +1,34 @@
+{
+  "success": true,
+  "command": "projects",
+  "data": {
+    "path": "D:\\Metroidvany\\MetroidvanyGame",
+    "version": "6000.3.9f1",
+    "architecture": "x86_64",
+    "template": "com.unity.template.urp-blank",
+    "opened": false,
+    "pipeline": {
+      "requested": false,
+      "installed": false,
+      "packageId": "com.unity.pipeline",
+      "hint": "AI agents drive the Editor through the Pipeline package, which this project does not have yet. Add it with unity pipeline install --project-path \"D:\\Metroidvany\\MetroidvanyGame\", or pass --with-pipeline when you create a project."
+    },
+    "diagnostics": {
+      "buildDefault": {
+        "source": "ProjectSettings/UnityConnectSettings.asset",
+        "state": "enabled"
+      },
+      "buildProfiles": {
+        "searched": "Assets/Settings/Build Profiles",
+        "profiles": []
+      },
+      "cloud": {
+        "linked": false,
+        "cloudProjectId": null,
+        "organizationId": null
+      }
+    }
+  },
+  "errors": [],
+  "warnings": []
+}

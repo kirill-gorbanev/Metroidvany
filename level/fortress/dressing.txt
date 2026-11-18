@@ -1,0 +1,286 @@
+# сгенерировано _gen.py из _dress.py — правь их, не этот файл
+cell1_bed:Bed_Twin2 L-1 8,29 NW
+Bucket_Wooden_1 L-1 9,29 NE
+cell1_bowl:Pot_1 L-1 9,28 E
+Bench L-1 11,29 N dx=1.0
+Bucket_Wooden_1 L-1 8,24 SW
+Bench L-1 12,25 E dz=-1.4 s=0.7
+Vase_Rubble_Medium L-1 11,24 c dx=-0.4 dz=0.5
+Prop_Brick1 L-1 11,24 S dx=0.35
+Prop_Brick3 L-1 12,24 S rot=30 dx=-0.5
+Torch_Metal L-1 8,27 W
+Torch_Metal L-1 15,28 E
+tpost:Table_Large L-1 15,29 E
+CandleStick L-1 15,29 on:tpost dz=0.6
+jail_post:Chair_1 L-1 14,29 c rot=90
+bowls:Cabinet L-1 14,28 W
+Table_Plate L-1 14,28 on:bowls dz=-0.35
+Mug L-1 14,28 on:bowls dz=0.3
+Barrel L-1 8,26 SW
+Crate_Wooden L-1 11,26 S
+Barrel L-1 15,27 E dz=0.4
+tinf:Table_Large L-1 18,30 N
+Potion_1 L-1 18,30 on:tinf dx=-0.8
+Potion_2 L-1 18,30 on:tinf dx=-0.5
+Bottle_1 L-1 18,30 on:tinf dx=-0.2
+CandleStick_Triple L-1 18,30 on:tinf dx=0.7
+Shelf_Small_Bottles L-1 17,30 N h=1.5
+Cauldron L-1 20,30 N
+inf_bed1:Bed_Twin1 L-1 16,28 W
+inf_bed2:Bed_Twin2 L-1 16,30 NW
+Bed_Twin2 L-1 17,25 S
+Bed_Twin1 L-1 19,25 S
+Chair_1 L-1 18,29 c dz=0.9
+Bucket_Wooden_1 L-1 16,27 W
+Shelf_Arch L-1 21,25 E
+Torch_Metal L-1 19,25 S
+Lantern_Wall L-1 21,26 E
+Bucket_Wooden_1 L-1 19,15 c
+Rope_3 L-1 19,18 W
+Torch_Metal L-1 18,20 W
+Torch_Metal L-1 20,12 S
+Barrel L-1 24,20 NE
+Stone1 L-1 9,13 NW
+Stone1 L-1 13,9 SE
+Stone3 L-1 10,10 SW s=0.8
+Crate_Wooden L-1 12,13 N
+Bucket_Metal L-1 13,12 E
+Chandelier L0 12,26 c s=1.4 h=5.73 power=2.6 range=11 shadows=1
+thall:Table_Large L0 12,29 N dx=1.0
+Mug L0 12,29 on:thall dx=-0.6
+Table_Plate L0 12,29 on:thall dx=0.4
+CandleStick_Triple L0 12,29 on:thall dx=1.0
+Bench L0 12,28 c dx=1.0 dz=0.3
+Torch_Metal L0 10,28 W h=1.9
+Torch_Metal L0 15,29 E
+hall_post:Chair_1 L0 13,25 c rot=270
+Barrel L0 14,24 S
+WeaponStand L0 15,27 E
+Shield_Wooden L0 10,26 W
+Banner_1 L0 11,29 N s=0.8 h=1.9
+Crate_Wooden L0 11,24 S
+Cauldron L0 17,29 c
+kitchen_table:Table_Large L0 19,30 c
+Food_bread_1 L0 19,30 on:kitchen_table dx=-0.9 dz=-0.25
+Food_fish L0 19,30 on:kitchen_table dx=-0.3
+kitchen_bowls:Pot_1 L0 19,30 on:kitchen_table dx=0.4
+CandleStick_Triple L0 19,30 on:kitchen_table dx=1.0
+Barrel L0 21,31 NE
+Bucket_Wooden_1 L0 20,31 N
+shk:Shelf_Simple L0 18,31 N h=1.5
+Mug L0 18,31 on:shk dx=-0.3
+Bottle_1 L0 18,31 on:shk dx=0.3
+storage_bag_potato L0 19,28 S
+Torch_Metal L0 17,28 S
+Barrel_Apples L0 17,31 N
+Deciduous_tree_stump L0 16,31 NW s=0.5
+Shelf_Small_Bottles L0 20,31 N h=1.5
+Stool L0 19,29 c dz=0.6
+Peg_Rack L0 22,28 W h=1.6
+Pickaxe_Bronze L0 22,29 W
+cr1:Crate_Wooden L0 27,31 NE
+Crate_Wooden L0 27,31 on:cr1
+Crate_Wooden L0 26,31 N
+Barrel L0 27,28 SE
+Barrel_Apples L0 27,29 E
+storage_bag_seeds L0 22,30 W
+storage_bag_carrot L0 22,31 NW
+Lantern_Wall L0 24,31 N
+Prop_Wagon L0 23,30 c dz=0.1
+Torch_Metal L0 23,6 W
+Torch_Metal L0 25,7 E
+Barrel L0 24,34 S
+Rope_2 L0 26,34 c
+Lantern_Wall L0 26,34 S h=2.2
+Lantern_Wall L0 10,23 N h=2.2
+Lantern_Wall L0 17,27 N h=2.2
+Lantern_Wall L0 22,27 N h=2.2
+Lantern_Wall L0 22,9 S h=2.2
+Lantern_Wall L0 26,9 S h=2.2
+Prop_Wagon L0 24,25 c dx=1.0 dz=-0.4
+storage_bag_potato L0 23,26 c dx=0.2
+storage_bag_carrot L0 23,25 c dx=0.3
+FarmCrate_Apple L0 26,26 c dx=-0.2
+FarmCrate_Carrot L0 26,25 c dx=-0.2 rot=10
+Prop_WoodenFence_Single L0 29,9 c dz=-0.3
+Bucket_Wooden_1 L0 29,9 c dz=0.4 dx=-0.5
+Bucket_Wooden_1 L0 29,9 c dz=0.4 dx=0.5
+FarmCrate_Carrot L0 30,9 c dz=0.3
+storage_bag L0 30,10 c
+Lantern_Wall L0 27,7 W h=2.2
+Lantern_Wall L0 41,13 E h=2.2
+woodB:Crate_Wooden L0 17,19 c cover=1
+Crate_Wooden L0 17,19 on:woodB
+Barrel L0 17,20 c dx=0.4
+yard_brazier:Cauldron L0 26,10 c glow=1,0.45,0.15 power=3 range=9 shadows=1
+stump:Deciduous_tree_stump L0 19,25 c s=0.6
+Axe_Bronze L0 19,25 on:stump
+Prop_Wagon L0 16,12 c
+Stone1 L0 16,9 c s=0.8
+Stone3 L0 17,10 c s=0.6
+Stone2 L0 20,10 c s=0.8
+Barrel L0 30,26 c
+Crate_Wooden L0 27,26 c
+Barrel L0 27,25 c
+Bush1 L0 7,19 W
+Bush1 L0 7,16 W
+Bush1 L0 7,21 W
+Bush1 L0 41,27 E
+Birch_tree2 L0 36,14 c
+Crate_Wooden L0 40,13 c
+Rope_3 L0 39,14 c
+Stone3 L0 34,13 c s=0.45
+Stone1 L0 38,13 c s=0.7
+Dummy L0 13,19 c
+Dummy L0 15,19 c rot=20
+WeaponStand L0 14,21 c rot=180
+Barrel L0 20,26 c
+Crate_Wooden L0 21,26 c rot=15
+Bench L0 8,21 c rot=90
+Prop_Vine2 L0 41,21 E
+Prop_Vine1 L0 41,29 E
+Plant1 L0 41,17 E
+Banner_1 L1 11,29 N s=0.8 h=1.9
+Banner_2 L1 13,29 N s=0.8 h=1.9
+Lantern_Wall L1 15,27 E
+Barrel L1 19,31 N
+Crate_Wooden L1 20,31 N
+Lantern_Wall L1 17,29 W h=2.2
+Crate_Wooden L1 6,6 NE
+bar_bed_g4:Bed_Twin1 L2 10,24 SW
+bar_bed_g3:Bed_Twin1 L2 11,29 N
+bar_bed_free:Bed_Twin2 L2 13,29 N
+tbar:Table_Large L2 13,27 c
+bar_bowl1:Pot_1 L2 13,27 on:tbar dx=-0.6
+bar_bowl2:Pot_1 L2 13,27 on:tbar dx=0.6
+Bench L2 13,26 c dz=0.5
+Bench L2 13,28 c dz=-0.5
+Lantern_Wall L2 12,24 S
+Shield_Wooden L2 15,29 N
+Crate_Wooden L2 6,4 E
+WeaponStand L2 4,4 c rot=90
+Torch_Metal L2 6,6 N
+Crate_Wooden L2 45,3 SE
+Barrel L2 42,3 SW
+Crate_Wooden L2 44,6 N
+Torch_Metal L2 45,5 E
+arrows:Crate_Wooden L2 26,5 SE
+Dummy L2 22,7 W
+WeaponStand L2 26,8 NE
+Chain_Coil L3 24,6 c
+Workbench L3 25,5 S
+Chair_1 L2 22,5 SW
+Torch_Metal L2 26,7 E
+Stone1 L2 44,34 c s=0.7
+Vase_Rubble_Medium L2 43,33 c
+Prop_Brick1 L2 45,32 c dx=-0.3
+Prop_Brick3 L2 42,35 c rot=30
+CandleStick_Stand L3 14,27 c
+tmap:Table_Large L3 12,26 c
+Scroll_1 L3 12,26 on:tmap dx=-0.7
+Book_Stack_1 L3 12,26 on:tmap dx=0.4
+CandleStick_Triple L3 12,26 on:tmap dx=1.0
+Chair_1 L3 12,25 c
+hq_vase1:Vase_2 L3 15,24 SE
+hq_vase2:Vase_4 L3 12,29 N
+Stool L3 3,5 c
+watch_stool:Stool L4 12,25 c
+horn_peg:Peg_Rack L4 13,29 N h=1.6
+tobs:Table_Large L4 12,27 c
+Book_Stack_2 L4 12,27 on:tobs dx=-0.5
+CandleStick_Stand L4 11,24 S
+Cauldron L4 4,4 c glow=1,0.45,0.15 power=3.5 range=9
+Cauldron L4 24,6 c glow=1,0.45,0.15 power=3.5 range=9
+roof_brazier:Cauldron L5 11,27 c glow=1,0.45,0.15 power=6 range=16 shadows=1
+Barrel L5 10,29 NW
+roof_bucket:Bucket_Wooden_1 L5 11,29 N
+Crate_Wooden L5 13,26 NW
+Rye L0 32,22 c dx=-0.45 dz=-0.3
+Rye L0 32,22 c dx=0.45 dz=0.35
+Rye L0 32,23 c dx=-0.45 dz=-0.3
+Rye L0 32,23 c dx=0.45 dz=0.35
+Rye L0 32,24 c dx=-0.45 dz=-0.3
+Rye L0 32,24 c dx=0.45 dz=0.35
+Rye L0 32,25 c dx=-0.45 dz=-0.3
+Rye L0 32,25 c dx=0.45 dz=0.35
+Rye L0 32,26 c dx=-0.45 dz=-0.3
+Rye L0 32,26 c dx=0.45 dz=0.35
+Rye L0 32,27 c dx=-0.45 dz=-0.3
+Rye L0 32,27 c dx=0.45 dz=0.35
+Rye L0 32,28 c dx=-0.45 dz=-0.3
+Rye L0 32,28 c dx=0.45 dz=0.35
+Rye L0 33,22 c dx=-0.45 dz=-0.3
+Rye L0 33,22 c dx=0.45 dz=0.35
+Rye L0 33,23 c dx=-0.45 dz=-0.3
+Rye L0 33,23 c dx=0.45 dz=0.35
+Rye L0 33,24 c dx=-0.45 dz=-0.3
+Rye L0 33,24 c dx=0.45 dz=0.35
+Rye L0 33,25 c dx=-0.45 dz=-0.3
+Rye L0 33,25 c dx=0.45 dz=0.35
+Rye L0 33,26 c dx=-0.45 dz=-0.3
+Rye L0 33,26 c dx=0.45 dz=0.35
+Rye L0 33,27 c dx=-0.45 dz=-0.3
+Rye L0 33,27 c dx=0.45 dz=0.35
+Rye L0 33,28 c dx=-0.45 dz=-0.3
+Rye L0 33,28 c dx=0.45 dz=0.35
+Rye L0 34,22 c dx=-0.45 dz=-0.3
+Rye L0 34,22 c dx=0.45 dz=0.35
+Rye L0 34,23 c dx=-0.45 dz=-0.3
+Rye L0 34,23 c dx=0.45 dz=0.35
+Rye L0 34,24 c dx=-0.45 dz=-0.3
+Rye L0 34,24 c dx=0.45 dz=0.35
+Rye L0 34,25 c dx=-0.45 dz=-0.3
+Rye L0 34,25 c dx=0.45 dz=0.35
+Rye L0 34,26 c dx=-0.45 dz=-0.3
+Rye L0 34,26 c dx=0.45 dz=0.35
+Rye L0 34,27 c dx=-0.45 dz=-0.3
+Rye L0 34,27 c dx=0.45 dz=0.35
+Rye L0 34,28 c dx=-0.45 dz=-0.3
+Rye L0 34,28 c dx=0.45 dz=0.35
+Rye L0 35,22 c dx=-0.45 dz=-0.3
+Rye L0 35,22 c dx=0.45 dz=0.35
+Rye L0 35,23 c dx=-0.45 dz=-0.3
+Rye L0 35,23 c dx=0.45 dz=0.35
+Rye L0 35,24 c dx=-0.45 dz=-0.3
+Rye L0 35,24 c dx=0.45 dz=0.35
+Rye L0 35,25 c dx=-0.45 dz=-0.3
+Rye L0 35,25 c dx=0.45 dz=0.35
+Rye L0 35,26 c dx=-0.45 dz=-0.3
+Rye L0 35,26 c dx=0.45 dz=0.35
+Rye L0 35,27 c dx=-0.45 dz=-0.3
+Rye L0 35,27 c dx=0.45 dz=0.35
+Rye L0 35,28 c dx=-0.45 dz=-0.3
+Rye L0 35,28 c dx=0.45 dz=0.35
+Rye L0 36,22 c dx=-0.45 dz=-0.3
+Rye L0 36,22 c dx=0.45 dz=0.35
+Rye L0 36,23 c dx=-0.45 dz=-0.3
+Rye L0 36,23 c dx=0.45 dz=0.35
+Rye L0 36,24 c dx=-0.45 dz=-0.3
+Rye L0 36,24 c dx=0.45 dz=0.35
+Rye L0 36,25 c dx=-0.45 dz=-0.3
+Rye L0 36,25 c dx=0.45 dz=0.35
+Rye L0 36,26 c dx=-0.45 dz=-0.3
+Rye L0 36,26 c dx=0.45 dz=0.35
+Rye L0 36,27 c dx=-0.45 dz=-0.3
+Rye L0 36,27 c dx=0.45 dz=0.35
+Rye L0 36,28 c dx=-0.45 dz=-0.3
+Rye L0 36,28 c dx=0.45 dz=0.35
+Rye L0 37,22 c dx=-0.45 dz=-0.3
+Rye L0 37,22 c dx=0.45 dz=0.35
+Rye L0 37,23 c dx=-0.45 dz=-0.3
+Rye L0 37,23 c dx=0.45 dz=0.35
+Rye L0 37,24 c dx=-0.45 dz=-0.3
+Rye L0 37,24 c dx=0.45 dz=0.35
+Rye L0 37,25 c dx=-0.45 dz=-0.3
+Rye L0 37,25 c dx=0.45 dz=0.35
+Rye L0 37,26 c dx=-0.45 dz=-0.3
+Rye L0 37,26 c dx=0.45 dz=0.35
+Rye L0 37,27 c dx=-0.45 dz=-0.3
+Rye L0 37,27 c dx=0.45 dz=0.35
+Rye L0 37,28 c dx=-0.45 dz=-0.3
+Rye L0 37,28 c dx=0.45 dz=0.35
+Prop_Vine5 L0 9,4 N
+Prop_Vine5 L0 12,4 N
+Prop_Vine5 L0 32,4 N
+Prop_Vine5 L0 15,34 S
+Prop_Vine5 L0 36,34 S

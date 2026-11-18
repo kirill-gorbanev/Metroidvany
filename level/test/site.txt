@@ -1,0 +1,4 @@
+name Тестовый кусок
+size 10 7
+origin -10 -7
+spawn L-1 1,5

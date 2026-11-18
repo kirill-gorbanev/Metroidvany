@@ -1,0 +1,12 @@
+# тест
+Bench L-1 1,5 N dx=1.0
+Bucket_Wooden_1 L-1 2,5 NE
+Torch_Metal L-1 3,4 N
+t1:Table_Large L0 2,3 S dx=0.4
+Cauldron L0 2,3 on:t1 dx=-0.6
+Pot_1 L0 2,3 on:t1 dx=0.7
+Barrel L0 1,3 SW
+Shelf_Simple L0 1,4 W h=1.5
+Lantern_Wall L0 4,5 E
+Torch_Metal L0 5,5 W
+Chest_Wood L1 4,5 NE

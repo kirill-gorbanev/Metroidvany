@@ -1,0 +1,83 @@
+# сгенерировано _gen.py — правь генератор, не карту
+room x name="Башенка" floor=wood walls=stone ceiling=wood plain=1
+roof Roof_Tower_RoundTiles at=14.5,25.5 rot=0 s=1.3 sy=1.15
+map
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                     P P P P P P p
+                    P: : : : : :  p
+                                 p
+                    P: : : : : :P
+
+                    P: : : : : :P
+                           - - -
+                    P: : :|x xr |
+
+                    P: : :Dx xr w
+
+                    P: : :|x x x|
+                     P P P - w -
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

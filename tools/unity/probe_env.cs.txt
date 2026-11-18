@@ -1,0 +1,15 @@
+var sb = new System.Text.StringBuilder();
+var bench = UnityEngine.Object.FindFirstObjectByType<Fortress.Rig.Tests.RigTestBench>();
+var fl = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+sb.Append("t=" + UnityEngine.Time.time.ToString("F1") + " ev='" + bench.GetType().GetField("lastEvent", fl).GetValue(bench) + "' ");
+var ar = UnityEngine.GameObject.Find("Ситуация");
+if (ar != null) foreach (var hp in ar.GetComponentsInChildren<Fortress.Rig.Human.HumanPuppet>()) {
+  var it = hp.GetComponent<Fortress.Rig.Human.HumanInteract>();
+  var p = hp.body.Root.position; var g = hp.targetPelvis.position;
+  sb.Append("| " + hp.name.Substring(0, 4) + " " + hp.state + "/" + (it ? it.task.ToString() : "-") + " pel=" + p.ToString("F2") + " gh=" + g.ToString("F2"));
+  sb.Append(" ft=" + hp.feet[0].position.y.ToString("F2") + "," + hp.feet[1].position.y.ToString("F2") + " trips=" + hp.Trips + " tone=" + hp.body.tone.ToString("F2"));
+  if (it && it.Item) sb.Append(" item=" + it.Item.position.ToString("F2") + (it.Carrying ? " held" : ""));
+  if (hp.Bracing) sb.Append(" BRACE");
+  if (hp.Events.Count > 0) { sb.Append(" EV[" + string.Join(" ; ", hp.Events) + "]"); hp.Events.Clear(); }
+}
+return sb.ToString();

@@ -1,0 +1,5 @@
+var h = UnityEngine.GameObject.Find("Hero"); var c = h.GetComponent<Fortress.Hero.HeroController>(); c.scripted = true; c.scriptPoint = new UnityEngine.Vector3(0.2f, 0f, 0.6f);
+var p = h.transform.position;
+global::FortressSetup.Shot("D:/Metroidvany/renders/hero/u_leftshoulder.png", p + new UnityEngine.Vector3(-1.1f, 1.0f, 0.2f), p + new UnityEngine.Vector3(-0.1f, 0.55f, 0f));
+global::FortressSetup.Shot("D:/Metroidvany/renders/hero/u_legs.png", p + new UnityEngine.Vector3(0.6f, 0.35f, 1.1f), p + new UnityEngine.Vector3(0f, 0.15f, 0.1f));
+return "ok";

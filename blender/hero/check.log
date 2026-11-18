@@ -1,0 +1,96 @@
+GPUTexture: Blender Texture Not Loaded!
+Blender 4.4.0 (hash 05377985c527 built 2025-03-18 03:22:03)
+Read blend: "D:\Metroidvany\blender\hero\hero.blend"
+Fra:1 Mem:433.74M (Peak 434.62M) | Time:00:00.96 | Rendering 1 / 64 samples
+Fra:1 Mem:433.74M (Peak 434.62M) | Time:00:01.00 | Rendering 25 / 64 samples
+Fra:1 Mem:433.74M (Peak 434.62M) | Time:00:01.04 | Rendering 50 / 64 samples
+Fra:1 Mem:433.74M (Peak 434.62M) | Time:00:01.07 | Rendering 64 / 64 samples
+Saved: 'D:\Metroidvany\blender\hero\renders\06_key_Blink_R.png'
+Time: 00:01.21 (Saving: 00:00.12)
+
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.04 | Rendering 1 / 64 samples
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.09 | Rendering 25 / 64 samples
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.13 | Rendering 50 / 64 samples
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.16 | Rendering 64 / 64 samples
+Saved: 'D:\Metroidvany\blender\hero\renders\06_key_Brow_Sad.png'
+Time: 00:00.24 (Saving: 00:00.06)
+
+Fra:1 Mem:433.74M (Peak 434.72M) | Time:00:00.04 | Rendering 1 / 64 samples
+Fra:1 Mem:433.74M (Peak 434.72M) | Time:00:00.08 | Rendering 25 / 64 samples
+Fra:1 Mem:433.74M (Peak 434.72M) | Time:00:00.12 | Rendering 50 / 64 samples
+Fra:1 Mem:433.74M (Peak 434.72M) | Time:00:00.15 | Rendering 64 / 64 samples
+Saved: 'D:\Metroidvany\blender\hero\renders\06_key_Wince.png'
+Time: 00:00.23 (Saving: 00:00.06)
+
+Fra:1 Mem:433.74M (Peak 434.87M) | Time:00:00.04 | Rendering 1 / 64 samples
+Fra:1 Mem:433.74M (Peak 434.87M) | Time:00:00.08 | Rendering 25 / 64 samples
+Fra:1 Mem:433.74M (Peak 434.87M) | Time:00:00.12 | Rendering 50 / 64 samples
+Fra:1 Mem:433.74M (Peak 434.87M) | Time:00:00.13 | Rendering 64 / 64 samples
+Saved: 'D:\Metroidvany\blender\hero\renders\06_key_Mouth_Frown.png'
+Time: 00:00.21 (Saving: 00:00.05)
+
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.04 | Rendering 1 / 64 samples
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.08 | Rendering 25 / 64 samples
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.15 | Rendering 50 / 64 samples
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.17 | Rendering 64 / 64 samples
+Saved: 'D:\Metroidvany\blender\hero\renders\01_naked_34.png'
+Time: 00:00.24 (Saving: 00:00.05)
+
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.04 | Rendering 1 / 64 samples
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.09 | Rendering 25 / 64 samples
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.14 | Rendering 50 / 64 samples
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.17 | Rendering 64 / 64 samples
+Saved: 'D:\Metroidvany\blender\hero\renders\02_naked_back.png'
+Time: 00:00.24 (Saving: 00:00.05)
+
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.04 | Rendering 1 / 64 samples
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.07 | Rendering 25 / 64 samples
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.11 | Rendering 50 / 64 samples
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.13 | Rendering 64 / 64 samples
+Saved: 'D:\Metroidvany\blender\hero\renders\03_naked_side.png'
+Time: 00:00.20 (Saving: 00:00.05)
+
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.04 | Rendering 1 / 64 samples
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.08 | Rendering 25 / 64 samples
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.13 | Rendering 50 / 64 samples
+Fra:1 Mem:433.74M (Peak 433.74M) | Time:00:00.15 | Rendering 64 / 64 samples
+Saved: 'D:\Metroidvany\blender\hero\renders\04_face.png'
+Time: 00:00.22 (Saving: 00:00.05)
+
+Fra:1 Mem:433.74M (Peak 434.72M) | Time:00:00.04 | Rendering 1 / 64 samples
+Fra:1 Mem:433.74M (Peak 434.72M) | Time:00:00.07 | Rendering 25 / 64 samples
+Fra:1 Mem:433.74M (Peak 434.72M) | Time:00:00.11 | Rendering 50 / 64 samples
+Fra:1 Mem:433.74M (Peak 434.72M) | Time:00:00.13 | Rendering 64 / 64 samples
+Saved: 'D:\Metroidvany\blender\hero\renders\05_face_burnside.png'
+Time: 00:00.21 (Saving: 00:00.05)
+
+Fra:1 Mem:562.87M (Peak 562.92M) | Time:00:00.39 | Rendering 1 / 64 samples
+Fra:1 Mem:562.87M (Peak 562.92M) | Time:00:00.44 | Rendering 25 / 64 samples
+Fra:1 Mem:562.87M (Peak 562.92M) | Time:00:00.50 | Rendering 50 / 64 samples
+Fra:1 Mem:562.87M (Peak 562.92M) | Time:00:00.53 | Rendering 64 / 64 samples
+Saved: 'D:\Metroidvany\blender\hero\renders\07_outfit_34.png'
+Time: 00:00.60 (Saving: 00:00.05)
+
+Fra:1 Mem:562.87M (Peak 562.87M) | Time:00:00.04 | Rendering 1 / 64 samples
+Fra:1 Mem:562.87M (Peak 562.87M) | Time:00:00.09 | Rendering 25 / 64 samples
+Fra:1 Mem:562.87M (Peak 562.87M) | Time:00:00.14 | Rendering 50 / 64 samples
+Fra:1 Mem:562.87M (Peak 562.87M) | Time:00:00.17 | Rendering 64 / 64 samples
+Saved: 'D:\Metroidvany\blender\hero\renders\08_outfit_back.png'
+Time: 00:00.24 (Saving: 00:00.05)
+
+Fra:1 Mem:562.87M (Peak 564.29M) | Time:00:00.04 | Rendering 1 / 64 samples
+Fra:1 Mem:562.87M (Peak 564.29M) | Time:00:00.09 | Rendering 25 / 64 samples
+Fra:1 Mem:562.87M (Peak 564.29M) | Time:00:00.15 | Rendering 50 / 64 samples
+Fra:1 Mem:562.87M (Peak 564.29M) | Time:00:00.17 | Rendering 64 / 64 samples
+Saved: 'D:\Metroidvany\blender\hero\renders\09_face_front_close.png'
+Time: 00:00.24 (Saving: 00:00.05)
+
+BlenderMCP addon registered
+[INFO ] services.locationservice ...............: Not adding link to MakeHuman user data, since neither explicit path nor auto-discovery is set in preferences.
+[INFO ] mpfb.init ..............................: Build info 20260722
+[INFO ] mpfb.init ..............................: MPFB initialization has finished.
+IK hand reach error 0.24290782824081886
+RENDERED D:\Metroidvany\blender\hero\renders/
+BlenderMCP addon unregistered
+
+Blender quit

@@ -1,0 +1,259 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &2211268095943272260
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6078546862846672240}
+  - component: {fileID: 1198002373935664600}
+  - component: {fileID: 6658145043449838757}
+  - component: {fileID: 1165669250305091985}
+  m_Layer: 0
+  m_Name: Hero
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6078546862846672240
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2211268095943272260}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 6420599388764398579}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!143 &1198002373935664600
+CharacterController:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2211268095943272260}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Height: 0.9
+  m_Radius: 0.28
+  m_SlopeLimit: 50
+  m_StepOffset: 0.2
+  m_SkinWidth: 0.02
+  m_MinMoveDistance: 0
+  m_Center: {x: 0, y: 0.45, z: 0}
+--- !u!114 &6658145043449838757
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2211268095943272260}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8df2b2148678e464592d4e9a4d244ef7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Fortress.Hero.HeroController
+  body: {fileID: 2171245679615484262}
+  cam: {fileID: 0}
+  reachFrac: 0.97
+  leanReach: 0.28
+  maxSpeedSit: 0.55
+  maxSpeedProne: 0.85
+  bodyMass: 45
+  grabRadius: 0.15
+  scripted: 0
+  scriptPoint: {x: 0, y: 0, z: 0}
+  scriptHold: 0
+  scriptToggleProne: 0
+  scriptLoop: 0
+  logEvents: 0
+--- !u!114 &1165669250305091985
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2211268095943272260}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 36fbbd338f31925429fcbb1010991c4d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Fortress.Hero.HeroOutfit
+  bodyRenderer: {fileID: 4584448552180675129}
+  outfitParts:
+  - {fileID: 4741377622913705459}
+  - {fileID: 3314047274649592240}
+  - {fileID: 4992652237346153654}
+  worn: 1
+  hideZones:
+  - Torso
+  - StumpLegs
+--- !u!1001 &6814003810967028760
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 6078546862846672240}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -6963420931086032405, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -6108725369064333730, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -5135725035315353610, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+      propertyPath: m_Name
+      value: "\u041C\u043E\u0434\u0435\u043B\u044C"
+      objectReference: {fileID: 0}
+    - target: {fileID: 2006708350456864942, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5866666021909216657, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6993826295986615841, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8317559367407642024, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2171245679615484262}
+  m_SourcePrefab: {fileID: 100100000, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+--- !u!137 &3314047274649592240 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 8317559367407642024, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+  m_PrefabInstance: {fileID: 6814003810967028760}
+  m_PrefabAsset: {fileID: 0}
+--- !u!137 &4584448552180675129 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 6993826295986615841, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+  m_PrefabInstance: {fileID: 6814003810967028760}
+  m_PrefabAsset: {fileID: 0}
+--- !u!137 &4741377622913705459 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: -6963420931086032405, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+  m_PrefabInstance: {fileID: 6814003810967028760}
+  m_PrefabAsset: {fileID: 0}
+--- !u!137 &4992652237346153654 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 2006708350456864942, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+  m_PrefabInstance: {fileID: 6814003810967028760}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &5931625043570473289 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+  m_PrefabInstance: {fileID: 6814003810967028760}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &2171245679615484262
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5931625043570473289}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60e2db0960e0e9747b6634933e0d52bd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Fortress.Hero.HeroBody
+  prone: 0
+  handTarget: {x: 0, y: 0, z: 0}
+  handWeight: 1
+  handPlanted: 0
+  handNormal: {x: 0, y: 1, z: 0}
+  lookTarget: {x: 0, y: 0, z: 0}
+  effort: 0
+  gripping: 0
+  root: {fileID: 6078546862846672240}
+  sitPelvisHeight: 0.13
+  pronePelvisHeight: 0.11
+  proneShift: -0.3
+  hunch: 20
+  maxReachLean: 70
+  maxTwist: 35
+  headLookWeight: 0.55
+  lookLimit: 75
+  eyeLimit: 28
+  blinkMin: 1.8
+  blinkMax: 5.5
+--- !u!4 &6420599388764398579 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 317c25c992a8b844eae117b4311cd94c, type: 3}
+  m_PrefabInstance: {fileID: 6814003810967028760}
+  m_PrefabAsset: {fileID: 0}

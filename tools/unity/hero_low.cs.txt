@@ -1,0 +1,8 @@
+var h = UnityEngine.GameObject.Find("Hero");
+float lo = 99f; string who = "";
+foreach (var r in h.GetComponentsInChildren<UnityEngine.SkinnedMeshRenderer>()) {
+  if (!r.enabled) continue;
+  var m = new UnityEngine.Mesh(); r.BakeMesh(m, true);
+  foreach (var v in m.vertices) { var w = r.transform.TransformPoint(v); if (w.y < lo) { lo = w.y; who = r.name; } }
+}
+return "lowest=" + lo.ToString("F3") + " (" + who + ") root=" + h.transform.position.y.ToString("F3");
