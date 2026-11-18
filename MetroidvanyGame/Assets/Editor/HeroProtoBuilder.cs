@@ -33,7 +33,7 @@ namespace Fortress.EditorTools
             Debug.Log("[Hero] прототип: " + ScenePath);
         }
 
-        static Material Mat(string n, Color c)
+        internal static Material Mat(string n, Color c)
         {
             var sh = Shader.Find("Universal Render Pipeline/Lit"); if (!sh) sh = Shader.Find("Standard");
             var m = new Material(sh) { name = n };
@@ -41,7 +41,7 @@ namespace Fortress.EditorTools
             return m;
         }
 
-        static Transform Cube(string n, Vector3 pos, Vector3 size, Color c, Transform parent = null)
+        internal static Transform Cube(string n, Vector3 pos, Vector3 size, Color c, Transform parent = null)
         {
             var g = GameObject.CreatePrimitive(PrimitiveType.Cube);
             g.name = n;
@@ -283,7 +283,7 @@ namespace Fortress.EditorTools
 
         static Mesh wedge;
         /// <summary>Клин 1×1×1: основание y = 0, верх поднимается к +Z (высокий торец z = +0.5).</summary>
-        static Mesh Wedge()
+        internal static Mesh Wedge()
         {
             const string path = "Assets/Characters/Hero/ProtoWedge.asset";
             if (wedge) return wedge;
