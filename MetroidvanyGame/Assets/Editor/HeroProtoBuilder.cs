@@ -133,8 +133,7 @@ namespace Fortress.EditorTools
         public static void RemoveModelMenu()
         {
             if (EditorApplication.isPlaying) { Debug.LogWarning("[Hero] кубики: выйди из Play"); return; }
-            var scene = SceneManager.GetSceneByPath(ScenePath);
-            if (!scene.IsValid() || !scene.isLoaded) return;
+            var scene = SceneManager.GetActiveScene();                    // любая сцена с прототипом (трасса, арены)
             foreach (var old in Object.FindObjectsOfType<ProtoHeroModel>()) Object.DestroyImmediate(old.gameObject);
             var proto = Object.FindObjectOfType<HeroProto>();
             if (proto)
@@ -155,8 +154,7 @@ namespace Fortress.EditorTools
         public static void AddModelMenu()
         {
             if (EditorApplication.isPlaying) { Debug.LogWarning("[Hero] модель: выйди из Play"); return; }
-            var scene = SceneManager.GetSceneByPath(ScenePath);
-            if (!scene.IsValid() || !scene.isLoaded) { Debug.LogWarning("[Hero] модель: открой " + ScenePath); return; }
+            var scene = SceneManager.GetActiveScene();                    // любая сцена с прототипом (трасса, арены)
             var proto = Object.FindObjectOfType<HeroProto>();
             if (!proto) { Debug.LogWarning("[Hero] модель: нет HeroProto"); return; }
             AddModel(proto);
@@ -416,7 +414,7 @@ namespace Fortress.EditorTools
                 Vector3 focus = body.position + Vector3.up * orbit.lookHeight;
                 camGo.transform.SetPositionAndRotation(focus - rot * Vector3.forward * orbit.distance, rot);
             }
-            proto.showHints = true;                                       // подсказки видны (автор вернул)
+            proto.showHints = false;                                      // подсказки выключены (автор: «вырубить индикаторы»)
             // 3D-модель вместо кубиков — эксперимент (модель видна только со спины): по меню «Proto: модель вместо кубиков»
             // префаб
             const string PrefabPath = "Assets/Characters/Hero/HeroProto.prefab";

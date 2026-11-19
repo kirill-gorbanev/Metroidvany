@@ -133,6 +133,68 @@ namespace Fortress.EditorTools
             return sb.ToString();
         }
 
+        /// <summary>Арена 6 — полоса целиком: бот идёт по точкам от старта до финиша (без переносов), отчёт по участкам.</summary>
+        public static string Course6(bool perLeg = false)
+        {
+            if (!Setup()) return "нет Play / героя";
+            var sb = new StringBuilder("ПОЛОСА (арена 6), бот от старта\n");
+            (string n, Vector3[] pts)[] legs =
+            {
+                ("1 слалом", new[] { new Vector3(4.4f, 0f, 2f) }),
+                ("2 ступени", new[] { new Vector3(6.2f, 0.96f, 2f), new Vector3(8.2f, 0.6f, 2f) }),
+                ("3 уступ 0.3", new[] { new Vector3(9.2f, 0.9f, 2f) }),
+                ("4 уступ 0.5", new[] { new Vector3(11.6f, 1.1f, 2f), new Vector3(13.4f, 0.6f, 2f) }),
+                ("5 тоннель", new[] { new Vector3(18.4f, 0.01f, 2f), new Vector3(23.3f, 0.6f, 2f) }),
+                ("поворот на ряд B", new[] { new Vector3(23.3f, 0.6f, 6.6f), new Vector3(21.8f, 0.6f, 6.6f) }),
+                ("6 уступ 0.7", new[] { new Vector3(19.6f, 1.3f, 6.6f) }),
+                ("7 склон 45° с перилами", new[] { new Vector3(14.8f, 1.8f, 7.5f) }),
+                ("8 узкий мост", new[] { new Vector3(10.2f, 1.8f, 6.6f), new Vector3(8.4f, 1.8f, 6.6f) }),
+                ("9 спуск 60°", new[] { new Vector3(4.4f, 0.6f, 6.6f) }),
+                ("поворот на ряд C", new[] { new Vector3(1.2f, 0.6f, 6.6f), new Vector3(1.2f, 0.6f, 11.2f), new Vector3(2.6f, 0.6f, 11.2f) }),
+                ("10 пропасть, челнок", new[] { new Vector3(8.0f, 0.6f, 11.2f) }),
+                ("11 поворотный круг", new[] { new Vector3(9.4f, 0.6f, 10.0f), new Vector3(11.8f, 0.6f, 10.0f), new Vector3(12.8f, 0.6f, 11.2f) }),
+                ("12 лифт", new[] { new Vector3(14.5f, 1.81f, 11.2f), new Vector3(17.6f, 1.8f, 11.2f) }),
+                ("13 лестница, финиш", new[] { new Vector3(23f, 0.6f, 11.2f) }),
+            };
+            try
+            {
+                var bot = new ProtoBot(H, H.cam, 7) { randomness = 0f, maxTargetAttempts = 100000, reachRadius = 0.6f };
+                H.driver = bot.Frame;
+                int total = 0; bool ok = true;
+                // старт каждого участка (для perLeg: участок проверяется сам по себе, с правильным лицом)
+                var starts = new (Vector3 p, float yaw)[]
+                {
+                    (new Vector3(0.8f, 0.6f, 2f), 90f), (new Vector3(4.4f, 0.6f, 2f), 90f), (new Vector3(8.0f, 0.6f, 2f), 90f),
+                    (new Vector3(10.2f, 0.9f, 2f), 90f), (new Vector3(13.4f, 0.6f, 2f), 90f), (new Vector3(23.2f, 0.6f, 2.4f), 0f),
+                    (new Vector3(21.6f, 0.6f, 6.6f), -90f), (new Vector3(17.6f, 0.6f, 7.5f), -90f), (new Vector3(14.8f, 1.8f, 6.6f), -90f),
+                    (new Vector3(8.4f, 1.8f, 6.6f), -90f), (new Vector3(4.4f, 0.6f, 6.6f), -90f), (new Vector3(2.6f, 0.6f, 11.2f), 90f),
+                    (new Vector3(8.0f, 0.6f, 11.2f), 90f), (new Vector3(12.8f, 0.6f, 11.2f), 90f), (new Vector3(17.6f, 1.8f, 11.2f), 90f),
+                };
+                int li = -1;
+                foreach (var leg in legs)
+                {
+                    li++;
+                    if (perLeg) { H.DiagTeleport(starts[li].p, starts[li].yaw); W = new ProtoWatch(H); for (int i = 0; i < 5; i++) Step(); bot.trapped = false; ok = true; }
+                    int a0 = bot.attempts, w0 = W.Total; float t0 = W.time;
+                    foreach (var p in leg.pts)
+                    {
+                        bot.Start(p); bot.reached = 0; int s0 = bot.attempts;
+                        while (bot.reached == 0 && bot.attempts - s0 < 150 && !bot.trapped) Step();
+                        if (bot.reached == 0) { ok = false; break; }
+                    }
+                    int att = bot.attempts - a0; total += att;
+                    sb.Append($"  {leg.n}: {(ok ? "прошёл" : "НЕ ПРОШЁЛ")}, жестов {att}, {W.time - t0:F0} с, тело ({H.BodyXZ.x:F1}, {H.BodyY:F2}, {H.BodyXZ.z:F1})" +
+                              (W.Total > w0 ? $", сторожа +{W.Total - w0}" : "") + "\n");
+                    if (perLeg && W.Total > w0) sb.Append("    ").Append(W.Report().Replace("\n", "\n    ")).Append('\n');
+                    if (!ok && !perLeg) break;
+                }
+                sb.Insert(0, ok ? $"ФИНИШ: {total} жестов, {W.time:F0} с симуляции\n" : "НЕ ДОШЁЛ\n");
+                sb.Append(bot.events.Count > 0 ? "  " + string.Join("; ", bot.events) + "\n" : "").Append("  ").Append(W.Report());
+            }
+            finally { End(); }
+            return sb.ToString();
+        }
+
         static HeroProto.InputFrame Hold(float dy = 0f) => new HeroProto.InputFrame { pressed = true, delta = new Vector2(0f, dy) };
         static HeroProto.InputFrame Free() => new HeroProto.InputFrame { pos = new Vector2(-9999f, -9999f) };
 

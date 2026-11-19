@@ -34,7 +34,7 @@ namespace Fortress.Hero.Proto
         {
             var f = new HeroProto.InputFrame();
             Vector3 body = h.BodyXZ;
-            if (hasTarget && AtTarget && escapeStep < 0) { reached++; NewTarget(null); ph = Ph.Release; ticks = 0; }
+            if (hasTarget && AtTarget) { escapeStep = -1; reached++; NewTarget(null); ph = Ph.Release; ticks = 0; }
             travelled += (body - lastBody).magnitude; lastBody = body;
             switch (ph)
             {
@@ -144,7 +144,8 @@ namespace Fortress.Hero.Proto
         }
 
         /// <summary>Цель достигнута: по полу ближе 0.35 м и (если у цели задана высота) на её уровне.</summary>
-        bool AtTarget => new Vector2(target.x - h.BodyXZ.x, target.z - h.BodyXZ.z).magnitude < 0.35f && (target.y <= 0f || Mathf.Abs(h.BodyY - target.y) < 0.15f);
+        public float reachRadius = 0.35f;
+        bool AtTarget => new Vector2(target.x - h.BodyXZ.x, target.z - h.BodyXZ.z).magnitude < reachRadius && (target.y <= 0f || Mathf.Abs(h.BodyY - target.y) < 0.15f);
         public int reached, failedTargets, targetAttempts, maxTargetAttempts = 60;
         public System.Func<Vector3> pickTarget;
         void NewTarget(string why)

@@ -20414,9 +20414,12 @@ MonoBehaviour:
   slideMax: 1.5
   handSlipSpeed: 0.3
   handSlipMax: 0.08
-  holdSnap: 0.1
+  holdSnapScreen: 0.15
+  holdSnapScreenFloor: 0.06
+  holdSnapWorld: 0.3
   climbUp: 0.8
-  climbGain: 0.6
+  climbPerPx: 0.0012
+  mantleSpeed: 0.8
   fallBack: 10
   bodyCube: {fileID: 7086956222114364864}
   shoulderCube: {fileID: 3238226125899729024}
@@ -20436,7 +20439,7 @@ MonoBehaviour:
   maxDrop: 0.4
   handDown: 0.5
   inputShift: 0
-  showHints: 1
+  showHints: 0
   cameraFollow: 1
   forwardSpeed: 1
   backSpeed: 0.45

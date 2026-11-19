@@ -110,7 +110,7 @@ namespace Fortress.Hero.Proto
 
         // ---- чтение точек (для модели; логику не меняет) ----
         /// <summary>Тело на поверхности: XZ — центр тела, y — поверхность под ним.</summary>
-        public Vector3 BodyGround => new Vector3(bodyCube.position.x, groundY, bodyCube.position.z);
+        public Vector3 BodyGround => new Vector3(bodyCube.position.x, groundY + climbLift, bodyCube.position.z);   // с подъёмом на кромке
         /// <summary>Кисть на поверхности (XZ — точка алгоритма, y — поверхность под ней).</summary>
         public Vector3 HandOnSurface => new Vector3(hand.x, handY, hand.z);
 
@@ -692,9 +692,21 @@ namespace Fortress.Hero.Proto
         bool FloorPoint(Vector2 px, out Vector3 p)
         {
             // курсор — луч на ПОВЕРХНОСТЬ (выступ, ступень, пол); дальше алгоритм берёт только XZ этой точки
+            // ПЕРЕКРЫТИЕ НАД ГОЛОВОЙ (крыша тоннеля, мост сверху): попали в поверхность выше своего уровня, а под ней есть пол
+            // своего уровня — луч идёт сквозь неё дальше, на свой пол. Иначе в тоннеле рука ставилась на 0.5 м ближе к камере.
             p = default;
-            if (!SurfaceRay(cam.ScreenPointToRay(px), out var h)) return false;
-            p = Flat(h); return true;
+            Ray r = cam.ScreenPointToRay(px);
+            for (int k = 0; k < 4; k++)
+            {
+                if (!SurfaceRay(r, out var h)) return false;
+                if (h.y > BodyLevel + maxStep + 0.05f)
+                {
+                    float below = LevelHeight(Flat(h), BodyLevel, handUp);
+                    if (!float.IsInfinity(below) && below < h.y - 0.1f) { r = new Ray(h + r.direction * 0.003f, r.direction); continue; }
+                }
+                p = Flat(h); return true;
+            }
+            return false;
         }
 
         /// <summary>ПЛАТФОРМЫ: тело на подвижной поверхности едет с ней (сдвиг, подъём, поворот); кисть, держащаяся за платформу, — тоже.

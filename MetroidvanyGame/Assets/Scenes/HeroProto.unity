@@ -34970,6 +34970,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2e42ca3205b1d8f409677bf952b49f39, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Fortress.Hero.Proto.HeroProto
+  steepAngle: 35
+  steepExit: 32
+  slideDelay: 0.2
+  slideAccel: 2.5
+  slideMax: 1.5
+  handSlipSpeed: 0.3
+  handSlipMax: 0.06
+  holdSnapScreen: 0.15
+  holdSnapScreenFloor: 0.06
+  holdSnapWorld: 0.3
+  climbUp: 0.8
+  climbPerPx: 0.0012
+  mantleSpeed: 0.8
+  fallBack: 10
   bodyCube: {fileID: 1367278466}
   shoulderCube: {fileID: 1675721836}
   elbowCube: {fileID: 1650247813}
@@ -34983,7 +34997,12 @@ MonoBehaviour:
   bodyRadius: 0.2
   surfaceRoot: {fileID: 652235789}
   heightFollow: 14
-  showHints: 1
+  maxStep: 0.4
+  handUp: 0.5
+  maxDrop: 0.4
+  handDown: 0.5
+  inputShift: 0
+  showHints: 0
   cameraFollow: 1
   forwardSpeed: 1
   backSpeed: 0.45
@@ -34996,6 +35015,7 @@ MonoBehaviour:
   testHold: 0
   mode: 0
   t: 0
+  armKeepOut: 0.15
   drawArmLine: 1
   sectorLeft: 50
   sectorRight: 70
@@ -35007,6 +35027,8 @@ MonoBehaviour:
   moveFadeRight: 100
   moveAllAround: 1
   wallFriction: 0.15
+  avoidGain: 1
+  avoidMargin: 0.12
 --- !u!21 &1550600126
 Material:
   serializedVersion: 8

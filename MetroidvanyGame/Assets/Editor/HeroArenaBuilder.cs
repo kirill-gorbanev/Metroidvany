@@ -96,11 +96,11 @@ namespace Fortress.EditorTools
         static void HoldCyl(Transform t) { var h = t.gameObject.AddComponent<ProtoHold>(); h.a = new Vector3(0f, -1f, 0f); h.b = new Vector3(0f, 1f, 0f); }
 
         /// <summary>Табличка-подпись на полу (читается от камеры за спиной героя, лицом на север).</summary>
-        static void Sign(string text, Vector3 pos, float size = 1f)
+        static void Sign(string text, Vector3 pos, float size = 1f, float yaw = 0f)
         {
             var g = new GameObject("Подпись: " + text.Split('\n')[0]);
             g.transform.SetParent(decor, false);
-            g.transform.SetPositionAndRotation(pos + Vector3.up * 0.01f, Quaternion.Euler(70f, 0f, 0f));
+            g.transform.SetPositionAndRotation(pos + Vector3.up * 0.01f, Quaternion.Euler(0f, yaw, 0f) * Quaternion.Euler(70f, 0f, 0f));   // yaw — куда смотрит камера, читающая подпись
             var tm = g.AddComponent<TextMesh>();
             tm.text = text; tm.fontSize = 64; tm.characterSize = 0.026f * size; tm.anchor = TextAnchor.LowerCenter;
             tm.alignment = TextAlignment.Center; tm.color = new Color(0.95f, 0.93f, 0.85f);
@@ -548,8 +548,165 @@ namespace Fortress.EditorTools
             PlaceHero(new Vector3(X(2) + Lane + Sep * 0.5f, 0f, 0.8f));
         }
 
+        // ================= АРЕНА 6 — ПОЛОСА ПРЕПЯТСТВИЙ (все механики подряд) =================
+        public const string Scene6Path = "Assets/Scenes/HeroArena6.unity";
+
+        /// <summary>Наклонный пандус по X: от низа xLow до верха xHigh (любой порядок), ширина z0..z1, от y0 на высоту h.</summary>
+        static void WedgeX(string n, float xLow, float xHigh, float z0, float z1, float y0, float h, Color c, Transform root)
+            => Wedge(n, Mathf.Min(xLow, xHigh), Mathf.Max(xLow, xHigh), z0, z1, y0, h, xHigh > xLow ? Vector3.right : Vector3.left, c, root);
+
+        /// <summary>Арена 6 — полоса препятствий: одна трасса змейкой через все механики, каждый участок подписан.
+        ///   Ряд A (восток):  слалом → ступени → уступ 0.3 шагом → уступ 0.5 подтянуться → тоннель под перекрытием.
+        ///   Ряд B (запад):   уступ 0.7 → склон 45° с перилами справа на настил 1.8 → узкий мост над провалом →
+        ///                    крутой спуск 60° без перил (съехать).
+        ///   Ряд C (восток):  пропасть с челноком → поворотный круг → лифт на балкон 1.8 → лестница вниз → финиш.
+        /// Логика героя не меняется. Меню Fortress → Hero → Build Arena 6 (полоса препятствий).</summary>
+        [MenuItem("Fortress/Hero/Build Arena 6 (полоса препятствий)")]
+        public static void Build6()
+        {
+            if (EditorApplication.isPlaying) { Debug.LogWarning("[Hero] арена 6: выйди из Play"); return; }
+            var open = SceneManager.GetSceneByPath(Scene6Path);
+            Scene scene;
+            if (open.IsValid() && open.isLoaded)
+            {
+                scene = open;
+                foreach (var g in scene.GetRootGameObjects()) Object.DestroyImmediate(g);
+                SceneManager.SetActiveScene(scene);
+            }
+            else
+            {
+                if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+                scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+            Fill6();
+            EditorSceneManager.SaveScene(scene, Scene6Path);
+            Debug.Log("[Hero] арена 6: " + Scene6Path);
+        }
+
+        static void Fill6()
+        {
+            const float W6 = 24f, D6 = 13.2f;
+            const float AZ0 = 0f, AZ1 = 4f, BZ0 = 4.6f, BZ1 = 8.6f, CZ0 = 9.2f, CZ1 = 13.2f;   // ряды и стенки между ними
+            const float E = 90f, Wst = -90f;                                                  // подписи: камера смотрит на восток / запад
+            walls = new GameObject("Арена: стены").transform;
+            surf = new GameObject("Арена: поверхность").transform;
+            decor = new GameObject("Арена: декор (не опора)").transform;
+
+            Box("Земля", -2f, W6 + 2f, -0.05f, 0f, -2f, D6 + 2f, GroundC, decor);
+            // основа 0.6: везде, кроме тоннеля (ряд A, x 14–22.6) и пропасти (ряд C, x 3–7)
+            Box("Основа A", 0f, 14f, 0f, MAIN, AZ0, BZ0, MainC, surf);
+            Box("Основа A (за тоннелем)", 22.6f, W6, 0f, MAIN, AZ0, BZ0, MainC, surf);
+            Box("Основа B", 0f, W6, 0f, MAIN, BZ0, CZ0, MainC, surf);
+            Box("Основа C (до пропасти)", 0f, 3f, 0f, MAIN, CZ0, D6, MainC, surf);
+            Box("Основа C", 7f, W6, 0f, MAIN, CZ0, D6, MainC, surf);
+
+            // периметр и стенки между рядами (проходы в концах) — низкие, 45 см над основой: камера за спиной видит поверх
+            Box("Стена юг", -0.3f, W6 + 0.3f, 0f, WallTop, -0.3f, 0f, WallC, walls);
+            Box("Стена север", -0.3f, W6 + 0.3f, 0f, WallTop, D6, D6 + 0.3f, WallC, walls);
+            Box("Стена запад", -0.3f, 0f, 0f, WallTop, 0f, D6, WallC, walls);
+            Box("Стена восток", W6, W6 + 0.3f, 0f, WallTop, 0f, D6, WallC, walls);
+            Box("Стенка A|B", 0f, 22.6f, 0f, WallTop, AZ1, BZ0, WallC, walls);           // проход на восток x 22.6–24
+            Box("Стенка B|C", 2.4f, W6, 0f, WallTop, BZ1, CZ0, WallC, walls);             // проход на западе x 0–2.4
+
+            Sign("ПОЛОСА ПРЕПЯТСТВИЙ\nстарт", new Vector3(1.2f, MAIN, 3.2f), 1f, E);
+
+            // ===== РЯД A (на восток) =====
+            // 1 слалом
+            Sign("1 · слалом", new Vector3(1.2f, MAIN, 0.6f), 1f, E);
+            foreach (var (x, z) in new[] { (2.0f, 1.3f), (2.9f, 2.7f), (3.8f, 1.3f) })
+                Box("Столб", x - 0.15f, x + 0.15f, MAIN, MAIN + 0.6f, z - 0.15f, z + 0.15f, WallC, walls);
+            // 2 ступени вверх и вниз по 12 см
+            Sign("2 · ступени", new Vector3(4.4f, MAIN, 0.5f), 1f, E);
+            float[] st = { 0.12f, 0.24f, 0.36f, 0.24f, 0.12f };
+            float[] sx = { 4.8f, 5.2f, 5.6f, 6.8f, 7.2f, 7.6f };
+            for (int i = 0; i < st.Length; i++) Box("Ступень " + (i + 1), sx[i], sx[i + 1], 0f, MAIN + st[i], AZ0, AZ1, i % 2 == 0 ? StepA : StepB, surf);
+            // 3 уступ 0.3 — шагом
+            Sign("3 · уступ 0.3\nшагом", new Vector3(8.0f, MAIN, 0.5f), 1f, E);
+            Box("Уступ 0.3", 8.6f, 9.8f, 0f, MAIN + 0.3f, AZ0, AZ1, DeckC, surf);
+            // 4 уступ 0.5 — подтянуться
+            Sign("4 · уступ 0.5\nподтянуться", new Vector3(10.4f, MAIN, 0.5f), 1f, E);
+            Box("Уступ 0.5", 10.9f, 12.4f, 0f, MAIN + 0.5f, AZ0, AZ1, DeckC, surf);
+            Box("Уступ 0.5: ступень вниз", 12.4f, 12.8f, 0f, MAIN + 0.25f, AZ0, AZ1, StepA, surf);
+            // 5 тоннель: съезд 0.6 → 0, низкое перекрытие, подъём
+            Sign("5 · тоннель\nпод перекрытием", new Vector3(13.4f, MAIN, 0.5f), 1f, E);
+            WedgeX("Съезд в тоннель", 16.8f, 14f, AZ0, AZ1, 0f, MAIN, TunC, surf);
+            Box("Перекрытие тоннеля", 17.2f, 19.6f, MAIN - 0.08f, MAIN, AZ0, AZ1, MainC, surf);   // просвет 0.52
+            WedgeX("Подъём из тоннеля", 20f, 22.6f, AZ0, AZ1, 0f, MAIN, TunC, surf);
+            Sign("→ налево", new Vector3(23.3f, MAIN, 3.0f), 0.9f, 0f);
+
+            // ===== РЯД B (на запад) =====
+            // 6 уступ 0.7 — тяжело
+            Sign("6 · уступ 0.7\nтяжело", new Vector3(21.6f, MAIN, 7.6f), 1f, Wst);
+            Box("Уступ 0.7", 18.6f, 20.6f, 0f, MAIN + 0.7f, BZ0, BZ1, DeckC, surf);
+            Box("Уступ 0.7: ступень вниз", 18.1f, 18.6f, 0f, MAIN + 0.35f, BZ0, BZ1, StepA, surf);
+            // 7 склон 45° с перилами справа (на север — справа, когда смотришь на запад) на настил 1.8
+            Sign("7 · склон 45°\nперила справа", new Vector3(17.4f, MAIN, 7.6f), 1f, Wst);
+            float rz0 = 6.6f, rz1 = 8.0f, rTop = 15.6f, rBot = rTop + (UP - MAIN);       // 45°: ход = подъём
+            WedgeX("Склон 45°", rBot, rTop, rz0, rz1, MAIN, UP - MAIN, TunC, surf);
+            {
+                float rx = rz1 - 0.06f;
+                float H(float x) => MAIN + (UP - MAIN) * Mathf.Clamp01((rBot - x) / (rBot - rTop));
+                for (int i = 0; i <= 3; i++) { float x = Mathf.Lerp(rBot - 0.03f, rTop + 0.03f, i / 3f); Post("Склон 45°: стойка", x, rx, MAIN, H(x) + Rail5, true); }
+                Post("Склон 45°: стойка (низ)", rBot + 0.4f, rx, MAIN, MAIN + Rail5, true);
+                Rail("Склон 45°: поручень (подход)", new Vector3(rBot + 0.4f, MAIN + Rail5, rx), new Vector3(rBot, MAIN + Rail5, rx));
+                Rail("Склон 45°: поручень", new Vector3(rBot, MAIN + Rail5, rx), new Vector3(rTop, UP + Rail5, rx));
+                Rail("Склон 45°: поручень (настил)", new Vector3(rTop, UP + Rail5, rx), new Vector3(rTop - 0.8f, UP + Rail5, rx));
+            }
+            // настил 1.8 в два куска с провалом между ними; 8 — узкий мост с перилами (зацепы)
+            Box("Настил (восток)", 10.8f, rTop, 0f, UP, BZ0, BZ1, DeckC, surf);
+            Box("Настил (запад)", 6f, 9.6f, 0f, UP, BZ0, BZ1, DeckC, surf);
+            Sign("8 · узкий мост", new Vector3(11.6f, UP, 7.9f), 1f, Wst);
+            Box("Мост", 9.6f, 10.8f, UP - 0.15f, UP, 6.1f, 7.1f, DeckC, surf);
+            foreach (float z in new[] { 6.13f, 7.07f })
+            {
+                Rail("Мост: поручень", new Vector3(10.8f, UP + Rail5, z), new Vector3(9.6f, UP + Rail5, z));
+                foreach (float x in new[] { 9.63f, 10.77f }) Post("Мост: стойка", x, z, UP, UP + Rail5, false);
+            }
+            // 9 крутой спуск 60° без перил — съехать
+            Sign("9 · спуск 60°\nсъехать", new Vector3(6.9f, UP, 7.9f), 1f, Wst);
+            WedgeX("Спуск 60°", 6f - (UP - MAIN) / Mathf.Tan(60f * Mathf.Deg2Rad), 6f, 5.0f, 8.2f, MAIN, UP - MAIN, TunC, surf);
+            Sign("→ направо", new Vector3(1.2f, MAIN, 6.0f), 0.9f, Wst);
+
+            // ===== РЯД C (на восток) =====
+            // 10 пропасть с челноком
+            Sign("10 · пропасть\nждать челнок", new Vector3(1.5f, MAIN, 12.6f), 1f, E);
+            var sh = Mover("Челнок", new Vector3(4f, 0f, 11.2f), new Vector3(2f, 0f, 0f), 3f, 4f, 0f, 0f);
+            Box("Челнок: площадка", 3f, 5f, PlatTop - 0.15f, PlatTop, 10.2f, 12.2f, PlatC, sh);
+            Box("Челнок: метка", 3.1f, 4.9f, PlatTop, PlatTop + 0.003f, 11.1f, 11.3f, StripeC, sh);
+            // 11 поворотный круг
+            Sign("11 · поворотный круг", new Vector3(8.0f, MAIN, 12.7f), 1f, E);
+            var disc = Mover("Поворотный круг", new Vector3(10.5f, 0f, 11.2f), Vector3.zero, 1f, 0f, 25f, 0f);
+            HoldCyl(Cyl("Круг: столб", new Vector3(10.5f, PlatTop, 11.2f), 0.06f, 0.8f, RailC, disc));
+            var cyl = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            cyl.name = "Круг"; Object.DestroyImmediate(cyl.GetComponent<Collider>());
+            cyl.transform.SetParent(disc, false);
+            cyl.transform.localPosition = new Vector3(0f, PlatTop - 0.02f, 0f); cyl.transform.localScale = new Vector3(2.8f, 0.02f, 2.8f);
+            cyl.GetComponent<MeshRenderer>().sharedMaterial = Mat("Круг", PlatC);
+            Box("Круг: полоса", 10.4f, 10.6f, PlatTop, PlatTop + 0.003f, 9.9f, 12.5f, StripeC, disc);
+            // 12 лифт на балкон 1.8 (балкон перегораживает ряд — только лифтом)
+            Sign("12 · лифт", new Vector3(13.0f, MAIN, 12.7f), 1f, E);
+            var lift = Mover("Лифт", new Vector3(14.5f, 0f, 11.2f), new Vector3(0f, UP - MAIN, 0f), 3f, 4f, 0f, 0f);
+            Box("Лифт: площадка", 13.6f, 15.4f, PlatTop - 0.15f, PlatTop, 10.2f, 12.2f, PlatC, lift);
+            Box("Лифт: метка", 14.4f, 14.6f, PlatTop, PlatTop + 0.003f, 10.3f, 12.1f, StripeC, lift);
+            Box("Балкон 1.8", 15.4f, 19f, 0f, UP, CZ0, CZ1, DeckC, surf);
+            // 13 лестница вниз и финиш
+            var down = new float[10]; for (int i = 0; i < 10; i++) down[i] = UP - 0.12f * (i + 1);
+            for (int i = 0; i < 10; i++) Box("Лестница вниз " + (i + 1), 19f + 0.3f * i, 19.3f + 0.3f * i, 0f, down[i], CZ0, CZ1, i % 2 == 0 ? StepA : StepB, surf);
+            Sign("13 · лестница вниз", new Vector3(17.2f, UP, 12.7f), 1f, E);
+            Box("Финиш", 22.2f, 23.8f, MAIN, MAIN + 0.004f, CZ0 + 0.2f, CZ1 - 0.2f, FinishC, decor);
+            Sign("ФИНИШ", new Vector3(23f, MAIN, 11.2f), 1.2f, E);
+
+            var sun = new GameObject("Свет").AddComponent<Light>();
+            sun.type = LightType.Directional; sun.intensity = 1.1f; sun.shadows = LightShadows.Soft;
+            sun.transform.rotation = Quaternion.Euler(55f, -35f, 0f);
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.45f, 0.45f, 0.47f);
+
+            PlaceHero(new Vector3(0.8f, 0f, 2.0f), 90f);
+        }
+
         /// <summary>Герой — тот же префаб прототипа (герой + камера), на старте лицом на север, камера за спиной.</summary>
-        static void PlaceHero(Vector3 start)
+        static void PlaceHero(Vector3 start, float yaw = 0f)
         {
             var src = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Characters/Hero/HeroProto.prefab");
             var rig = (GameObject)PrefabUtility.InstantiatePrefab(src);
@@ -564,10 +721,10 @@ namespace Fortress.EditorTools
             Paint(proto.handCube, new Color(0.95f, 0.45f, 0.35f));
             Vector3 d = start - new Vector3(body.position.x, 0f, body.position.z);
             rig.transform.position += d;
-            body.rotation = Quaternion.identity;                          // лицом на север (+Z)
+            body.rotation = Quaternion.Euler(0f, yaw, 0f);                // лицом по yaw (0 — на север, +Z); камера встанет за спину
             proto.obstaclesRoot = walls;
             proto.surfaceRoot = surf;
-            proto.showHints = true;
+            proto.showHints = false;                                      // подсказки выключены (автор: «вырубить индикаторы»)
             // плечо — справа от тела
             proto.shoulderCube.position = body.position + body.right * proto.shoulderSide + Vector3.up * 0.14f;
             var orbit = rig.GetComponentInChildren<ProtoOrbitCamera>(true);
