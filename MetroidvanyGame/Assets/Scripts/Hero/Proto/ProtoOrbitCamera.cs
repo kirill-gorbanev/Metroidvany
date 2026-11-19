@@ -35,11 +35,13 @@ namespace Fortress.Hero.Proto
             Apply();
         }
 
-        void LateUpdate()
+        void LateUpdate() { if (!HeroProto.ManualTick) Step(Time.unscaledDeltaTime); }
+
+        /// <summary>Шаг камеры (симуляция вызывает сама).</summary>
+        public void Step(float dt)
         {
             if (!target) return;
-            float dt = Time.unscaledDeltaTime;
-            var m = Mouse.current;
+            var m = HeroProto.ManualTick ? null : Mouse.current;
             // ПКМ (зажать) + мышь вверх/вниз — наклон камеры; вправо/влево не крутит (это делает тело на ЛКМ)
             Orbiting = m != null && m.rightButton.isPressed;
             if (m != null)

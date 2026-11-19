@@ -15,7 +15,7 @@ namespace Fortress.Hero.Proto
     ///      столько тело и проехало по ней (1:1 к экрану), в пределах концов.
     /// 4. Отпустил ЛКМ — тело остаётся, рука снова свободна.
     /// Видно: гизмосы (окно Scene / Game с Gizmos) и линии LineRenderer (окно Game всегда).</summary>
-    public class HeroProto : MonoBehaviour
+    public partial class HeroProto : MonoBehaviour
     {
         [Header("Точки (кубики)")]
         public Transform bodyCube, shoulderCube, elbowCube, handCube;
@@ -114,8 +114,52 @@ namespace Fortress.Hero.Proto
         /// <summary>Кисть на поверхности (XZ — точка алгоритма, y — поверхность под ней).</summary>
         public Vector3 HandOnSurface => new Vector3(hand.x, handY, hand.z);
 
+        // ---- диагностика для сторожей (ProtoWatch) и бота; логику не меняет ----
+        public float GroundY => groundY;
+        /// <summary>Досягаемость в текущем хвате (по XZ).</summary>
+        public float GripReach => gripL;
+        public float HandY => handY;
+        public Vector3 BodyXZ => Body;
+        public Vector3 ShoulderXZ => Shoulder;
+        public Vector3 HandXZ => hand;
+        public Vector3 FaceDir => Face;
+        public float LineT => t;
+        public float LineTTarget => tTarget;
+        public Vector3 FarEnd => farEnd;
+        public Vector3 NearEnd => nearEnd;
+        /// <summary>Тело заходит в препятствие (прямоугольник) глубже допуска.</summary>
+        public bool DiagBodyInWall(float tol) { foreach (var o in obstacles) { float cx = Mathf.Clamp(Body.x, o.xMin, o.xMax), cz = Mathf.Clamp(Body.z, o.yMin, o.yMax); float dx = Body.x - cx, dz = Body.z - cz; if (dx * dx + dz * dz < (bodyRadius - tol) * (bodyRadius - tol)) return true; } return false; }
+        /// <summary>Центр тела внутри сплошного (уступ / ящик выше порога).</summary>
+        public bool DiagBodyInSolid => HasSurface && float.IsInfinity(LevelHeight(Body, BodyLevel, maxStep));
+        public bool DiagHandInWall => !gripHold && !hoverHold && sinceHold > 0.3f && InObstacle(hand, -0.005f);   // кисть над стойкой перил после хвата — не в стене
+        public float DiagArmToBody => ArmToBody(Body, Shoulder, hand);
+        public bool DiagBlocked(Vector3 p) => Blocked(Flat(p), bodyRadius);
+        public bool DiagClimbable(Vector3 p) => Climbable(Flat(p));
+        /// <summary>Тест: поставить тело в точку p (p.y — уровень, с которого искать поверхность), лицом по yaw; рука свободна.</summary>
+        public void DiagTeleport(Vector3 p, float yaw)
+        {
+            mode = Mode.Free; pendingTurn = 0f; handMover = null;
+            bodyCube.rotation = Quaternion.Euler(0f, yaw, 0f);
+            float g = LevelHeight(Flat(p), p.y, maxStep, out var rm);
+            groundY = float.IsInfinity(g) ? p.y : g; rideMover = rm; rideStep = rm ? rm.StepId : 0;
+            bodyCube.position = new Vector3(p.x, groundY + bodyLift, p.z);
+            hand = Shoulder + Face * L * 0.6f; handY = groundY;
+            ClimbReset();
+            Place();
+        }
+        public Bounds DiagSurfaceBounds { get { var b = new Bounds(Body, Vector3.one); foreach (var s in surfBounds) b.Encapsulate(s); return b; } }
+
         /// <summary>Поверхность под кистью со своего уровня (не выше handUp); внутри сплошного — TooHigh.</summary>
-        float HandLevel(Vector3 p) => LevelHeight(p, groundY, handUp);
+        float HandLevel(Vector3 p) => HandHit(p, out _, out _);
+
+        /// <summary>Поверхность под кистью: сначала в обычных пределах руки (handUp) — пол под перекрытием остаётся полом;
+        /// только если там сплошное (стена уступа) — верх уступа до climbUp (кромка для вскарабкивания).</summary>
+        float HandHit(Vector3 p, out ProtoMover mover, out Vector3 normal)
+        {
+            float h = LevelHit(p, BodyLevel, handUp, out mover, out normal);
+            if (!float.IsInfinity(h) || climbUp <= handUp) return h;
+            return LevelHit(p, BodyLevel, climbUp, out mover, out normal);
+        }
         const float HandGap = 0.03f;      // кисть не ближе этого к стене
 
         [Header("Рука и тело")]
@@ -129,6 +173,21 @@ namespace Fortress.Hero.Proto
             float k = d.sqrMagnitude > 1e-8f ? Mathf.Clamp01(Vector3.Dot(b - s, d) / d.sqrMagnitude) : 0f;
             return (b - (s + d * k)).magnitude;
         }
+        /// <summary>Самая длинная рука по направлению dir (плечо → кисть), при которой отрезок руки не режет тело.
+        /// Тело сбоку от плеча и стоит в нём неподвижно, пока тело едет по линии хода: рука через грудь, вытягиваясь
+        /// (тело отъезжает от кисти), подходит к центру тела — дальний конец хода там, где рука упрётся в тело.</summary>
+        float ArmLenMax(Vector3 dir, float curLen)
+        {
+            if (armKeepOut <= 0f) return Mathf.Max(gripL, Mathf.Min(curLen, L));
+            return Mathf.Max(Mathf.Min(ArmLenMax0(dir), gripL), Mathf.Min(curLen, L));   // уже на границе — не хуже, чем сейчас (без рывка тела на линию)
+        }
+        float ArmLenMax0(Vector3 dir)
+        {
+            Vector3 v = -SideOff;                                   // тело относительно плеча
+            float p = Vector3.Dot(v, dir), perp = (v - dir * p).magnitude;
+            if (perp >= armKeepOut || p <= 0f) return L;
+            return Mathf.Clamp(p - Mathf.Sqrt(armKeepOut * armKeepOut - perp * perp), Mathf.Min(dMin + 0.02f, L), L);
+        }
         /// <summary>Рука сквозь тело?</summary>
         bool ArmThroughBody(Vector3 H) => armKeepOut > 0f && ArmToBody(Body, Shoulder, H) < armKeepOut;
 
@@ -138,6 +197,8 @@ namespace Fortress.Hero.Proto
         {
             Vector3 S = Shoulder, d = Flat(target - S);
             float len = d.magnitude;
+            if (float.IsNaN(len) || float.IsInfinity(len)) return S + Face * 0.05f;   // защита: без конечной цели марш не кончится
+            len = Mathf.Min(len, 2f * L);
             if (len < 1e-4f) return target;
             if (InObstacle(S, HandGap) || float.IsInfinity(HandLevel(S))) return PushOut(target);   // плечо само в преграде (не должно) — по-старому
             // рука резала бы тело — доворот направления к лицу до границы, ДЛИНА та же (без скачка кисти к груди)
@@ -193,7 +254,7 @@ namespace Fortress.Hero.Proto
                 float dx = S.x - cx, dz = S.z - cz;
                 if (dx * dx + dz * dz < ShoulderR * ShoulderR) return true;
             }
-            return surfBounds.Count > 0 && !Climbable(S);
+            return HasSurface && !Climbable(S);
         }
 
         /// <summary>Высота для подсказок: со своего уровня, а где стена — по верху.</summary>
@@ -245,6 +306,7 @@ namespace Fortress.Hero.Proto
             CollectObstacles();
             if (!surfaceRoot) { var r = GameObject.Find("Рельеф (Y)"); if (r) surfaceRoot = r.transform; }
             CollectSurface();
+            CollectHolds();
             // высоты кубиков над поверхностью — как их поставил сборщик на ровном полу
             bodyLift = bodyCube.position.y; shoulderLift = shoulderCube.position.y;
             elbowLift = elbowCube.position.y; handLift = handCube.position.y;
@@ -279,9 +341,11 @@ namespace Fortress.Hero.Proto
         void CollectSurface()
         {
             surfTris.Clear(); surfBounds.Clear(); surfStart.Clear(); surfNorm.Clear();
+            CollectMovers();
             if (!surfaceRoot) return;
             foreach (var mf in surfaceRoot.GetComponentsInChildren<MeshFilter>())
             {
+                if (mf.GetComponentInParent<ProtoMover>()) continue;          // подвижные — отдельно (CollectMovers)
                 var mesh = mf.sharedMesh; if (!mesh) continue;
                 var v = mesh.vertices; var nv = mesh.normals; var tr = mesh.triangles; var m = mf.transform.localToWorldMatrix;
                 surfStart.Add(surfTris.Count);
@@ -305,18 +369,82 @@ namespace Fortress.Hero.Proto
             }
         }
 
-        /// <summary>Ближайшее пересечение луча с рельефом (обе стороны треугольников) или с полом y = 0 (если plane).
-        /// normal — наружная нормаль задетой грани (пол — вверх).</summary>
-        bool RayHit(Ray ray, bool plane, out float best, out Vector3 normal)
+        // ---------------- подвижные поверхности (блок ProtoMover) ----------------
+        class MoverSurf
         {
-            best = float.MaxValue; normal = Vector3.up;
+            public ProtoMover m;
+            public readonly System.Collections.Generic.List<Vector3> tris = new System.Collections.Generic.List<Vector3>();   // в системе платформы
+            public readonly System.Collections.Generic.List<Vector3> norms = new System.Collections.Generic.List<Vector3>();
+            public Renderer[] rends;
+            /// <summary>Детали платформы: рендерер и его треугольники [start, end) — луч проверяет только задетые по рамке.</summary>
+            public readonly System.Collections.Generic.List<(Renderer r, int start, int end)> parts = new System.Collections.Generic.List<(Renderer, int, int)>();
+        }
+        readonly System.Collections.Generic.List<MoverSurf> movers = new System.Collections.Generic.List<MoverSurf>();
+        [System.NonSerialized] public ProtoMover rideMover, handMover;   // на чём стоит тело / за что держится кисть
+        int rideStep, handStep;                                         // последний применённый шаг платформы
+
+        void CollectMovers()
+        {
+            movers.Clear();
+            foreach (var pm in FindObjectsOfType<ProtoMover>())
+            {
+                var ms = new MoverSurf { m = pm, rends = pm.GetComponentsInChildren<Renderer>() };
+                Matrix4x4 toLocal = pm.transform.worldToLocalMatrix;
+                foreach (var mf in pm.GetComponentsInChildren<MeshFilter>())
+                {
+                    var mesh = mf.sharedMesh; if (!mesh) continue;
+                    var v = mesh.vertices; var nv = mesh.normals; var tr = mesh.triangles;
+                    Matrix4x4 m = toLocal * mf.transform.localToWorldMatrix;
+                    int start = ms.tris.Count;
+                    for (int i = 0; i < tr.Length; i += 3)
+                    {
+                        Vector3 a = m.MultiplyPoint3x4(v[tr[i]]), b = m.MultiplyPoint3x4(v[tr[i + 1]]), c = m.MultiplyPoint3x4(v[tr[i + 2]]);
+                        ms.tris.Add(a); ms.tris.Add(b); ms.tris.Add(c);
+                        Vector3 ng = Vector3.Cross(b - a, c - a).normalized;
+                        if (nv != null && nv.Length == v.Length && Vector3.Dot(ng, m.MultiplyVector(nv[tr[i]] + nv[tr[i + 1]] + nv[tr[i + 2]])) < 0f) ng = -ng;
+                        ms.norms.Add(ng);
+                    }
+                    ms.parts.Add((mf.GetComponent<Renderer>(), start, ms.tris.Count));
+                }
+                movers.Add(ms);
+            }
+        }
+
+        bool HasSurface => surfBounds.Count > 0 || movers.Count > 0;
+
+        bool RayHit(Ray ray, bool plane, out float best, out Vector3 normal) => RayHit(ray, plane, out best, out normal, out _);
+
+        /// <summary>Ближайшее пересечение луча с рельефом (обе стороны треугольников), с подвижными платформами или с полом y = 0 (если plane).
+        /// normal — наружная нормаль задетой грани (пол — вверх); mover — платформа, если попали в неё.</summary>
+        bool RayHit(Ray ray, bool plane, out float best, out Vector3 normal, out ProtoMover mover)
+        {
+            best = float.MaxValue; normal = Vector3.up; mover = null;
             if (plane && ray.direction.y < -1e-5f) { float d = -ray.origin.y / ray.direction.y; if (d > 0f) best = d; }
             for (int k = 0; k < surfBounds.Count; k++)
             {
                 if (!surfBounds[k].IntersectRay(ray, out float bd) || bd > best) continue;
                 int end = k + 1 < surfStart.Count ? surfStart[k + 1] : surfTris.Count;
                 for (int i = surfStart[k]; i < end; i += 3)
-                    if (RayTri(ray, surfTris[i], surfTris[i + 1], surfTris[i + 2], out float d) && d < best) { best = d; normal = surfNorm[i / 3]; }
+                    if (RayTri(ray.origin, ray.direction, surfTris[i], surfTris[i + 1], surfTris[i + 2], out float d) && d < best) { best = d; normal = surfNorm[i / 3]; mover = null; }
+            }
+            foreach (var ms in movers)
+            {
+                if (!ms.m) continue;
+                bool local = false; Matrix4x4 l2w = default; Vector3 o = default, dir = default;
+                foreach (var part in ms.parts)
+                {
+                    if (part.r) { var b = part.r.bounds; b.Expand(0.01f); if (!b.IntersectRay(ray, out float bd) || bd > best) continue; }
+                    if (!local)
+                    {
+                        // луч — в систему платформы (параметр t тот же: направление не нормируется)
+                        local = true;
+                        Matrix4x4 w2l = ms.m.transform.worldToLocalMatrix; l2w = ms.m.transform.localToWorldMatrix;
+                        o = w2l.MultiplyPoint3x4(ray.origin); dir = w2l.MultiplyVector(ray.direction);
+                    }
+                    for (int i = part.start; i < part.end; i += 3)
+                        if (RayTri(o, dir, ms.tris[i], ms.tris[i + 1], ms.tris[i + 2], out float d) && d < best)
+                        { best = d; normal = l2w.MultiplyVector(ms.norms[i / 3]).normalized; mover = ms.m; }
+                }
             }
             return best < float.MaxValue;
         }
@@ -328,16 +456,16 @@ namespace Fortress.Hero.Proto
             return ok;
         }
 
-        static bool RayTri(Ray r, Vector3 a, Vector3 b, Vector3 c, out float t)
+        static bool RayTri(Vector3 ro, Vector3 rd, Vector3 a, Vector3 b, Vector3 c, out float t)
         {
             t = 0f;
-            Vector3 e1 = b - a, e2 = c - a, p = Vector3.Cross(r.direction, e2);
+            Vector3 e1 = b - a, e2 = c - a, p = Vector3.Cross(rd, e2);
             float det = Vector3.Dot(e1, p);
             if (Mathf.Abs(det) < 1e-9f) return false;
-            float inv = 1f / det; Vector3 s = r.origin - a;
+            float inv = 1f / det; Vector3 s = ro - a;
             float u = Vector3.Dot(s, p) * inv; if (u < 0f || u > 1f) return false;
             Vector3 q = Vector3.Cross(s, e1);
-            float v = Vector3.Dot(r.direction, q) * inv; if (v < 0f || u + v > 1f) return false;
+            float v = Vector3.Dot(rd, q) * inv; if (v < 0f || u + v > 1f) return false;
             t = Vector3.Dot(e2, q) * inv;
             return t > 1e-5f;
         }
@@ -345,36 +473,46 @@ namespace Fortress.Hero.Proto
         /// <summary>Высота самой верхней поверхности в точке XZ (рельеф или пол 0) — для старта и подсказок вне уровня.</summary>
         public float Height(Vector3 p)
         {
-            if (surfBounds.Count == 0) return 0f;
+            if (!HasSurface) return 0f;
             return SurfaceRay(new Ray(new Vector3(p.x, 50f, p.z), Vector3.down), out var h) ? h.y : 0f;
         }
 
         /// <summary>ВЫСОТА ОТ СВОЕГО УРОВНЯ. Поверхность в точке XZ, на которую можно встать с высоты fromY, поднявшись не больше up:
         /// луч вниз с fromY + up — мост, перекрытие тоннеля и всё, что выше, не мешает; ниже — с любой глубины.
         /// Точка внутри сплошного (бок галереи, ящик) — TooHigh: выше порога, это стена.</summary>
-        public float LevelHeight(Vector3 p, float fromY, float up)
+        public float LevelHeight(Vector3 p, float fromY, float up) => LevelHeight(p, fromY, up, out _);
+
+        /// <summary>То же + платформа под точкой (null — неподвижная поверхность или пол).</summary>
+        public float LevelHeight(Vector3 p, float fromY, float up, out ProtoMover mover) => LevelHit(p, fromY, up, out mover, out _);
+
+        /// <summary>То же + нормаль поверхности в точке (крутизна склона).</summary>
+        public float LevelHit(Vector3 p, float fromY, float up, out ProtoMover mover, out Vector3 normal)
         {
-            if (surfBounds.Count == 0) return 0f;
+            mover = null; normal = Vector3.up;
+            if (!HasSurface) return 0f;
             float top = fromY + up + 0.003f;
             Vector3 o = new Vector3(p.x, top, p.z);
             // внутри сплошного: ближайшая грань сверху смотрит вверх (это её крышка изнутри)
             if (RayHit(new Ray(o, Vector3.up), false, out _, out var nu) && nu.y > 0.1f) return TooHigh;
-            return RayHit(new Ray(o, Vector3.down), top > 0f, out float d, out _) ? top - d : 0f;
+            return RayHit(new Ray(o, Vector3.down), top > 0f, out float d, out normal, out mover) ? top - d : 0f;
         }
         public const float TooHigh = float.PositiveInfinity;
 
         /// <summary>Тело может стоять в точке p со своего уровня: не выше порога maxStep и не ниже порога maxDrop (край — как стена).</summary>
         bool Climbable(Vector3 p)
         {
-            float h = LevelHeight(p, groundY, maxStep);
-            return !float.IsInfinity(h) && h >= groundY - maxDrop;
+            float h = LevelHeight(p, BodyLevel, maxStep);
+            if (float.IsInfinity(h)) return false;
+            if (climbLift < -0.01f) return true;                        // докатывается после перевала: кромка за спиной — не обрыв
+            return h >= groundY - maxDrop;
         }
 
         /// <summary>Кисть может лечь в точку p: не выше своего уровня + handUp и не ниже − handDown.</summary>
         bool HandOk(Vector3 p)
         {
             float h = HandLevel(p);
-            return !float.IsInfinity(h) && h >= groundY - handDown;
+            if (float.IsInfinity(h) || h < groundY - handDown) return false;
+            return h <= BodyLevel + maxStep || LedgeGrabOk(p, h);     // выше порога — только кромка уступа в досягаемости (вскарабкивание)
         }
 
         /// <summary>Круг радиуса r в точке p задевает препятствие или уступ выше порога (центр + 4 точки по краю)?</summary>
@@ -387,7 +525,7 @@ namespace Fortress.Hero.Proto
                 if (dx * dx + dz * dz < r * r) return true;
             }
             if (ShoulderBlocked(p)) return true;                    // плечо сбоку тоже не входит в стену / уступ
-            if (surfBounds.Count == 0) return false;
+            if (!HasSurface) return false;
             if (!Climbable(p)) return true;
             float e = r * 0.8f;
             return !Climbable(p + new Vector3(e, 0f, 0f)) || !Climbable(p - new Vector3(e, 0f, 0f))
@@ -425,7 +563,7 @@ namespace Fortress.Hero.Proto
             FromRects(p, bodyRadius);
             if (shoulderSide != 0f) FromRects(p + SideOff, ShoulderR);
             // уступы выше порога: пробы по кругу на краю тела и чуть дальше
-            if (surfBounds.Count > 0)
+            if (HasSurface)
                 for (int i = 0; i < 8; i++)
                 {
                     Vector3 dir = Quaternion.AngleAxis(i * 45f, Vector3.up) * Vector3.forward;
@@ -462,7 +600,7 @@ namespace Fortress.Hero.Proto
                 }
             }
             // уступ выше порога — тоже стена: нормаль от тех сторон, где не залезть
-            if (surfBounds.Count > 0)
+            if (HasSurface)
                 for (int i = 0; i < 8; i++)
                 {
                     Vector3 dir = Quaternion.AngleAxis(i * 45f, Vector3.up) * Vector3.forward;
@@ -487,13 +625,22 @@ namespace Fortress.Hero.Proto
         Vector3 Slide(Vector3 from, Vector3 delta)
         {
             Vector3 p = from;
+            // в хвате рука (плечо → кисть) не должна резать тело на новом месте — глубже, чем сейчас (скольжение вбок уводит плечо с линии)
+            float arm0 = mode == Mode.Grip ? ArmToBody(Flat(from), Flat(from) + SideOff, gripHand) : 1f;
+            bool Stop(Vector3 q)
+            {
+                if (Blocked(q, bodyRadius)) return true;
+                if (mode != Mode.Grip || armKeepOut <= 0f) return false;
+                float a = ArmToBody(Flat(q), Flat(q) + SideOff, gripHand);
+                return a < armKeepOut && a < arm0 - 1e-4f;
+            }
             for (int i = 0; i < 3 && delta.sqrMagnitude > 1e-10f; i++)
             {
                 Vector3 q = p + delta;
-                if (!Blocked(q, bodyRadius)) return q;
+                if (!Stop(q)) return q;
                 // до касания — бисекцией
                 float lo = 0f, hi = 1f;
-                for (int k = 0; k < 10; k++) { float mid = (lo + hi) * 0.5f; if (Blocked(p + delta * mid, bodyRadius)) hi = mid; else lo = mid; }
+                for (int k = 0; k < 10; k++) { float mid = (lo + hi) * 0.5f; if (Stop(p + delta * mid)) hi = mid; else lo = mid; }
                 p += delta * lo;
                 Vector3 n = ContactNormal(p + delta * hi, bodyRadius);
                 if (n == Vector3.zero) break;
@@ -512,7 +659,8 @@ namespace Fortress.Hero.Proto
             float d = dir.magnitude;
             if (d < 1e-4f) return;
             dir /= d;
-            farEnd = gripHand - dir * L;
+            gripL = ComputeGripL();
+            farEnd = gripHand - dir * ArmLenMax(dir, d);
             nearEnd = gripHand - dir * Mathf.Min(dMin, d);
             float len = (nearEnd - farEnd).magnitude;
             t = Mathf.Clamp01(Vector3.Dot(body - farEnd, dir) / Mathf.Max(len, 1e-4f));
@@ -549,30 +697,92 @@ namespace Fortress.Hero.Proto
             p = Flat(h); return true;
         }
 
-        void Update()
+        /// <summary>ПЛАТФОРМЫ: тело на подвижной поверхности едет с ней (сдвиг, подъём, поворот); кисть, держащаяся за платформу, — тоже.
+        /// Тело и кисть на разных опорах: линия хода через новое плечо; рука не достаёт (дальше L или за порогом кисти) — хват срывается.</summary>
+        void Carry()
         {
-            var m = Mouse.current; if (m == null || !cam) return;
+            bool bodyMoved = false, handMoved = false;
+            if (rideMover && rideMover.StepId != rideStep)
+            {
+                rideStep = rideMover.StepId;
+                Matrix4x4 D = rideMover.Delta;
+                Vector3 np = D.MultiplyPoint3x4(new Vector3(bodyCube.position.x, groundY, bodyCube.position.z));
+                Vector3 f = D.MultiplyVector(bodyCube.forward); f.y = 0f;
+                if (f.sqrMagnitude > 1e-6f) bodyCube.rotation = Quaternion.LookRotation(f.normalized, Vector3.up);
+                bodyCube.position = new Vector3(np.x, np.y + bodyLift, np.z);
+                groundY = np.y;
+                bodyMoved = true;
+            }
+            if (mode == Mode.Grip && handMover && handMover.StepId != handStep)
+            {
+                handStep = handMover.StepId;
+                Matrix4x4 D = handMover.Delta;
+                gripHand = Flat(D.MultiplyPoint3x4(gripHand));
+                if (gripHold) gripHand = Flat(gripHold.At(gripHoldS));      // зацеп — точно по его точке
+                hand = gripHand;
+                farEnd = Flat(D.MultiplyPoint3x4(farEnd)); nearEnd = Flat(D.MultiplyPoint3x4(nearEnd));
+                handMoved = true;
+            }
+            if (mode == Mode.Grip && (bodyMoved || handMoved) && !(bodyMoved && handMoved && rideMover == handMover))
+            {
+                float dh = Flat(gripHand - Shoulder).magnitude;
+                bool lost = gripHold ? (gripHold.At(gripHoldS) - Shoulder3).magnitude > L + 0.02f : (dh > L + 0.02f || !HandOk(gripHand));
+                if (lost) { mode = Mode.Free; pendingTurn = 0f; handMover = null; gripHold = null; }   // сорвался
+                else { float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0); }
+            }
+        }
+
+        // ---------------- ввод: мышь или внешний водитель (бот / тест) ----------------
+        /// <summary>Кадр ввода: курсор (пиксели), сдвиг мыши за кадр, ЛКМ зажата / нажата в этом кадре, облёт камеры.</summary>
+        public struct InputFrame { public Vector2 pos, delta; public bool pressed, down, orbit; }
+        /// <summary>Не null — ввод берётся отсюда, а не с мыши (бот, сценарии). Путь дальше — тот же, что у мыши.</summary>
+        [System.NonSerialized] public System.Func<InputFrame> driver;
+        /// <summary>Симуляция: Update ничего не делает, шаги вызываются снаружи Tick(dt) (сторожа, бот).</summary>
+        public static bool ManualTick;
+        float dtNow = 0.02f;
+
+        void Update() { if (!ManualTick) Tick(Time.deltaTime); }
+
+        public void Tick(float dt)
+        {
+            dtNow = dt;
+            Carry();
+            if (!cam) return;
+            InputFrame inp;
+            if (driver != null) inp = driver();
+            else
+            {
+                var m = Mouse.current; if (m == null) return;
+                inp = new InputFrame { pos = m.position.ReadValue(), delta = m.delta.ReadValue(), pressed = m.leftButton.isPressed,
+                                       down = m.leftButton.wasPressedThisFrame, orbit = ProtoOrbitCamera.Orbiting };
+            }
             // зона ввода сдвинута вниз: точка руки = курсор + сдвиг вверх (жесты — по смещению мыши, их сдвиг не меняет)
-            Vector2 px = m.position.ReadValue() + new Vector2(0f, inputShift * Screen.height);
-            float dt = Time.deltaTime;
-            bool orbit = ProtoOrbitCamera.Orbiting;                 // ПКМ — облёт камеры: рука и жест замирают
+            Vector2 px = inp.pos + new Vector2(0f, inputShift * Screen.height);
+            bool orbit = inp.orbit;                                 // ПКМ — облёт камеры: рука и жест замирают
 
             if (mode == Mode.Free)
             {
-                if (!orbit && FloorPoint(px, out var p))
+                // ЗАЦЕП: курсор рядом с перилами / столбом — кисть прилипает к ним (иначе — на поверхность, как раньше)
+                hoverHold = null;
+                if (!orbit && FindHold(px, out var hh, out float hs)) { hoverHold = hh; hoverS = hs; }
+                if (!orbit && hoverHold)
+                    hand = Vector3.Lerp(hand, Flat(hoverHold.At(hoverS)), 1f - Mathf.Exp(-handFollow * dt));
+                else if (!orbit && FloorPoint(px, out var p))
                 {
                     Vector3 want = HandAtLedge(Reach(p));
                     hand = Vector3.Lerp(hand, want, 1f - Mathf.Exp(-handFollow * dt));
                 }
                 // ВВОД РАБОТАЕТ ВСЕГДА (даже вплотную к уступу): кисть встаёт у кромки, хват есть.
                 // Отсекается уже исполнение: тело не въедет в уступ выше порога (Blocked), а отъехать / развернуться — можно.
-                if (!orbit && m.leftButton.wasPressedThisFrame && FloorPoint(px, out var c))
+                if (!orbit && inp.down && hoverHold) BeginGripHold(hoverHold, hoverS);
+                else if (!orbit && inp.down && FloorPoint(px, out var c))
                     BeginGrip(HandAtLedge(Reach(c)));
             }
             else
             {
-                if (!m.leftButton.isPressed && !testHold) { mode = Mode.Free; pendingTurn = 0f; lastGestureAlong = lastGestureSide = Vector2.zero; }
-                else if (!orbit) Gesture(m.delta.ReadValue());
+                if (!inp.pressed && !testHold) { mode = Mode.Free; pendingTurn = 0f; lastGestureAlong = lastGestureSide = Vector2.zero; gripHold = null; gripSlip = false; }
+                else if (!orbit) Gesture(inp.delta);
+                HandSlipStep(dt);                                     // кисть на крутом (не зацеп) — съезжает и отпускает
                 hand = gripHand;
                 // плавный поворот на месте: доворачиваем часть накопленного угла
                 if (Mathf.Abs(pendingTurn) > 1e-3f)
@@ -592,7 +802,7 @@ namespace Fortress.Hero.Proto
                     {
                         float dh = Flat(gripHand - Shoulder).magnitude;
                         // плечо ушло бы в стену / уступ — поворот стоп (как и при выходе руки из [dMin, L])
-                        if (dh > L || dh < dMin || ShoulderBlocked(Body)) { bodyCube.rotation = was; pendingTurn = 0f; }
+                        if (dh > ComputeGripL() || dh < dMin || ShoulderBlocked(Body)) { bodyCube.rotation = was; pendingTurn = 0f; }   // досягаемость — с учётом высоты зацепа
                         else { float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0); }
                     }
                 }
@@ -635,7 +845,10 @@ namespace Fortress.Hero.Proto
                 if (Blocked(b, bodyRadius)) b = Slide(Body, b - Body); // никогда не ставить тело в стену
                 bodyCube.position = new Vector3(b.x, bodyCube.position.y, b.z);
             }
+            SlopeStep(dt);                                            // крутой склон без опоры — сползание
+            ClimbDecay(dt);                                           // отпустил кромку до перевала — назад вниз
             Place();
+            ClimbVisuals(dt);
             Draw();
         }
 
@@ -648,11 +861,17 @@ namespace Fortress.Hero.Proto
 
         public void BeginGrip(Vector3 c)
         {
-            mode = Mode.Grip; gripHand = c;
+            mode = Mode.Grip; gripHand = c; gripHold = null;
+            gripTop = HandHit(c, out handMover, out var gn);               // кисть на платформе — поедет с ней
+            if (float.IsInfinity(gripTop)) gripTop = groundY;
+            // кисть на крутом склоне не держит — съедет и отпустит (видно)
+            gripSlip = Vector3.Angle(gn, Vector3.up) > steepAngle; slipDist = 0f;
+            gripL = ComputeGripL();
+            handStep = handMover ? handMover.StepId : 0;
             Vector3 dir = (c - Shoulder); dir.y = 0f;
             if (dir.sqrMagnitude < 1e-6f) dir = Vector3.forward;
             dir.Normalize();
-            farEnd = c - dir * L;          // плечо при вытянутой руке
+            farEnd = c - dir * ArmLenMax(dir, Flat(c - Shoulder).magnitude);   // плечо при вытянутой руке (или пока рука не упрётся в своё тело)
             // плечо при руке, согнутой до упора; кисть у кромки ближе dMin — ближний конец там, где плечо сейчас (без рывка назад)
             nearEnd = c - dir * Mathf.Min(dMin, Flat(c - Shoulder).magnitude);
             // текущая позиция плеча — проекция на траекторию
@@ -696,12 +915,14 @@ namespace Fortress.Hero.Proto
                 : 1f - Mathf.Clamp01((-phi - sectorLeft) / Mathf.Max(1f, moveFadeLeft - sectorLeft));
             if (!moveAllAround) k *= moveK;
             lastSpeedK = k;
-            tTarget = Mathf.Clamp01(tTarget + along * k / axisLen);
+            // ВСКАРАБКИВАНИЕ: у кромки, за которую держишься, жест «на себя» поднимает тело (а не двигает)
+            if (!ClimbConvert(along))
+                tTarget = Mathf.Clamp01(tTarget + along * k / axisLen);
             lastGestureAlong = -a * along * k; lastGestureSide = side;
 
             // ПОВОРОТ НА МЕСТЕ («лопасти вертолёта»): боковой жест поворачивает тело на месте, кисть стоит на полу —
             // её угол от лица меняется. Ограничен слоем поворота: дальше его края за один хват не довернуть.
-            if (!allowTurn) return;
+            if (!allowTurn || Hanging) return;                    // висит на кромке — не крутится
             float mpp = (nearEnd - farEnd).magnitude / axisLen;                 // метров на пиксель вдоль линии
             float sidePx = md.x;                                                 // + — мышь вправо по экрану (как при кисти впереди)
             float r = Mathf.Max(0.12f, (gripHand - Bn).magnitude);
@@ -718,13 +939,21 @@ namespace Fortress.Hero.Proto
             Vector3 S = Shoulder;
             // ВЫСОТА: тело — на поверхности под своим центром (плавно), плечо — с телом, кисть — на поверхности под собой
             // уровень тела — поверхность под центром СО СВОЕГО уровня (мост/перекрытие сверху не поднимают; вниз — падает)
-            float gWant = LevelHeight(Body, groundY, maxStep);
-            if (!float.IsInfinity(gWant)) groundY = Mathf.Lerp(groundY, gWant, 1f - Mathf.Exp(-heightFollow * Time.deltaTime));
-            bodyCube.position = new Vector3(bodyCube.position.x, groundY + bodyLift, bodyCube.position.z);
-            // кисть: поверхность своего уровня; под ней уступ выше досягаемости — остаётся на прежней высоте (не прыгает наверх)
-            float hl = HandLevel(hand);
-            if (!float.IsInfinity(hl)) handY = hl;
-            float sy = groundY + shoulderLift, hy = handY + handLift;
+            float gWant = LevelHit(Body, BodyLevel, maxStep, out var rm, out var bn);
+            if (rm != rideMover) { rideMover = rm; rideStep = rm ? rm.StepId : 0; }   // встал на платформу / сошёл
+            if (!float.IsInfinity(gWant))
+            {
+                bodyNormal = bn;
+                // ПЕРЕВАЛ: висел на кромке и центр тела уже над уступом — уровень тела = верх уступа, подъём докатывается плавно
+                if (climbLift > 0.01f && gWant > groundY + 0.05f) { float total = groundY + climbLift; groundY = gWant; climbLift = total - gWant; crestFlash = 0.4f; }
+                else groundY = Mathf.Lerp(groundY, gWant, 1f - Mathf.Exp(-heightFollow * dtNow));
+            }
+            bodyCube.position = new Vector3(bodyCube.position.x, groundY + climbLift + bodyLift, bodyCube.position.z);
+            // кисть: поверхность своего уровня (или зацеп); под ней уступ выше досягаемости — остаётся на прежней высоте (не прыгает наверх).
+            // Высота кисти догоняет плавно (без скачка на перила и со ступени).
+            float hl = HandTargetY();
+            if (!float.IsInfinity(hl)) handY = Mathf.MoveTowards(handY, Mathf.Lerp(handY, hl, 1f - Mathf.Exp(-handFollow * dtNow)), 5f * dtNow);   // не быстрее 5 м/с
+            float sy = groundY + climbLift + shoulderLift, hy = handY + handLift;
             shoulderCube.position = new Vector3(S.x, sy, S.z);
             handCube.position = new Vector3(hand.x, hy, hand.z);
             // локоть: два звена, сгиб наружу (вправо от направления плечо→кисть)
@@ -736,7 +965,7 @@ namespace Fortress.Hero.Proto
             float A = Mathf.Acos(cosA);
             Vector3 E = S + (dn * Mathf.Cos(A) + outw * Mathf.Sin(A)) * a;
             // локоть: опирается только на поверхность своего уровня (до порога); над уступом выше порога — висит между плечом и кистью
-            float el = LevelHeight(E, groundY, maxStep), mid = Mathf.Lerp(sy, hy, 0.5f) - 0.05f;
+            float el = LevelHeight(E, BodyLevel, maxStep), mid = Mathf.Lerp(sy, hy, 0.5f) - 0.05f;
             float ey = float.IsInfinity(el) ? mid : Mathf.Max(el + elbowLift, mid);
             elbowCube.position = new Vector3(E.x, ey, E.z);
         }
