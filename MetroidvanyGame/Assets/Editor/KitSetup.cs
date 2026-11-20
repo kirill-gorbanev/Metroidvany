@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using Fortress.Grid;
+using Fortress.Rendering;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -89,7 +90,7 @@ namespace Fortress.EditorTools
         {
             // стекло видно с обеих сторон
             var glass = AssetDatabase.LoadAssetAtPath<Material>(MatDir + "/MI_WindowGlass.mat");
-            if (glass) { glass.SetFloat("_Cull", 0f); EditorUtility.SetDirty(glass); }
+            if (glass) { FortRender.SetDoubleSided(glass, true); FortRender.Validate(glass); EditorUtility.SetDirty(glass); }
             var plant = AssetDatabase.LoadAssetAtPath<Material>(MatDir + "/EX_Plant.mat");
             if (plant) { plant.enableInstancing = true; EditorUtility.SetDirty(plant); }
             GroundNormals();
@@ -113,8 +114,7 @@ namespace Fortress.EditorTools
                 ti.SaveAndReimport();
                 var m = AssetDatabase.LoadAssetAtPath<Material>(M + mat + ".mat");
                 if (!m) continue;
-                m.SetTexture("_BumpMap", AssetDatabase.LoadAssetAtPath<Texture2D>(dst));
-                m.SetFloat("_BumpScale", 1.2f); m.EnableKeyword("_NORMALMAP");
+                FortRender.SetNormalMap(m, AssetDatabase.LoadAssetAtPath<Texture2D>(dst), 1.2f);
                 Matte(m, 0.08f);
                 EditorUtility.SetDirty(m);
             }
@@ -206,14 +206,15 @@ namespace Fortress.EditorTools
 
         static void BuildExtra(bool overwrite)
         {
-            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            var lit = FortRender.Lit;
             string T = Kits + "/Extra/Textures/";
             Material TexMat(string name, string tex, bool cutout)
             {
                 var m = MakeMat("EX_" + name, lit);
-                m.SetTexture("_BaseMap", Tex(T + tex)); m.SetColor("_BaseColor", Color.white);
+                FortRender.SetBaseMap(m, Tex(T + tex)); FortRender.SetColor(m, Color.white);
                 Matte(m, 0.08f);
                 if (cutout) AlphaClip(m, 0.45f);
+                FortRender.Validate(m);
                 EditorUtility.SetDirty(m);
                 return m;
             }
@@ -303,54 +304,37 @@ namespace Fortress.EditorTools
 
         static void Matte(Material m, float smooth = 0.1f)
         {
-            m.SetFloat("_Metallic", 0f);
-            m.SetFloat("_Smoothness", smooth);
-            m.SetFloat("_EnvironmentReflections", 0f);
-            m.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
-            m.SetFloat("_SpecularHighlights", 0f);
-            m.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+            FortRender.SetMetallic(m, 0f);
+            FortRender.SetSmoothness(m, smooth);
+            FortRender.Validate(m);
         }
 
-        static void Textured(Material m, Texture2D baseMap, Texture2D normal, float bump = 1f)
+        static void Textured(Material m, Texture2D baseMap, Texture2D normal, float bump = 1.6f)   // HDRP: 1.6 — рельеф кладки и дерева читается в сумерках
         {
-            m.SetTexture("_BaseMap", baseMap);
-            m.SetColor("_BaseColor", Color.white);
-            if (normal)
-            {
-                m.SetTexture("_BumpMap", normal);
-                m.SetFloat("_BumpScale", bump);
-                m.EnableKeyword("_NORMALMAP");
-            }
+            FortRender.SetBaseMap(m, baseMap);
+            FortRender.SetColor(m, Color.white);
+            FortRender.SetNormalMap(m, normal, bump);
+            FortRender.Validate(m);
         }
 
         static void AlphaClip(Material m, float cutoff = 0.4f)
         {
-            m.SetFloat("_AlphaClip", 1f);
-            m.SetFloat("_Cutoff", cutoff);
-            m.EnableKeyword("_ALPHATEST_ON");
-            m.SetFloat("_Cull", (float)CullMode.Off);
-            m.renderQueue = (int)RenderQueue.AlphaTest;
+            FortRender.SetAlphaClip(m, cutoff);
+            FortRender.SetDoubleSided(m, true);
+            FortRender.Validate(m);
         }
 
         static void Transparent(Material m, Color c)
         {
-            m.SetFloat("_Surface", 1f);
-            m.SetFloat("_Blend", 0f);
-            m.SetColor("_BaseColor", c);
-            m.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
-            m.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
-            m.SetFloat("_SrcBlendAlpha", (float)BlendMode.One);
-            m.SetFloat("_DstBlendAlpha", (float)BlendMode.OneMinusSrcAlpha);
-            m.SetFloat("_ZWrite", 0f);
-            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            m.SetOverrideTag("RenderType", "Transparent");
-            m.renderQueue = (int)RenderQueue.Transparent;
+            FortRender.SetTransparent(m, true);
+            FortRender.SetColor(m, c);
+            FortRender.Validate(m);
         }
 
         public static Dictionary<string, Material> SetupMaterials()
         {
-            var lit = Shader.Find("Universal Render Pipeline/Lit");
-            var vc = Shader.Find("Fortress/LitVertexColor") ?? lit;
+            var lit = FortRender.Lit;
+            var vc = Shader.Find(FortRender.VertexColorName) ?? lit;
             string V = Kits + "/QVillage/Textures/", P = Kits + "/QProps/Textures/";
             var map = new Dictionary<string, Material>();
 
@@ -371,20 +355,21 @@ namespace Fortress.EditorTools
             Village("MI_RoundTiles", "RoundTiles");
 
             var metal = MakeMat("MI_MetalOrnaments", lit);
-            metal.SetTexture("_BaseMap", null);
-            metal.SetColor("_BaseColor", new Color(0.16f, 0.16f, 0.17f));
-            metal.SetFloat("_Metallic", 0.55f); metal.SetFloat("_Smoothness", 0.35f);
+            FortRender.SetBaseMap(metal, null);
+            FortRender.SetColor(metal, new Color(0.16f, 0.16f, 0.17f));
+            FortRender.SetMetallic(metal, 0.55f); FortRender.SetSmoothness(metal, 0.35f);
+            FortRender.Validate(metal);
             map["MI_MetalOrnaments"] = metal;
 
             var glass = MakeMat("MI_WindowGlass", lit);
-            glass.SetTexture("_BaseMap", null);
+            FortRender.SetBaseMap(glass, null);
+            FortRender.SetSmoothness(glass, 0.85f); FortRender.SetMetallic(glass, 0f);
             Transparent(glass, new Color(0.62f, 0.74f, 0.8f, 0.32f));
-            glass.SetFloat("_Smoothness", 0.85f); glass.SetFloat("_Metallic", 0f);
             map["MI_WindowGlass"] = glass;
 
             var vine = MakeMat("MI_Vine", lit);
             Textured(vine, Tex(V + "T_VineLeaf.png"), null);
-            vine.SetColor("_BaseColor", new Color(0.42f, 0.62f, 0.25f));
+            FortRender.SetColor(vine, new Color(0.42f, 0.62f, 0.25f));
             AlphaClip(vine); Matte(vine);
             map["MI_Vine"] = vine;
 
@@ -548,8 +533,8 @@ namespace Fortress.EditorTools
                     if (!dark)
                     {
                         dark = new Material(mats[i]) { name = "MI_Trim_Metal_Dark" };
-                        dark.SetColor("_BaseColor", new Color(0.30f, 0.29f, 0.31f));
-                        if (dark.HasProperty("_Smoothness")) dark.SetFloat("_Smoothness", 0.3f);
+                        FortRender.SetColor(dark, new Color(0.30f, 0.29f, 0.31f));
+                        FortRender.SetSmoothness(dark, 0.3f);
                         AssetDatabase.CreateAsset(dark, darkPath);
                     }
                     mats[i] = dark; ch = true;

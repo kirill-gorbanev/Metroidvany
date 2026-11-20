@@ -262,7 +262,7 @@ namespace Fortress.EditorTools
             var t = go.GetComponent<Terrain>();
             t.detailObjectDistance = 70f; t.detailObjectDensity = 1f; t.heightmapPixelError = 4f; t.basemapDistance = 120f;
             t.drawInstanced = true;
-            var lit = Shader.Find("Universal Render Pipeline/Terrain/Lit");
+            var lit = Shader.Find("HDRP/TerrainLit");
             if (lit) t.materialTemplate = new Material(lit);
             var fe = go.AddComponent<Fortress.Grid.FortElement>(); fe.kind = Fortress.Grid.ElementKind.Ground; fe.model = "Terrain";
             return t;

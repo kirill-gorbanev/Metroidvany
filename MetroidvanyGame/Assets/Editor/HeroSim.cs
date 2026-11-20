@@ -304,7 +304,138 @@ namespace Fortress.EditorTools
                     for (int i = 0; i < 200 && H.BodyY < top - 0.03f; i++) { Step(); px += 10; }
                     sb.Append($"5 уступ {hgt}: кисть на {c.z - 3f:F2} м за кромкой, перевал за {px} px жеста (цель ≤ 600), тело {H.BodyY:F2}\n");
                 }
-                TP(H.BodyXZ, 0f); sb.Append(feelLog.Length > 0 ? "сторожа:" + feelLog : "сторожа: нарушений нет");
+                TP(new Vector3(H.BodyXZ.x, H.BodyY, H.BodyXZ.z), 0f); sb.Append(feelLog.Length > 0 ? "сторожа:" + feelLog : "сторожа: нарушений нет");
+            }
+            finally { End(); }
+            return sb.ToString();
+        }
+
+        // ================= КАРУСЕЛЬ (арена 4) =================
+        static ProtoMover Disc(float speed) { foreach (var m in Movers) if (m && Mathf.Abs(m.spinSpeed - speed) < 0.1f) return m; return null; }
+        static float R(ProtoMover m) => new Vector2(H.BodyXZ.x - m.transform.position.x, H.BodyXZ.z - m.transform.position.z).magnitude;
+        static Vector3 OnDisc(ProtoMover m, float r, float ang) => m.transform.position + Quaternion.AngleAxis(ang, Vector3.up) * Vector3.forward * r + Vector3.up * 0.6f;
+
+        /// <summary>Ближайшая к плечу достижимая точка зацепа этой карусели.</summary>
+        static bool HoldOn(ProtoMover m, out ProtoHold best, out float bestS, bool pole)
+        {
+            best = null; bestS = 0f; float bd = float.MaxValue;
+            foreach (var hd in H.Holds)
+            {
+                if (!hd || hd.GetComponentInParent<ProtoMover>() != m) continue;
+                if (pole != hd.name.Contains("Столб")) continue;
+                for (int i = 0; i <= 60; i++)
+                {
+                    Vector3 P = hd.At(i / 60f); float d = (P - H.ShoulderPos3).magnitude;
+                    if (d < bd && d < H.L - 0.05f) { bd = d; best = hd; bestS = i / 60f; }
+                }
+            }
+            return best;
+        }
+
+        /// <summary>Критерии ощущения карусели (цели геймдизайнера). Нужен Play на арене 4.</summary>
+        public static string Spin4()
+        {
+            if (!Setup()) return "нет Play / героя";
+            feelLog.Length = 0;
+            var sb = new StringBuilder("КАРУСЕЛЬ (арена 4)\n");
+            try
+            {
+                var d30 = Disc(30f); var d60 = Disc(60f); var d120 = Disc(120f);
+                if (!d30 || !d60 || !d120) return "нет каруселей 30/60/120";
+                for (int i = 0; i < 5; i++) Step();                      // ω посчитана
+
+                // 1. 120°/с без опоры с r 0.7: знак, слёт, отлёт, угол к касательной
+                TP(OnDisc(d120, 0.7f, 90f), 0f); H.driver = () => Free();
+                int sign = -1, off = -1, stop = -1; Vector3 leave = default, tangent = default; float maxV = 0f;
+                for (int i = 0; i < 400; i++)
+                {
+                    Vector3 before = H.BodyXZ;
+                    Step();
+                    if (sign < 0 && H.OnSpin) sign = i;
+                    if (off < 0 && H.rideMover != d120)
+                    {
+                        off = i; leave = H.BodyXZ;
+                        Vector3 rr = before - d120.transform.position; rr.y = 0f;
+                        tangent = Vector3.Cross(Vector3.up, rr).normalized * Mathf.Sign(-d120.Omega);   // по вращению
+                        Vector3 rt = Quaternion.AngleAxis(d120.Omega * Mathf.Rad2Deg * Dt, Vector3.up) * rr - rr; rt.y = 0f;
+                        if (rt.sqrMagnitude > 1e-8f) tangent = rt.normalized;
+                    }
+                    maxV = Mathf.Max(maxV, H.FlingVel.magnitude);
+                    if (off >= 0 && i > off + 2 && !H.Flung) { stop = i; break; }
+                }
+                Vector3 fl = H.BodyXZ - leave; fl.y = 0f;
+                float dev = fl.sqrMagnitude > 1e-6f && tangent.sqrMagnitude > 0f ? Vector3.Angle(fl, tangent) : -1f;
+                sb.Append($"1 120°/с без опоры, r 0.7: знак {(sign < 0 ? "—" : ((sign + 1) * Dt * 1000f).ToString("F0") + " мс")} (≤ 20), слёт через {(off < 0 ? "—" : ((off + 1) * Dt).ToString("F2") + " с")} (0.6–0.9), отлёт {fl.magnitude:F2} м (0.5–1.0), отклонение от касательной {dev:F0}° (≤ 30), макс. скорость {maxV:F2}\n");
+
+                // 2. 120°/с поручень у края 10 с — сдвиг по радиусу
+                ProtoHold h0 = null; foreach (var x in H.Holds) if (x && x.GetComponentInParent<ProtoMover>() == d120 && !x.name.Contains("Столб")) { h0 = x; break; }
+                { Vector3 hp = h0.At(0.5f) - d120.transform.position; hp.y = 0f; float ang = Vector3.SignedAngle(Vector3.forward, hp, Vector3.up);
+                  TP(OnDisc(d120, 0.8f, ang - 12f), ang); }
+                H.driver = () => Free(); Step();
+                if (!HoldOn(d120, out var hd, out float hs, false)) sb.Append("2 нет поручня рядом\n");
+                else
+                {
+                    H.BeginGripHold(hd, hs); H.driver = () => Hold();
+                    for (int i = 0; i < 5; i++) Step();
+                    float r0 = R(d120);
+                    for (int i = 0; i < 500; i++) Step();
+                    sb.Append($"2 120°/с за поручень 10 с: r {r0:F2} → {R(d120):F2} (сдвиг {(R(d120) - r0) * 100f:F1} см, цель 0), хват {(H.Gripping ? "держит" : "СОРВАЛСЯ")}, на карусели {(H.rideMover == d120 ? "да" : "НЕТ")}\n");
+                }
+
+                // 3. без опоры 10 с: 30°/с у края r 1.3, 60°/с r 1.0 — сдвиг 0
+                foreach (var (m, r, name) in new[] { (d30, 1.3f, "30°/с у края r 1.3"), (d60, 1.0f, "60°/с r 1.0") })
+                {
+                    TP(OnDisc(m, r, 0f), 0f); H.driver = () => Free(); Step();
+                    float r0 = R(m);
+                    for (int i = 0; i < 500; i++) Step();
+                    sb.Append($"3 {name} без опоры 10 с: r {r0:F2} → {R(m):F2}, на карусели {(H.rideMover == m ? "да" : "НЕТ")}, зона {(H.OnSpin ? "ДА" : "нет")}\n");
+                }
+                // 3б. 60°/с у самого края r 1.38 — в зоне, уносит
+                {
+                    TP(OnDisc(d60, 1.38f, 0f), 0f); H.driver = () => Free(); Step();
+                    int off2 = -1; for (int i = 0; i < 300; i++) { Step(); if (H.rideMover != d60) { off2 = i; break; } }
+                    sb.Append($"3б 60°/с у кромки r 1.38 без опоры: слетел через {(off2 < 0 ? "— (держит)" : ((off2 + 1) * Dt).ToString("F2") + " с")}\n");
+                }
+
+                // 4. кисть на самом диске в зоне (120°/с): тело у центра, кисть на r ~0.9 — съезжает и отпускает
+                {
+                    TP(OnDisc(d120, 0.25f, 0f), 0f); H.driver = () => Free(); Step();
+                    Vector3 c = OnDisc(d120, 0.75f, 0f); c.y = 0f;
+                    H.BeginGrip(c); H.driver = () => Hold();
+                    int rel = -1; bool slip = false;
+                    for (int i = 0; i < 100; i++) { Step(); slip |= H.GripSlipping; if (!H.Gripping) { rel = i; break; } }
+                    sb.Append($"4 120°/с кисть на диске r 0.75 (в зоне): съезжает {(slip ? "да" : "НЕТ")}, отпустила через {(rel < 0 ? "—" : ((rel + 1) * Dt).ToString("F2") + " с")}\n");
+                }
+                // 4б. кисть на диске вне зоны (60°/с, r 0.8) держит тело у края 5 с
+                {
+                    TP(OnDisc(d60, 1.3f, 0f), 180f); H.driver = () => Free(); Step();
+                    Vector3 c = OnDisc(d60, 0.8f, 0f); c.y = 0f;
+                    H.BeginGrip(c); H.driver = () => Hold();
+                    for (int i = 0; i < 250; i++) Step();
+                    sb.Append($"4б 60°/с кисть на диске r 0.8 (вне зоны), тело у края: хват {(H.Gripping ? "держит" : "СОРВАЛСЯ")}, r тела {R(d60):F2}, на карусели {(H.rideMover == d60 ? "да" : "НЕТ")}\n");
+                }
+
+                // 5. 120°/с: за столб, жест «на себя» вытягивает к центру из зоны
+                {
+                    TP(OnDisc(d120, 0.45f, 0f), 180f); H.driver = () => Free(); Step();
+                    if (!HoldOn(d120, out var pole, out float ps, true)) sb.Append("5 столб не достать\n");
+                    else
+                    {
+                        H.BeginGripHold(pole, ps); H.driver = () => Hold(-8f);
+                        float r0 = R(d120);
+                        for (int i = 0; i < 150; i++) Step();
+                        sb.Append($"5 120°/с за столб, жест на себя 3 с: r {r0:F2} → {R(d120):F2}, хват {(H.Gripping ? "держит" : "СОРВАЛСЯ")}, зона {(H.OnSpin ? "да" : "нет")}\n");
+                    }
+                }
+                // 6. кисть на неподвижном полу, тело на 120°/с: не длиннее досягаемости (раньше — на кадр длиннее)
+                {
+                    TP(OnDisc(d120, 1.2f, 180f), 180f); H.driver = () => Free(); Step();
+                    Vector3 c = d120.transform.position + Vector3.back * 1.6f; c.y = 0f;
+                    H.BeginGrip(c); H.driver = () => Hold();
+                    int rel = -1; for (int i = 0; i < 100; i++) { Step(); if (!H.Gripping) { rel = i; break; } }
+                    sb.Append($"6 120°/с кисть на неподвижном полу: отпустила через {(rel < 0 ? "— (держит)" : ((rel + 1) * Dt).ToString("F2") + " с")}\n");
+                }
+                TP(new Vector3(H.BodyXZ.x, H.BodyY, H.BodyXZ.z), 0f); sb.Append(feelLog.Length > 0 ? "сторожа:" + feelLog : "сторожа: нарушений нет");
             }
             finally { End(); }
             return sb.ToString();

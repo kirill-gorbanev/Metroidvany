@@ -62,7 +62,7 @@ namespace Fortress.Hero.Proto
         public bool OnSteep => onSteep;
         public bool Sliding => slideV > 0f;
         public float SlideSpeed => slideV;
-        public bool GripSlipping => gripSlip && mode == Mode.Grip;
+        public bool GripSlipping => (gripSlip || spinSlip) && mode == Mode.Grip;
         public bool OnHold => gripHold && mode == Mode.Grip;
         /// <summary>Видимая высота тела (с подъёмом на кромке).</summary>
         public float BodyY => groundY + climbLift;
@@ -85,6 +85,7 @@ namespace Fortress.Hero.Proto
         {
             gripHold = null; hoverHold = null; climbLift = 0f; gripSlip = false; slipDist = 0f;
             steepTimer = 0f; slideV = 0f; onSteep = false; crestFlash = slipFlash = 0f; gripL = L;
+            SpinReset();
         }
 
         // ---------------- досягаемость ----------------
@@ -167,7 +168,7 @@ namespace Fortress.Hero.Proto
         {
             Vector3 P = hd.At(s);
             mode = Mode.Grip; gripHold = hd; gripHoldS = s; gripSlip = false; slipDist = 0f;
-            gripHand = Flat(P); gripTop = P.y - handLift;
+            gripHand = Flat(P); hand = gripHand; gripTop = P.y - handLift;
             handMover = hd.GetComponentInParent<ProtoMover>();
             handStep = handMover ? handMover.StepId : 0;
             Vector3 dir = gripHand - Shoulder; dir.y = 0f;
@@ -320,7 +321,8 @@ namespace Fortress.Hero.Proto
             Color b = cBody;
             if (crestFlash > 0f) b = new Color(0.35f, 0.9f, 0.4f);
             else if (Hanging) b = Color.Lerp(cBody, new Color(0.65f, 0.35f, 0.85f), 0.8f);
-            else if (onSteep && !held) b = Color.Lerp(cBody, new Color(1f, 0.45f, 0.1f), 0.5f + 0.5f * slideV / Mathf.Max(slideMax, 0.01f));
+            else if ((onSteep && !held) || (onSpin && !SpinHeld(rideMover)) || Flung)
+                b = Color.Lerp(cBody, new Color(1f, 0.45f, 0.1f), 0.5f + 0.5f * Mathf.Max(Mathf.Max(slideV, spinV), flingV.magnitude) / Mathf.Max(slideMax, 0.01f));
             Color h = cHand;
             if (GripSlipping || slipFlash > 0f) h = new Color(1f, 0.1f, 0.1f);
             else if (OnHold || (mode == Mode.Free && hoverHold)) h = new Color(1f, 0.9f, 0.15f);
@@ -328,7 +330,7 @@ namespace Fortress.Hero.Proto
             if (rHand && rHand.material.color != h) rHand.material.color = h;
             if (lnArm)
             {
-                bool loaded = Hanging || (onSteep && held);
+                bool loaded = Hanging || (onSteep && held) || (onSpin && SpinHeld(rideMover));
                 lnArm.startColor = lnArm.endColor = loaded ? new Color(1f, 0.25f, 0.2f) : cArm;
             }
         }

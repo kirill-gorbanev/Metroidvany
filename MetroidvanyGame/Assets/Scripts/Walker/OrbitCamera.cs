@@ -14,13 +14,7 @@ namespace Fortress.Walker
         public float sensitivity = 0.12f;
         public float yaw, pitch = 15f;
         [Tooltip("Сглаживание высоты точки обзора (с): ступени лестницы не дёргают камеру")] public float heightSmooth = 0.15f;
-        [Tooltip("Окно сквозь стены вокруг героя (SeeThroughCamera): камера не прижимается к герою, стены между ними вырезаются сеткой")]
-        public bool seeThroughWalls = true;
-        [Tooltip("С окном сквозь стены: стены подтягивают камеру не ближе этого к герою, м")] public float keepMin = 1.8f;
-        [Tooltip("С окном сквозь стены: камера не ниже этого над полом под ней, м")] public float floorClear = 0.35f;
-        [Tooltip("С окном сквозь стены: камера не выше этого под потолком комнаты героя, м")] public float ceilClear = 0.2f;
         PlayerWalker walker;
-        SeeThroughCamera seeThrough;
         float pivotY, pivotVel;
         bool pivotInit;
         float curD, curDVel;
@@ -56,58 +50,20 @@ namespace Fortress.Walker
             Vector3 pivot = new Vector3(target.position.x, pivotY + height, target.position.z);
             Vector3 dir = rot * Vector3.back;
             float d = distance;
-            if (!seeThrough) seeThrough = GetComponent<SeeThroughCamera>();
-            if (!seeThrough && seeThroughWalls)
-            {   // окно сквозь стены ставится само (и после перекомпиляции в Play)
-                seeThrough = gameObject.AddComponent<SeeThroughCamera>();
-                seeThrough.target = target;
-            }
-            if (seeThrough && !seeThrough.target) seeThrough.target = target;
-            bool through = seeThrough && seeThrough.isActiveAndEnabled;
-            Vector3 cam;
-            if (through)
+            // стена или потолок между героем и камерой — камера подъезжает к герою (обычная камера от третьего лица)
+            var hits = Physics.SphereCastAll(pivot, 0.22f, dir, distance, ~0, QueryTriggerInteraction.Ignore);
+            foreach (var h in hits)
             {
-                // разрез перед героем (SeeThroughCamera): стена или потолок сзади подтягивают камеру, но не ближе keepMin;
-                // если и там заслоняет — всё ближе героя убирается целиком в высоте его этажа (изнанка стен тёмная);
-                // под пол камера не уходит — поднимается над ним, выше потолка комнаты героя — тоже нет
-                var hits = Physics.SphereCastAll(pivot, 0.22f, dir, distance, ~0, QueryTriggerInteraction.Ignore);
-                foreach (var h in hits)
-                {
-                    if (h.collider.transform.IsChildOf(target)) continue;
-                    if (h.distance > 0f && h.distance < d) d = h.distance - 0.05f;
-                }
-                d = Mathf.Max(d, Mathf.Min(keepMin, distance));
-                // к герою — быстро (стена не мелькает), назад — плавно (не скачет)
-                if (!dInit || d < curD) curD = Mathf.MoveTowards(dInit ? curD : d, d, 25f * Time.deltaTime);
-                else curD = Mathf.SmoothDamp(curD, d, ref curDVel, 0.3f);
-                dInit = true;
-                d = curD;
-                cam = pivot + dir * d;
-                // не выше потолка комнаты героя (низкий подвал: иначе камера над перекрытием, смотрит на пол этажа выше)
-                if (cam.y > pivot.y && Physics.SphereCast(pivot, 0.15f, Vector3.up, out var ch, cam.y - pivot.y + 0.3f, ~0, QueryTriggerInteraction.Ignore)
-                    && !ch.collider.transform.IsChildOf(target))
-                    cam.y = Mathf.Min(cam.y, pivot.y + ch.distance + 0.15f - ceilClear);
-                // не под полом: камера ниже головы и под ней пол выше неё — поднять над полом
-                if (cam.y < pivot.y)
-                {
-                    Vector3 from = new Vector3(cam.x, pivot.y, cam.z);
-                    if (Physics.Raycast(from, Vector3.down, out var fh, pivot.y - cam.y + floorClear, ~0, QueryTriggerInteraction.Ignore)
-                        && !fh.collider.transform.IsChildOf(target) && cam.y < fh.point.y + floorClear)
-                        cam.y = fh.point.y + floorClear;
-                }
+                if (h.collider.transform.IsChildOf(target)) continue;
+                if (h.distance > 0f && h.distance < d) d = Mathf.Max(0.3f, h.distance - 0.05f);
             }
-            else
-            {
-                var hits = Physics.SphereCastAll(pivot, 0.22f, dir, distance, ~0, QueryTriggerInteraction.Ignore);
-                foreach (var h in hits)
-                {
-                    if (h.collider.transform.IsChildOf(target)) continue;
-                    if (h.distance > 0f && h.distance < d) d = Mathf.Max(0.3f, h.distance - 0.05f);
-                }
-                cam = pivot + dir * d;
-            }
+            // к герою — сразу (стена не мелькает), назад — плавно (не скачет)
+            if (!dInit || d < curD) { curD = d; curDVel = 0f; dInit = true; }
+            else curD = Mathf.SmoothDamp(curD, d, ref curDVel, 0.25f);
+            d = curD;
+            Vector3 cam = pivot + dir * d;
             // камера не заходит в тонкие детали (настил, балки): если рядом с ней коллайдер — ближе к игроку
-            for (int s = 0; s < 8 && d > 0.3f && !through; s++)
+            for (int s = 0; s < 8 && d > 0.3f; s++)
             {
                 bool inside = false;
                 foreach (var c in Physics.OverlapSphere(cam, 0.18f, ~0, QueryTriggerInteraction.Ignore))

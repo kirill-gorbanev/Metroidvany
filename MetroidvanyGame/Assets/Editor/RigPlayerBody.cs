@@ -35,7 +35,6 @@ namespace Fortress.EditorTools
             if (!model.GetComponent<HumanGhostIK>()) model.AddComponent<HumanGhostIK>();
             var wb = player.GetComponent<WalkerBody>() ?? player.AddComponent<WalkerBody>();
             wb.anim = anim; wb.walker = walker;
-            SeeThroughSetup.AttachCamera(walker);    // окно сквозь стены вокруг героя вместо камеры в лицо
             return true;
         }
 

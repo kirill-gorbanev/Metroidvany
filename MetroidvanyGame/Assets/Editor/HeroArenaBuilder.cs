@@ -393,7 +393,17 @@ namespace Fortress.EditorTools
                     Vector3 d = Quaternion.AngleAxis(45f + 90f * i, Vector3.up) * Vector3.forward * 1.22f;
                     HoldCyl(Cyl("Поручень", new Vector3(c.x + d.x, PlatTop, c.z + d.z), 0.035f, 0.5f, RailC, disc));
                 }
+                // ЗОНА УНОСА (ω²·r > spinGrip 1.5): тёплое кольцо от r* до края — видно до того, как встанешь. Круглое — не крутится, декор.
+                float w = speeds[k] * Mathf.Deg2Rad, rStar = 1.5f / (w * w);
+                if (rStar < 1.4f)
+                {
+                    Cyl("Зона уноса", new Vector3(c.x, PlatTop, c.z), 1.4f, 0.0015f, new Color(0.9f, 0.45f, 0.2f), decor);
+                    Cyl("Зона: держит", new Vector3(c.x, PlatTop, c.z), rStar, 0.002f, PlatC, decor);
+                }
             }
+            Sign("30°/с\nдержит везде", new Vector3(3.5f, MAIN, 2.25f), 0.8f);
+            Sign("60°/с\nу края уносит", new Vector3(8.5f, MAIN, 2.25f), 0.8f);
+            Sign("120°/с\nдержись за столб\nили поручень", new Vector3(13.5f, MAIN, 2.25f), 0.8f);
 
             // ---- СКЛОНЫ к уступу (верх у z = 10), слева направо: 30°, 45°, 60° перила справа, 60° перила слева, 60° без перил
             SteepRamp("Склон 30°", 0.6f, 2.4f, LedgeZ, 30f, true, true);
@@ -724,7 +734,7 @@ namespace Fortress.EditorTools
             body.rotation = Quaternion.Euler(0f, yaw, 0f);                // лицом по yaw (0 — на север, +Z); камера встанет за спину
             proto.obstaclesRoot = walls;
             proto.surfaceRoot = surf;
-            proto.showHints = false;                                      // подсказки выключены (автор: «вырубить индикаторы»)
+            proto.showHints = true;                                       // подсказки и Gizmos включены
             // плечо — справа от тела
             proto.shoulderCube.position = body.position + body.right * proto.shoulderSide + Vector3.up * 0.14f;
             var orbit = rig.GetComponentInChildren<ProtoOrbitCamera>(true);

@@ -299,9 +299,7 @@ namespace Fortress.EditorTools
             var ballMat = AssetDatabase.LoadAssetAtPath<Material>(Root + "/Materials/Ball.mat");
             if (!ballMat)
             {
-                ballMat = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = "Ball" };
-                ballMat.SetColor("_BaseColor", new Color(0.75f, 0.2f, 0.15f));
-                ballMat.SetFloat("_Smoothness", 0.35f);
+                ballMat = Fortress.Rendering.FortRender.NewLit(new Color(0.75f, 0.2f, 0.15f), 0.35f, "Ball");
                 AssetDatabase.CreateAsset(ballMat, Root + "/Materials/Ball.mat");
             }
 

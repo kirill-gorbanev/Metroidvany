@@ -28,6 +28,10 @@ namespace Fortress.Hero.Proto
         public Matrix4x4 Delta { get; private set; } = Matrix4x4.identity;
         /// <summary>Номер шага — чтобы герой применил сдвиг ровно один раз.</summary>
         public int StepId { get; private set; }
+        /// <summary>Угловая скорость за последний шаг (рад/с) вокруг вертикали через transform.position.</summary>
+        public float Omega { get; private set; }
+        /// <summary>Центробежное ускорение (м/с²) в точке p на этой платформе: ω²·r.</summary>
+        public float SpinAccel(Vector3 p) { Vector3 r = p - transform.position; r.y = 0f; return Omega * Omega * r.magnitude; }
 
         Vector3 start; Quaternion startRot; float time;
 
@@ -58,6 +62,9 @@ namespace Fortress.Hero.Proto
                 transform.rotation = Quaternion.AngleAxis(spinStep * (n + k), Vector3.up) * startRot;
             }
             Delta = transform.localToWorldMatrix * prev.inverse;
+            // угловая скорость вокруг вертикали (рад/с, + — по часовой сверху): для центробежной зоны карусели
+            Vector3 f0 = prev.MultiplyVector(Vector3.forward), f1 = transform.forward; f0.y = 0f; f1.y = 0f;
+            Omega = dt > 1e-6f && f0.sqrMagnitude > 1e-8f && f1.sqrMagnitude > 1e-8f ? Vector3.SignedAngle(f0, f1, Vector3.up) * Mathf.Deg2Rad / dt : 0f;
             StepId++;
         }
 

@@ -50,16 +50,12 @@ public static class FortressSetup
         var m = AssetDatabase.LoadAssetAtPath<Material>(p);
         if (m == null)
         {
-            var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            m = new Material(sh); AssetDatabase.CreateAsset(m, p);
+            m = new Material(Fortress.Rendering.FortRender.Lit); AssetDatabase.CreateAsset(m, p);
         }
-        m.SetColor("_BaseColor", color); m.color = color;
-        m.SetFloat("_Smoothness", smooth);
-        if (emission.HasValue)
-        {
-            m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", emission.Value);
-            m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
-        }
+        Fortress.Rendering.FortRender.SetColor(m, color);
+        Fortress.Rendering.FortRender.SetSmoothness(m, smooth);
+        if (emission.HasValue) Fortress.Rendering.FortRender.SetEmission(m, emission.Value);
+        Fortress.Rendering.FortRender.Validate(m);
         EditorUtility.SetDirty(m);
         return m;
     }
@@ -250,19 +246,18 @@ public static class FortressSetup
             // импорт FBX ставит металличность/глянец -> бирюзовые отражения неба: делаем всё матовым
             if (!new[] { "water", "magiccircle", "player", "playerfacing", "duskysky", "dusksky" }.Contains(low))
             {
-                if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0f);
-                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", low.Contains("metal") || low.Contains("iron") ? 0.35f : 0.12f);
-                if (m.HasProperty("_EnvironmentReflections")) m.SetFloat("_EnvironmentReflections", 0f);
-                m.DisableKeyword("_METALLICSPECGLOSSMAP"); m.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
+                Fortress.Rendering.FortRender.SetMetallic(m, 0f);
+                Fortress.Rendering.FortRender.SetSmoothness(m, low.Contains("metal") || low.Contains("iron") ? 0.35f : 0.12f);
+                Fortress.Rendering.FortRender.Validate(m);
                 EditorUtility.SetDirty(m);
             }
             bool cut = keys.Any(k => low.Contains(k));
-            if (!cut && m.HasProperty("_BaseMap") && m.GetTexture("_BaseMap") is Texture2D t)
+            if (!cut && Fortress.Rendering.FortRender.GetBaseMap(m) is Texture2D t)
                 cut = keys.Any(k => t.name.ToLowerInvariant().Contains(k));
-            if (!cut || !m.HasProperty("_AlphaClip")) continue;
-            m.SetFloat("_AlphaClip", 1f); m.EnableKeyword("_ALPHATEST_ON"); m.SetFloat("_Cutoff", 0.45f);
-            if (m.HasProperty("_Cull")) m.SetFloat("_Cull", 0f);
-            m.renderQueue = (int)RenderQueue.AlphaTest; EditorUtility.SetDirty(m); n++;
+            if (!cut || !Fortress.Rendering.FortRender.IsLit(m.shader)) continue;
+            Fortress.Rendering.FortRender.SetAlphaClip(m, 0.45f);
+            Fortress.Rendering.FortRender.SetDoubleSided(m, true);
+            Fortress.Rendering.FortRender.Validate(m); EditorUtility.SetDirty(m); n++;
         }
         AssetDatabase.SaveAssets();
         Debug.Log($"[Fortress] материалов с альфа-отсечением: {n}");

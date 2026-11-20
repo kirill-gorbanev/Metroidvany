@@ -112,13 +112,7 @@ namespace Fortress.EditorTools
             g.transform.SetPositionAndRotation(pos, Quaternion.Euler(pitch, yaw, 0f));
             g.transform.localScale = size;
             var r = g.GetComponent<MeshRenderer>();
-            var sh = Shader.Find("Universal Render Pipeline/Lit");
-            if (sh)
-            {
-                var m = new Material(sh) { name = name };
-                m.SetColor("_BaseColor", col);
-                r.sharedMaterial = m;
-            }
+            r.sharedMaterial = Fortress.Rendering.FortRender.NewLit(col, 0.25f, name);
             return g;
         }
 

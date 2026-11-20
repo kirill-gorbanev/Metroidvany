@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Fortress.Rendering;
 
 namespace Fortress.Hero
 {
@@ -21,12 +22,10 @@ namespace Fortress.Hero
         static Material Hidden()
         {
             if (hidden) return hidden;
-            var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            hidden = new Material(sh) { name = "Hero_HiddenZone", hideFlags = HideFlags.DontSave };
-            hidden.SetFloat("_AlphaClip", 1f); hidden.SetFloat("_Cutoff", 1f);
-            hidden.EnableKeyword("_ALPHATEST_ON");
-            hidden.SetColor("_BaseColor", new Color(1f, 1f, 1f, 0f));
-            hidden.renderQueue = 2450;
+            hidden = FortRender.NewLit(new Color(1f, 1f, 1f, 0f), 0f, "Hero_HiddenZone");
+            hidden.hideFlags = HideFlags.DontSave;
+            FortRender.SetAlphaClip(hidden, 1f);
+            FortRender.Validate(hidden);
             return hidden;
         }
 
@@ -43,7 +42,8 @@ namespace Fortress.Hero
                 // ткань — двусторонняя: изнутри рукава/штанины не просвечивает насквозь
                 foreach (var m in r.materials)
                 {
-                    if (m.HasProperty("_Cull")) m.SetFloat("_Cull", 0f);
+                    FortRender.SetDoubleSided(m, true);
+                    FortRender.Validate(m);
                     m.doubleSidedGI = true;
                 }
             }

@@ -445,7 +445,7 @@ namespace Fortress.Rig.V3
                             if ((ca - cb).magnitude > A.partRadius[i] + B.partRadius[j] + 0.03f) continue;
                             if (!Physics.ComputePenetration(A.probes[i], A.bones[i].position, A.bones[i].rotation,
                                                             B.probes[j], B.bones[j].position, B.bones[j].rotation, out var dir, out _)) continue;
-                            long key = ((long)A.GetInstanceID() << 32) ^ ((long)B.GetInstanceID() * 1000 + i * 16 + j);
+                            long key = ((long)A.GetHashCode() << 32) ^ ((long)B.GetHashCode() * 1000 + i * 16 + j);
                             if (pairCool.TryGetValue(key, out var t) && now - t < 0.3f) continue;
                             Vector3 n = -dir;               // от A к B
                             Vector3 p = Physics.ClosestPoint(cb, A.probes[i], A.bones[i].position, A.bones[i].rotation);

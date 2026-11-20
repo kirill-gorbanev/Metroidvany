@@ -35,10 +35,7 @@ namespace Fortress.EditorTools
 
         internal static Material Mat(string n, Color c)
         {
-            var sh = Shader.Find("Universal Render Pipeline/Lit"); if (!sh) sh = Shader.Find("Standard");
-            var m = new Material(sh) { name = n };
-            m.SetColor("_BaseColor", c); m.color = c;
-            return m;
+            return Fortress.Rendering.FortRender.NewLit(c, 0.25f, n);
         }
 
         internal static Transform Cube(string n, Vector3 pos, Vector3 size, Color c, Transform parent = null)
@@ -414,7 +411,7 @@ namespace Fortress.EditorTools
                 Vector3 focus = body.position + Vector3.up * orbit.lookHeight;
                 camGo.transform.SetPositionAndRotation(focus - rot * Vector3.forward * orbit.distance, rot);
             }
-            proto.showHints = false;                                      // подсказки выключены (автор: «вырубить индикаторы»)
+            proto.showHints = true;                                       // подсказки и Gizmos включены
             // 3D-модель вместо кубиков — эксперимент (модель видна только со спины): по меню «Proto: модель вместо кубиков»
             // префаб
             const string PrefabPath = "Assets/Characters/Hero/HeroProto.prefab";

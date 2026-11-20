@@ -343,8 +343,7 @@ namespace Fortress.EditorTools
             string p = LocMat + name + ".mat";
             var m = AssetDatabase.LoadAssetAtPath<Material>(p);
             if (m) return m;
-            m = new Material(Shader.Find("Universal Render Pipeline/Lit")) { color = c };
-            m.SetFloat("_Smoothness", 0.25f);
+            m = Fortress.Rendering.FortRender.NewLit(c, 0.25f);
             AssetDatabase.CreateAsset(m, p);
             return m;
         }
@@ -463,7 +462,8 @@ namespace Fortress.EditorTools
             sun.transform.rotation = Quaternion.Euler(38f, -128f, 0f);
             if (dusk)
             {   // низкое солнце с запада, тени длинные; огонь в 6-8 раз ярче тени — свет и тень читаются глазом
-                sun.color = new Color(1f, 0.62f, 0.4f); sun.intensity = 0.6f; sun.transform.rotation = Quaternion.Euler(10f, 95f, 0f);
+                // HDRP: солнце 16° — закат красит физическое небо, тени длинные, но двор не тонет в темноте
+                sun.color = new Color(1f, 0.74f, 0.52f); sun.intensity = 1.25f; sun.transform.rotation = Quaternion.Euler(16f, 95f, 0f);
             }
             var sky = AssetDatabase.LoadAssetAtPath<Material>(LocMat + "DuskSky.mat");
             if (sky) RenderSettings.skybox = sky;
@@ -491,6 +491,9 @@ namespace Fortress.EditorTools
                 RenderSettings.ambientProbe = shd;
                 RenderSettings.fogMode = FogMode.Exponential; RenderSettings.fogColor = new Color(0.17f, 0.19f, 0.26f); RenderSettings.fogDensity = 0.01f;
             }
+            // HDRP: солнце в люксах, небо/туман/экспозиция — профиль из RenderSettings выше
+            Fortress.Rendering.FortRender.SetIntensity(sun, sun.intensity);
+            HdrpSetup.RebuildAtmosphere();
         }
 
         static void CreatePlayer(Vector3 spawn, Vector3[] points)

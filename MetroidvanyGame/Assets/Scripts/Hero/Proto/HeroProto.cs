@@ -64,7 +64,7 @@ namespace Fortress.Hero.Proto
 
         [Header("Подсказки")]
         [Tooltip("Сектор, линия хода, стрелки жеста и лица. Выключено — видны только кубики.")]
-        public bool showHints = false;
+        public bool showHints = true;
 
         [Header("Камера")]
         [Tooltip("Камера едет за телом с тем же смещением.")]
@@ -714,6 +714,7 @@ namespace Fortress.Hero.Proto
         void Carry()
         {
             bool bodyMoved = false, handMoved = false;
+            carryVel = Vector3.zero;
             if (rideMover && rideMover.StepId != rideStep)
             {
                 rideStep = rideMover.StepId;
@@ -721,6 +722,7 @@ namespace Fortress.Hero.Proto
                 Vector3 np = D.MultiplyPoint3x4(new Vector3(bodyCube.position.x, groundY, bodyCube.position.z));
                 Vector3 f = D.MultiplyVector(bodyCube.forward); f.y = 0f;
                 if (f.sqrMagnitude > 1e-6f) bodyCube.rotation = Quaternion.LookRotation(f.normalized, Vector3.up);
+                carryVel = (np - new Vector3(bodyCube.position.x, groundY, bodyCube.position.z)) / Mathf.Max(dtNow, 1e-4f);   // скорость с платформы (для слёта)
                 bodyCube.position = new Vector3(np.x, np.y + bodyLift, np.z);
                 groundY = np.y;
                 bodyMoved = true;
@@ -738,7 +740,8 @@ namespace Fortress.Hero.Proto
             if (mode == Mode.Grip && (bodyMoved || handMoved) && !(bodyMoved && handMoved && rideMover == handMover))
             {
                 float dh = Flat(gripHand - Shoulder).magnitude;
-                bool lost = gripHold ? (gripHold.At(gripHoldS) - Shoulder3).magnitude > L + 0.02f : (dh > L + 0.02f || !HandOk(gripHand));
+                bool lost = gripHold ? (gripHold.At(gripHoldS) - Shoulder3).magnitude > L + 0.02f : (dh > ComputeGripL() + 0.02f || !HandOk(gripHand));   // досягаемость с учётом высоты (не L)
+                lost |= ArmCutsBody();                                   // диск повернул тело, кисть на полу — рука прошла бы сквозь тело
                 if (lost) { mode = Mode.Free; pendingTurn = 0f; handMover = null; gripHold = null; }   // сорвался
                 else { float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0); }
             }
@@ -792,7 +795,7 @@ namespace Fortress.Hero.Proto
             }
             else
             {
-                if (!inp.pressed && !testHold) { mode = Mode.Free; pendingTurn = 0f; lastGestureAlong = lastGestureSide = Vector2.zero; gripHold = null; gripSlip = false; }
+                if (!inp.pressed && !testHold) { mode = Mode.Free; pendingTurn = 0f; lastGestureAlong = lastGestureSide = Vector2.zero; gripHold = null; gripSlip = false; spinSlip = false; }
                 else if (!orbit) Gesture(inp.delta);
                 HandSlipStep(dt);                                     // кисть на крутом (не зацеп) — съезжает и отпускает
                 hand = gripHand;
@@ -858,6 +861,7 @@ namespace Fortress.Hero.Proto
                 bodyCube.position = new Vector3(b.x, bodyCube.position.y, b.z);
             }
             SlopeStep(dt);                                            // крутой склон без опоры — сползание
+            SpinStep(dt);                                             // карусель: центробежная зона, слёт
             ClimbDecay(dt);                                           // отпустил кромку до перевала — назад вниз
             Place();
             ClimbVisuals(dt);
@@ -873,7 +877,7 @@ namespace Fortress.Hero.Proto
 
         public void BeginGrip(Vector3 c)
         {
-            mode = Mode.Grip; gripHand = c; gripHold = null;
+            mode = Mode.Grip; gripHand = c; hand = c; gripHold = null;          // кисть — сразу в точке хвата (иначе кадр «рука длиннее»)
             gripTop = HandHit(c, out handMover, out var gn);               // кисть на платформе — поедет с ней
             if (float.IsInfinity(gripTop)) gripTop = groundY;
             // кисть на крутом склоне не держит — съедет и отпустит (видно)
