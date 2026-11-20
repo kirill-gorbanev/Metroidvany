@@ -136,10 +136,11 @@ namespace Fortress.Hero.Proto
             // под курсором хороший пол (достижим и не крутой) — поручень берётся только рядом; иначе (склон, кромка, пустота) — издалека
             bool floorGood = false;
             if (haveFloor && HandOk(fp)) { HandHit(fp, out _, out var fn); floorGood = Vector3.Angle(fn, Vector3.up) <= steepAngle; }
-            float R = (floorGood ? holdSnapScreenFloor : holdSnapScreen) * Screen.height, bestScore = float.MaxValue;
+            float bestScore = float.MaxValue;
             foreach (var hd in holds)
             {
                 if (!hd) continue;
+                float R = SnapPx(hd, floorGood), RW = SnapWorld(hd);              // выступ (Ledge) — радиус меньше поручня
                 if ((hd.At(hd.ClosestTo(S3)) - S3).magnitude > L) continue;      // весь поручень дальше руки
                 int n = Mathf.Clamp(Mathf.CeilToInt((hd.B - hd.A).magnitude / 0.02f), 8, 200);
                 float dAny = float.MaxValue, dOk = float.MaxValue, sOk = -1f, wOk = float.MaxValue;
@@ -154,9 +155,9 @@ namespace Fortress.Hero.Proto
                     if (haveFloor) wOk = Mathf.Min(wOk, Flat(P - fp).magnitude);
                 }
                 if (sOk < 0f) continue;                                          // ни одной достижимой точки
-                bool near = dAny <= R || (!floorGood && wOk <= holdSnapWorld);
+                bool near = dAny <= R || (!floorGood && wOk <= RW);
                 if (!near) continue;
-                float score = Mathf.Min(dAny, wOk / holdSnapWorld * R);          // ближе к курсору — тот поручень и берём
+                float score = Mathf.Min(dAny, wOk / RW * R) + SnapBias(hd);      // ближе к курсору — тот поручень и берём; поручень сильнее камня
                 if (score < bestScore) { bestScore = score; best = hd; bestS = sOk; }
             }
             return best;
@@ -232,7 +233,7 @@ namespace Fortress.Hero.Proto
 
         // ---------------- уступ: подтягивание ----------------
         /// <summary>Хват за кромку уступа выше порога.</summary>
-        bool ClimbGrip => mode == Mode.Grip && !gripHold && gripTop > groundY + maxStep + 0.005f;
+        bool ClimbGrip => (mode == Mode.Grip && !gripHold && gripTop > groundY + maxStep + 0.005f) || NubHang;   // кромка или вис на выступе (Ledge)
 
         /// <summary>Тело упёрлось в уступ на пути к кисти (не стена-препятствие, а уступ выше шага).</summary>
         bool AtLedge()
@@ -254,7 +255,7 @@ namespace Fortress.Hero.Proto
             if (meters > 0f)
             {
                 if (climbLift >= need) return false;                      // уже поднялся — дальше обычный ход на уступ
-                if (!AtLedge() && climbLift <= 0.001f) return false;      // ещё не у кромки — едет к ней
+                if (!(OnNub ? NubAtWall() : AtLedge()) && climbLift <= 0.001f) return false;      // ещё не у кромки — едет к ней
                 climbLift = Mathf.Min(climbLift + meters, need);
                 return true;
             }
@@ -266,7 +267,7 @@ namespace Fortress.Hero.Proto
         /// Иначе короткая рука на высоком уступе (кисть у самой кромки) не довела бы тело за кромку.</summary>
         void MantleStep(float dt)
         {
-            if (!ClimbGrip) return;
+            if (!ClimbGrip || OnNub) return;                              // через камень не перевалить (Ledge)
             float need = gripTop - groundY - maxStep + 0.03f;
             if (climbLift < need - 1e-3f) return;
             Vector3 dir = Flat(gripHand - Body); float d = dir.magnitude;
@@ -333,6 +334,7 @@ namespace Fortress.Hero.Proto
                 bool loaded = Hanging || (onSteep && held) || (onSpin && SpinHeld(rideMover));
                 lnArm.startColor = lnArm.endColor = loaded ? new Color(1f, 0.25f, 0.2f) : cArm;
             }
+            NubVisuals();                                                 // выступ: подсветка камня (Ledge)
         }
     }
 }

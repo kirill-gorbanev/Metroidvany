@@ -715,6 +715,149 @@ namespace Fortress.EditorTools
             PlaceHero(new Vector3(0.8f, 0f, 2.0f), 90f);
         }
 
+        // ================= АРЕНА 7 — ВЫСТУПЫ (хват за камни, края, неровности) =================
+        public const string Scene7Path = "Assets/Scenes/HeroArena7.unity";
+        static readonly Color NubC = new Color(0.62f, 0.56f, 0.48f);
+
+        /// <summary>Арена 7 — стенды блока «хват за выступы» (ProtoNub), каждый подписан:
+        ///   1 · 60° с камнями — залезть (без перил);   2 · 60° без камней — нельзя (контроль);   3 · 45° с камнями;
+        ///   4 · стена 1.2 с камнями — вис (подтянуться), залезть — только с перехватом (блок 3);
+        ///   5 · камень и поручень на низкой стене — пол рядом остаётся полом, поручень сильнее;
+        ///   6 · камень на челноке — кисть едет с ним, не достаёт — срыв;   7 · карусель 120°/с с камнями и ручками.</summary>
+        [MenuItem("Fortress/Hero/Build Arena 7 (выступы)")]
+        public static void Build7()
+        {
+            if (EditorApplication.isPlaying) { Debug.LogWarning("[Hero] арена 7: выйди из Play"); return; }
+            var open = SceneManager.GetSceneByPath(Scene7Path);
+            Scene scene;
+            if (open.IsValid() && open.isLoaded)
+            {
+                scene = open;
+                foreach (var g in scene.GetRootGameObjects()) Object.DestroyImmediate(g);
+                SceneManager.SetActiveScene(scene);
+            }
+            else
+            {
+                if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+                scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+            Fill7();
+            EditorSceneManager.SaveScene(scene, Scene7Path);
+            Debug.Log("[Hero] арена 7: " + Scene7Path);
+        }
+
+        /// <summary>Камень-выступ: кубик по центру и размеру (длинная сторона — по X или Z), маркер ProtoNub. Корень — декор
+        /// (не опора, не стена) или подвижный элемент.</summary>
+        static Transform Nub(string n, Vector3 c, Vector3 size, Transform parent, Quaternion? rot = null)
+        {
+            var t = Cube(n, c, size, NubC, parent ? parent : decor);
+            if (rot.HasValue) t.rotation = rot.Value;
+            t.gameObject.AddComponent<ProtoNub>().Fit();
+            return t;
+        }
+
+        /// <summary>Камни на склоне (как Ramp5 без перил): две колонки (x ± 0.3 от середины), шаг по Z.</summary>
+        static void NubsOnRamp(string n, float x0, float x1, float topZ, float top, float ang, float stepZ)
+        {
+            float rise = top - MAIN, run = rise / Mathf.Tan(ang * Mathf.Deg2Rad), z0 = topZ - run, xc = (x0 + x1) * 0.5f;
+            int k = 0;
+            for (float z = z0 + 0.08f; z < topZ - 0.05f; z += stepZ, k++)
+            {
+                float y = MAIN + rise * (z - z0) / run;
+                foreach (float dx in new[] { -0.3f, 0.3f })
+                    Nub($"{n}: камень {k + 1}{(dx < 0 ? "л" : "п")}", new Vector3(xc + dx, y + 0.03f, z), new Vector3(0.24f, 0.1f, 0.12f), decor);
+            }
+        }
+
+        static void Fill7()
+        {
+            const int Lanes = 6;
+            float WL = Lanes * (Lane + Sep) + Sep, W7 = WL + 4.4f, D7 = 9.5f, Deck = UP;
+            walls = new GameObject("Арена: стены").transform;
+            surf = new GameObject("Арена: поверхность").transform;
+            decor = new GameObject("Арена: декор (не опора)").transform;
+            float X(int i) => Sep + i * (Lane + Sep);
+
+            Box("Земля", -2f, W7 + 2f, -0.05f, 0f, -2f, D7 + 2f, GroundC, decor);
+            Box("Основа", 0f, W7, 0f, MAIN, 0f, D7, MainC, surf);
+            for (int i = 1; i < 10; i++) Box("Разметка Z" + i, 0f, W7, MAIN, MAIN + 0.002f, i - 0.005f, i + 0.005f, LineC, decor);
+
+            Box("Стена юг", -0.3f, W7 + 0.3f, 0f, WallTop, -0.3f, 0f, WallC, walls);
+            Box("Стена север", -0.3f, W7 + 0.3f, 0f, Deck + 0.45f, D7, D7 + 0.3f, WallC, walls);
+            Box("Стена запад", -0.3f, 0f, 0f, WallTop, 0f, D7, WallC, walls);
+            Box("Стена восток", W7, W7 + 0.3f, 0f, WallTop, 0f, D7, WallC, walls);
+            for (int i = 1; i <= Lanes; i++) { float x = X(i) - Sep; Box("Стенка дорожек " + i, x, x + Sep, MAIN, MAIN + 0.45f, StandZ0, StandZ1, WallC, walls); }
+
+            Sign("СТЕНДЫ: ВЫСТУПЫ\nкамни держат, как поручни, но берутся только рядом", new Vector3(WL * 0.5f, MAIN, 0.25f), 1.1f);
+            Box("Настил 1.8", 0f, WL, 0f, Deck, StandZ1, D7, DeckC, surf);
+            Box("Финиш (настил)", 0.5f, WL - 0.5f, Deck, Deck + 0.004f, 8.4f, 9.2f, FinishC, decor);
+
+            // 1–3: склоны на настил
+            var ramps = new (string label, float ang, bool nubs)[]
+            {
+                ("1 · 60° с камнями\nзалезть", 60f, true), ("2 · 60° без камней\nнельзя", 60f, false), ("3 · 45° с камнями\nзалезть", 45f, true),
+            };
+            for (int k = 0; k < ramps.Length; k++)
+            {
+                float x0 = X(k), x1 = x0 + Lane;
+                Ramp5("Склон " + ramps[k].label.Split('\n')[0], x0, x1, StandZ1, Deck, ramps[k].ang, false, false);
+                if (ramps[k].nubs) NubsOnRamp("Склон " + (k + 1), x0, x1, StandZ1, Deck, ramps[k].ang, ramps[k].ang > 50f ? 0.17f : 0.25f);
+                Sign(ramps[k].label, new Vector3((x0 + x1) * 0.5f, MAIN, 2.0f));
+            }
+
+            // 4: стена 1.2 (выше кромки) с камнями на южной грани: 0.5 — вис, 0.8 — только с перехватом
+            {
+                float x0 = X(3), x1 = x0 + Lane, xc = (x0 + x1) * 0.5f;
+                Box("Стена 1.2", x0, x1, 0f, MAIN + 1.2f, 3f, 4.5f, DeckC, surf);
+                Nub("Стена 1.2: камень 0.5", new Vector3(xc + 0.25f, MAIN + 0.5f - 0.05f, 2.94f), new Vector3(0.26f, 0.1f, 0.12f), decor);
+                Nub("Стена 1.2: камень 0.8", new Vector3(xc - 0.15f, MAIN + 0.8f - 0.05f, 2.94f), new Vector3(0.26f, 0.1f, 0.12f), decor);
+                Sign("4 · стена 1.2, камни\nповиснуть; выше —\nблок 3 (перехват)", new Vector3(xc, MAIN, 2.0f));
+            }
+            // 5: низкая стена 0.55 — камень (слева) и поручень (справа) на высоте 0.45: пол рядом — пол, поручень сильнее
+            {
+                float x0 = X(4), x1 = x0 + Lane, xc = (x0 + x1) * 0.5f;
+                Box("Низкая стена", x0, x1, MAIN, MAIN + 0.55f, 3.6f, 3.9f, WallC, walls);
+                Nub("Низкая стена: камень", new Vector3(xc - 0.35f, MAIN + 0.45f - 0.05f, 3.54f), new Vector3(0.26f, 0.1f, 0.12f), decor);
+                Rail("Низкая стена: поручень", new Vector3(xc + 0.05f, MAIN + 0.45f, 3.55f), new Vector3(xc + 0.6f, MAIN + 0.45f, 3.55f));
+                Sign("5 · камень и поручень\nпол рядом — пол", new Vector3(xc, MAIN, 2.0f));
+            }
+            // 6: челнок-стенка с камнем ходит вбок 0.6 м (3 с, стоянка 2 с) — кисть едет с камнем, не достаёт — срыв
+            {
+                float x0 = X(5), xc = x0 + 0.45f;
+                var sh = Mover("Челнок с камнем", new Vector3(xc, 0f, 3.6f), new Vector3(0.6f, 0f, 0f), 3f, 2f, 0f, 0f);
+                Box("Челнок: стенка", xc - 0.3f, xc + 0.3f, 0f, MAIN + 0.9f, 3.6f, 3.9f, PlatC, sh);
+                Nub("Челнок: камень", new Vector3(xc, MAIN + 0.5f - 0.05f, 3.54f), new Vector3(0.26f, 0.1f, 0.12f), sh);
+                Sign("6 · камень на челноке\nедет с ним", new Vector3(x0 + Lane * 0.5f, MAIN, 2.0f));
+            }
+            // 7 (восток): карусель 120°/с — два камня и две ручки на одном радиусе (сравнить удержание)
+            {
+                var c = new Vector3(WL + 2.2f, 0f, 4f);
+                var disc = Mover("Карусель 120°/с (камни)", c, Vector3.zero, 1f, 0f, 120f, 0f);
+                Cyl("Круг", new Vector3(c.x, PlatTop - 0.04f, c.z), 1.4f, 0.04f, PlatC, disc);
+                Box("Полоса", c.x - 0.1f, c.x + 0.1f, PlatTop, PlatTop + 0.003f, c.z - 1.3f, c.z + 1.3f, StripeC, disc);
+                for (int i = 0; i < 4; i++)
+                {
+                    Vector3 d = Quaternion.AngleAxis(45f + 90f * i, Vector3.up) * Vector3.forward * 1.22f;
+                    if (i % 2 == 0)
+                        Nub("Камень на круге", new Vector3(c.x + d.x, PlatTop + 0.05f, c.z + d.z), new Vector3(0.12f, 0.1f, 0.24f), disc,
+                            Quaternion.LookRotation(Vector3.Cross(Vector3.up, d.normalized), Vector3.up));   // длинной стороной по касательной
+                    else HoldCyl(Cyl("Ручка", new Vector3(c.x + d.x, PlatTop, c.z + d.z), 0.035f, 0.5f, RailC, disc));
+                }
+                float w = 120f * Mathf.Deg2Rad, rStar = 1.5f / (w * w);
+                Cyl("Зона уноса", new Vector3(c.x, PlatTop, c.z), 1.4f, 0.0015f, new Color(0.9f, 0.45f, 0.2f), decor);
+                Cyl("Зона: держит", new Vector3(c.x, PlatTop, c.z), rStar, 0.002f, PlatC, decor);
+                Sign("7 · карусель 120°/с\nкамни и ручки", new Vector3(c.x, MAIN, 1.8f), 0.8f);
+            }
+
+            var sun = new GameObject("Свет").AddComponent<Light>();
+            sun.type = LightType.Directional; sun.intensity = 1.1f; sun.shadows = LightShadows.Soft;
+            sun.transform.rotation = Quaternion.Euler(55f, -35f, 0f);
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.45f, 0.45f, 0.47f);
+
+            PlaceHero(new Vector3(WL * 0.5f, 0f, 0.8f));
+        }
+
         /// <summary>Герой — тот же префаб прототипа (герой + камера), на старте лицом на север, камера за спиной.</summary>
         static void PlaceHero(Vector3 start, float yaw = 0f)
         {

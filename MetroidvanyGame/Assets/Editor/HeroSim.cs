@@ -83,7 +83,7 @@ namespace Fortress.EditorTools
         }
 
         /// <summary>Один стенд: поставить героя, дойти до цели (с высотой) ботом без разброса. ok — дошёл; att — попыток (жестов).</summary>
-        public static string Stand(string name, Vector3 start, float yaw, Vector3 goal, bool expect, int maxAttempts, out bool ok, out int att)
+        public static string Stand(string name, Vector3 start, float yaw, Vector3 goal, bool expect, int maxAttempts, out bool ok, out int att, bool byHeight = false)
         {
             ok = false; att = 0;
             if (!Setup()) return "нет Play / героя";
@@ -95,8 +95,9 @@ namespace Fortress.EditorTools
                 H.driver = bot.Frame;
                 bot.Start(goal);
                 float maxY = H.BodyY;
-                while (bot.reached == 0 && bot.attempts < maxAttempts && !bot.trapped) { Step(); maxY = Mathf.Max(maxY, H.BodyY); }
-                ok = bot.reached > 0; att = bot.attempts;
+                bool high = false;   // byHeight: стенд пройден, когда тело поднялось на высоту цели (бот дальше может уйти в угол)
+                while (bot.reached == 0 && bot.attempts < maxAttempts && !bot.trapped && !high) { Step(); maxY = Mathf.Max(maxY, H.BodyY); high = byHeight && H.BodyY >= goal.y - 0.05f; }
+                ok = bot.reached > 0 || high; att = bot.attempts;
                 string verdict = ok == expect ? "как задумано" : "НЕ КАК ЗАДУМАНО";
                 return $"{name}: {(ok ? "дошёл" : "не дошёл")} ({verdict}), жестов {att}, за зацеп {bot.holdAims}, выше всего {maxY:F2}, " +
                        $"конец ({H.BodyXZ.x:F2}, {H.BodyY:F2}, {H.BodyXZ.z:F2}), пустых {bot.dead}" +
@@ -434,6 +435,153 @@ namespace Fortress.EditorTools
                     H.BeginGrip(c); H.driver = () => Hold();
                     int rel = -1; for (int i = 0; i < 100; i++) { Step(); if (!H.Gripping) { rel = i; break; } }
                     sb.Append($"6 120°/с кисть на неподвижном полу: отпустила через {(rel < 0 ? "— (держит)" : ((rel + 1) * Dt).ToString("F2") + " с")}\n");
+                }
+                TP(new Vector3(H.BodyXZ.x, H.BodyY, H.BodyXZ.z), 0f); sb.Append(feelLog.Length > 0 ? "сторожа:" + feelLog : "сторожа: нарушений нет");
+            }
+            finally { End(); }
+            return sb.ToString();
+        }
+
+        // ================= ВЫСТУПЫ (арена 7) =================
+        /// <summary>Ближайший к плечу достижимый камень (имя содержит key), точка впереди тела.</summary>
+        static bool NearestNub(string key, out ProtoHold best, out float bestS)
+        {
+            best = null; bestS = 0f; float bd = float.MaxValue;
+            foreach (var hd in H.Holds)
+            {
+                if (!(hd is ProtoNub) || !hd.name.Contains(key)) continue;
+                for (int i = 0; i <= 30; i++)
+                {
+                    Vector3 P = hd.At(i / 30f); float d = (P - H.ShoulderPos3).magnitude;
+                    if (d < bd && d < H.L - 0.05f && H.DiagHoldOk(P)) { bd = d; best = hd; bestS = i / 30f; }
+                }
+            }
+            return best;
+        }
+
+        static string Sec(int i) => i < 0 ? "—" : ((i + 1) * Dt).ToString("F2") + " с";
+
+        /// <summary>Критерии блока «хват за выступы» (цели геймдизайнера). Нужен Play на арене 7.</summary>
+        public static string Ledge7()
+        {
+            var sb = new StringBuilder("ВЫСТУПЫ (арена 7)\n");
+            float M = 0.6f;
+            // A. стенды ботом: склоны с камнями / без, стена 1.2
+            (string n, float x, Vector3 goal, bool expect)[] st =
+            {
+                ("1 60° с камнями", 1.3f, new Vector3(1.3f, 1.8f, 7f), true), ("2 60° без камней", 3.3f, new Vector3(3.3f, 1.8f, 7f), false),
+                ("3 45° с камнями", 5.3f, new Vector3(5.3f, 1.8f, 7f), true), ("4 стена 1.2 с камнями", 7.3f, new Vector3(7.3f, 1.8f, 3.8f), false),
+            };
+            int good = 0;
+            foreach (var s in st)
+            {
+                sb.Append(Stand(s.n, new Vector3(s.x, M, 2.3f), 0f, s.goal, s.expect, 120, out bool ok, out _, true)).Append('\n');
+                if (ok == s.expect) good++;
+            }
+            sb.Insert(sb.ToString().IndexOf('\n') + 1, $"стенды как задумано {good}/{st.Length}\n");
+
+            if (!Setup()) return sb + "нет Play / героя";
+            feelLog.Length = 0;
+            try
+            {
+                for (int i = 0; i < 5; i++) Step();
+                // B1. ВИС 10 с на камне посреди 60° — смещение ≤ 1 см
+                TP(new Vector3(1.4f, 1.2f, 5.45f), 0f); H.driver = () => Free(); Step();
+                if (!NearestNub("Склон 1", out var hd, out float hs)) sb.Append("B1 нет камня рядом\n");
+                else
+                {
+                    H.BeginGripHold(hd, hs); H.driver = () => Hold();
+                    for (int i = 0; i < 10; i++) Step();
+                    Vector3 p0 = new Vector3(H.BodyXZ.x, H.BodyY, H.BodyXZ.z);
+                    for (int i = 0; i < 500; i++) Step();
+                    float drift = (new Vector3(H.BodyXZ.x, H.BodyY, H.BodyXZ.z) - p0).magnitude;
+                    sb.Append($"B1 висение 10 с на камне, склон {H.SteepAngleUnderBody:F0}°: смещение {drift * 100f:F1} см (цель ≤ 1), хват {(H.Gripping ? "держит" : "СОРВАЛСЯ")}\n");
+                }
+                // B2. ЗНАК: курсор на камень — подсветка и жёлтая кисть в первый же шаг (≤ 20 мс)
+                ProtoHold stone5 = null; foreach (var x in H.Holds) if (x is ProtoNub && x.name.Contains("Низкая стена")) stone5 = x;
+                ProtoHold rail5 = null; foreach (var x in H.Holds) if (!(x is ProtoNub) && x.name.Contains("Низкая стена")) rail5 = x;
+                TP(new Vector3(9.0f, M, 3.0f), 0f); H.driver = () => Free();
+                for (int i = 0; i < 20; i++) Step();
+                {
+                    Vector2 px = H.cam.WorldToScreenPoint(stone5.At(0.5f));
+                    H.driver = () => new HeroProto.InputFrame { pos = px };
+                    int sign = -1; for (int i = 0; i < 10; i++) { Step(); if (H.HoverNub) { sign = i; break; } }
+                    sb.Append($"B2 курсор на камень: подсветка через {(sign < 0 ? "—" : ((sign + 1) * Dt * 1000f).ToString("F0") + " мс")} (цель ≤ 20)\n");
+                }
+                // C. МАГНИТ: курсор на полу в 8–30 см от камня — камень не крадёт пол (цель ≤ 5%); курсор на камне — 100%; поровну с поручнем — поручень
+                {
+                    var rng = new System.Random(7); int n = 0, snap = 0;
+                    for (int k = 0; k < 300; k++)
+                    {
+                        float off = 0.08f + 0.22f * (float)rng.NextDouble();
+                        Vector3 fp = new Vector3(8.75f + 0.4f * (float)rng.NextDouble(), M, 3.48f - off);
+                        if (!H.DiagHandOk(fp)) continue;
+                        n++;
+                        if (H.DiagHoldAt(H.cam.WorldToScreenPoint(fp)) is ProtoNub) snap++;
+                    }
+                    int on = 0;
+                    for (int k = 0; k <= 10; k++) if (H.DiagHoldAt(H.cam.WorldToScreenPoint(stone5.At(k / 10f))) == stone5) on++;
+                    Vector3 mid = (stone5.B + rail5.A) * 0.5f;
+                    var tie = H.DiagHoldAt(H.cam.WorldToScreenPoint(mid));
+                    sb.Append($"C магнит: пол в 8–30 см от камня — прилипло {snap} из {n} ({(n > 0 ? 100f * snap / n : 0f):F0}%, цель ≤ 5%); курсор на камне — {on}/11 (цель 11); поровну камень/поручень — {(tie == rail5 ? "поручень" : tie == stone5 ? "КАМЕНЬ" : "ничего")} (цель поручень)\n");
+                }
+                // D. ВИС НА СТЕНЕ 1.2: камень 0.5 — подтянуться, отпустить — назад вниз
+                {
+                    TP(new Vector3(7.45f, M, 2.55f), 0f); H.driver = () => Free(); for (int i = 0; i < 10; i++) Step();
+                    if (!NearestNub("Стена 1.2: камень 0.5", out var st4, out float s4)) sb.Append("D камень 0.5 не достать\n");
+                    else
+                    {
+                        H.BeginGripHold(st4, s4); H.driver = () => Hold(-10f);
+                        float maxLift = 0f; int px = 0, reach = -1;
+                        for (int i = 0; i < 150 && H.Gripping; i++) { Step(); px += 10; if (H.ClimbLift > maxLift + 1e-4f) { maxLift = H.ClimbLift; reach = px; } }
+                        bool held = H.Gripping;
+                        H.driver = () => Hold(); for (int i = 0; i < 100; i++) Step();
+                        float hang = H.ClimbLift;
+                        H.driver = () => Free(); int land = -1;
+                        for (int i = 0; i < 100; i++) { Step(); if (H.ClimbLift < 0.01f) { land = i; break; } }
+                        sb.Append($"D стена 1.2, камень 0.5: подъём {maxLift * 100f:F0} см за {reach} px, хват {(held ? "держит" : "СОРВАЛСЯ")}, вис 2 с — {hang * 100f:F0} см, отпустил — на полу через {Sec(land)} (цель ≤ 0.5 с), тело {H.BodyY:F2}\n");
+                    }
+                }
+                // E. ЧЕЛНОК: кисть на камне едет с ним; расхождение 0; не достаёт — срыв, сторож «рука длиннее» — 0
+                {
+                    TP(new Vector3(11.05f, M, 3.05f), 0f); H.driver = () => Free(); for (int i = 0; i < 3; i++) Step();
+                    ProtoHold sn = null; float ss = 0f;
+                    for (int i = 0; i < 400 && !NearestNub("Челнок", out sn, out ss); i++) Step();   // ждать, пока челнок подъедет (фаза зависит от прошлых прогонов)
+                    if (!sn) sb.Append("E камень челнока не достать\n");
+                    else
+                    {
+                        H.BeginGripHold(sn, ss); H.driver = () => Hold();
+                        float maxGap = 0f; int rel = -1;
+                        for (int i = 0; i < 500; i++)
+                        {
+                            Step();
+                            if (!H.Gripping) { rel = i; break; }
+                            Vector3 P = sn.At(ss); maxGap = Mathf.Max(maxGap, new Vector2(H.HandXZ.x - P.x, H.HandXZ.z - P.z).magnitude);
+                        }
+                        sb.Append($"E челнок: расхождение кисти и камня {maxGap * 100f:F1} см (цель 0), {(rel < 0 ? "держит 10 с" : "сорвался через " + Sec(rel))}, рука {(H.HandXZ - H.ShoulderXZ).magnitude:F2}\n");
+                    }
+                }
+                // F. КАРУСЕЛЬ 120°/с: камень против ручки, 10 с хвата у края
+                {
+                    ProtoMover disc = Disc(120f);
+                    foreach (bool nub in new[] { true, false })
+                    {
+                        ProtoHold h0 = null; foreach (var x in H.Holds) if (x && x.GetComponentInParent<ProtoMover>() == disc && (x is ProtoNub) == nub) { h0 = x; break; }
+                        Vector3 hp = h0.At(0.5f) - disc.transform.position; hp.y = 0f; float ang = Vector3.SignedAngle(Vector3.forward, hp, Vector3.up);
+                        TP(OnDisc(disc, 0.8f, ang - 12f), ang); H.driver = () => Free(); Step();
+                        ProtoHold best = null; float bs = 0f, bd = float.MaxValue;
+                        foreach (var x in H.Holds)
+                        {
+                            if (!x || x.GetComponentInParent<ProtoMover>() != disc || (x is ProtoNub) != nub) continue;
+                            for (int i = 0; i <= 30; i++) { Vector3 P = x.At(i / 30f); float d = (P - H.ShoulderPos3).magnitude; if (d < bd && H.DiagHoldOk(P)) { bd = d; best = x; bs = i / 30f; } }
+                        }
+                        if (!best) { sb.Append($"F {(nub ? "камень" : "ручка")}: не достать\n"); continue; }
+                        H.BeginGripHold(best, bs); H.driver = () => Hold();
+                        for (int i = 0; i < 5; i++) Step();
+                        float r0 = R(disc); int rel = -1;
+                        for (int i = 0; i < 500; i++) { Step(); if (!H.Gripping) { rel = i; break; } }
+                        sb.Append($"F 120°/с за {(nub ? "камень" : "ручку")} 10 с: r {r0:F2} → {R(disc):F2}, {(rel < 0 ? "держит" : "сорвался через " + Sec(rel))}, на карусели {(H.rideMover == disc ? "да" : "НЕТ")}\n");
+                    }
                 }
                 TP(new Vector3(H.BodyXZ.x, H.BodyY, H.BodyXZ.z), 0f); sb.Append(feelLog.Length > 0 ? "сторожа:" + feelLog : "сторожа: нарушений нет");
             }

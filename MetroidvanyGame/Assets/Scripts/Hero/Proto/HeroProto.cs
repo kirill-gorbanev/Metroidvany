@@ -812,12 +812,25 @@ namespace Fortress.Hero.Proto
                     if (armKeepOut > 0f && armAfter < armKeepOut && armAfter < armBefore) { bodyCube.rotation = was; pendingTurn = 0f; }
                     else
                     // тело крутится вокруг своего центра, плечо сбоку обходит его — линия хода заново через новое плечо.
-                    // Плечо не уходит от кисти дальше L и не ближе dMin: иначе линия хода «дёрнет» тело (в стену). Тогда поворот стоп.
+                    // Плечо ушло бы от кисти дальше досягаемости или ближе dMin — РУКА ВЕДЁТ ТЕЛО: тело сдвигается вдоль руки
+                    // на излишек (подтягивается / отталкивается), поворот идёт дальше. Раньше поворот вставал: при вытянутой
+                    // руке (и при жесте с долей «от себя») в одну сторону не крутилось почти совсем (автор: «зона 1 / зона 2»).
+                    // Стоп — только если телу некуда сдвинуться (стена, уступ) или плечо в стене.
                     if (shoulderSide != 0f)
                     {
-                        float dh = Flat(gripHand - Shoulder).magnitude;
-                        // плечо ушло бы в стену / уступ — поворот стоп (как и при выходе руки из [dMin, L])
-                        if (dh > ComputeGripL() || dh < dMin || ShoulderBlocked(Body)) { bodyCube.rotation = was; pendingTurn = 0f; }   // досягаемость — с учётом высоты зацепа
+                        Vector3 bodyWas = bodyCube.position;
+                        float gl = ComputeGripL();                                    // досягаемость — с учётом высоты зацепа
+                        Vector3 v = Flat(gripHand - Shoulder); float dh = v.magnitude;
+                        float keep = Mathf.Clamp(dh, dMin, gl);
+                        if (Mathf.Abs(dh - keep) > 1e-4f && dh > 1e-4f)
+                        {
+                            Vector3 np = Slide(Body, v / dh * (dh - keep));            // + к кисти (рука длинна), − от кисти (согнута до упора)
+                            bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
+                            dh = Flat(gripHand - Shoulder).magnitude;
+                        }
+                        bool armIn = armKeepOut > 0f && ArmToBody(Body, Shoulder, gripHand) < armKeepOut && ArmToBody(Body, Shoulder, gripHand) < armBefore;
+                        if (dh > gl + 0.005f || dh < dMin - 0.005f || ShoulderBlocked(Body) || armIn)
+                        { bodyCube.rotation = was; bodyCube.position = bodyWas; pendingTurn = 0f; }
                         else { float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0); }
                     }
                 }
