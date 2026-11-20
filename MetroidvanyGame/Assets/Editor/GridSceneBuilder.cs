@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using Fortress.Grid;
 using Fortress.Guards;
-using Fortress.Walker;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -209,15 +208,6 @@ namespace Fortress.EditorTools
             {
                 QuadMesh("WaterSurface", wroot, water.Select(w => (V(w.pos), b.cell / 2f)).ToList(),
                          AssetDatabase.LoadAssetAtPath<Material>(LocMat + "Water.mat"), false, ShadowCastingMode.Off);
-                foreach (var w in water)
-                {
-                    var z = new GameObject($"Swim_{w.cell[0]}_{w.cell[1]}_{w.cell[2]}"); z.transform.SetParent(wroot);
-                    var bc = z.AddComponent<BoxCollider>(); bc.isTrigger = true; z.layer = GridNavBuilder.TriggerLayer;
-                    float top = w.pos[1] + 1.2f;
-                    bc.center = new Vector3(w.pos[0], (w.bottom + top) / 2, w.pos[2]);
-                    bc.size = new Vector3(b.cell, top - w.bottom, b.cell);
-                    z.AddComponent<WaterZone>().surfaceY = w.pos[1];
-                }
             }
 
             // стремянки: две жерди + перекладины из деревянного столба набора
@@ -244,23 +234,6 @@ namespace Fortress.EditorTools
                     r.transform.localScale = new Vector3(0.3f, 0.2f, 0.3f);
                     foreach (var c in r.GetComponentsInChildren<Collider>()) Object.DestroyImmediate(c);
                 }
-                var zone = new GameObject("ClimbZone"); zone.transform.SetParent(lad, false); zone.layer = GridNavBuilder.TriggerLayer;
-                var bc = zone.AddComponent<BoxCollider>(); bc.isTrigger = true;
-                float hz = h + 1.0f;                                // зона выше пола — чтобы выйти наверх
-                bc.center = new Vector3(0, hz / 2, 0.4f); bc.size = new Vector3(1.0f, hz, 0.8f);
-                var lz = zone.AddComponent<LadderZone>();
-                // верх — пол выхода; у цепочки стремянок в одной шахте — выход наверху всей цепочки
-                float TopOf(LadderT o) => Mathf.Round((o.pos[1] + o.height) / b.storey) * b.storey;
-                float top = TopOf(l);
-                if (!l.water)
-                    for (int kk = l.cell[2] + 1; ; kk++)
-                    {
-                        var up = b.ladders.FirstOrDefault(o => !o.water && o.cell[0] == l.cell[0] && o.cell[1] == l.cell[1] && o.cell[2] == kk);
-                        if (up == null) break;
-                        top = TopOf(up);
-                    }
-                lz.top = top; lz.bottom = l.pos[1];
-                lz.line = lad.position; lz.face = lad.forward;
             }
 
             // свет
@@ -284,13 +257,10 @@ namespace Fortress.EditorTools
             SetupAtmosphere(true);
             var navRoot = new GameObject("Nav").transform; navRoot.SetParent(root);
             foreach (var a in b.nav?.areas ?? new AreaT[0]) GridNavBuilder.AreaVolume(navRoot, V(a.pos), b.cell, a.area);
-            CreateEscapeZones(b, root);
             GridNavBuilder.Bake(root, sceneName);
             CreateGuards(b, root);
             var spawn = V(b.spawn) + Vector3.up * 0.05f;
-            var points = new List<Vector3> { spawn };
-            foreach (var pt in b.points ?? new PointT[0]) points.Add(V(pt.pos) + Vector3.up * 0.05f);
-            CreatePlayer(spawn, points.ToArray());
+            CreateCamera(spawn);
 
             Directory.CreateDirectory("Assets/Scenes");
             string path = "Assets/Scenes/" + sceneName + ".unity";
@@ -303,39 +273,6 @@ namespace Fortress.EditorTools
             }
             Debug.Log($"[Grid] {loc}: блоков {made}, нет префаба {missing}, земли {b.ground?.Length}, воды {water.Length}, " +
                       $"стремянок {b.ladders?.Length}, огней {b.lights?.Length}, стражи {b.guards?.Length}, ошибок компилятора {b.errors} -> {path}");
-        }
-
-        /// <summary>Выходы из стен (метка побега) и финиш на внешнем берегу.</summary>
-        static void CreateEscapeZones(BuildData b, Transform root)
-        {
-            var er = new GameObject("Escape").transform; er.SetParent(root);
-            er.gameObject.AddComponent<EscapeLog>();
-            foreach (var e in b.nav?.exits ?? new ExitT[0])
-            {
-                var z = new GameObject("Exit_" + e.name); z.transform.SetParent(er); z.layer = GridNavBuilder.TriggerLayer;
-                z.transform.SetPositionAndRotation(V(e.pos) + Vector3.up * 1.5f, Quaternion.Euler(0, e.yaw, 0));
-                var bc = z.AddComponent<BoxCollider>(); bc.isTrigger = true; bc.size = new Vector3(2.0f, 3.2f, 1.2f);
-                z.AddComponent<EscapeZone>().exitName = e.name;
-            }
-            if (b.nav?.finish == "border")
-            {
-                float x0 = b.origin[0], z0 = b.origin[1], x1 = x0 + b.size[0] * b.cell, z1 = z0 + b.size[1] * b.cell, c = b.cell;
-                var boxes = new[]
-                {
-                    (new Vector3((x0 + x1) / 2, 1.5f, z0 + c / 2), new Vector3(x1 - x0, 3.4f, c)),
-                    (new Vector3((x0 + x1) / 2, 1.5f, z1 - c / 2), new Vector3(x1 - x0, 3.4f, c)),
-                    (new Vector3(x0 + c / 2, 1.5f, (z0 + z1) / 2), new Vector3(c, 3.4f, z1 - z0)),
-                    (new Vector3(x1 - c / 2, 1.5f, (z0 + z1) / 2), new Vector3(c, 3.4f, z1 - z0)),
-                };
-                int i = 0;
-                foreach (var (cen, size) in boxes)
-                {
-                    var z = new GameObject("Finish_" + i++); z.transform.SetParent(er); z.layer = GridNavBuilder.TriggerLayer;
-                    z.transform.position = cen;
-                    var bc = z.AddComponent<BoxCollider>(); bc.isTrigger = true; bc.size = size;
-                    z.AddComponent<EscapeZone>().finish = true;
-                }
-            }
         }
 
         static Material GuardMat(string name, Color c)
@@ -496,35 +433,13 @@ namespace Fortress.EditorTools
             HdrpSetup.RebuildAtmosphere();
         }
 
-        static void CreatePlayer(Vector3 spawn, Vector3[] points)
+        /// <summary>Обычная камера у точки старта (без игрока: у героя своё управление в прототипе).</summary>
+        static void CreateCamera(Vector3 spawn)
         {
-            var player = new GameObject("Player");
-            player.transform.position = spawn;
-            var cc = player.AddComponent<CharacterController>();
-            var obst = player.AddComponent<NavMeshObstacle>();   // стража обходит игрока (без вырезания навмеша)
-            obst.shape = NavMeshObstacleShape.Capsule; obst.radius = 0.35f; obst.height = 1.8f; obst.center = new Vector3(0, 0.9f, 0); obst.carving = false;
-            cc.height = 1.8f; cc.radius = 0.35f; cc.center = new Vector3(0, 0.9f, 0); cc.stepOffset = 0.45f; cc.slopeLimit = 50f; cc.skinWidth = 0.04f;
-            var bodyPivot = new GameObject("Body").transform; bodyPivot.SetParent(player.transform, false);
-            var capsule = GameObject.CreatePrimitive(PrimitiveType.Capsule); Object.DestroyImmediate(capsule.GetComponent<Collider>());
-            capsule.name = "Capsule"; capsule.transform.SetParent(bodyPivot, false);
-            capsule.transform.localPosition = new Vector3(0, 0.9f, 0); capsule.transform.localScale = new Vector3(0.7f, 0.9f, 0.7f);
-            capsule.GetComponent<MeshRenderer>().sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>(LocMat + "Player.mat");
-            var nose = GameObject.CreatePrimitive(PrimitiveType.Cube); Object.DestroyImmediate(nose.GetComponent<Collider>());
-            nose.name = "Facing"; nose.transform.SetParent(bodyPivot, false);
-            nose.transform.localPosition = new Vector3(0, 1.45f, 0.33f); nose.transform.localScale = new Vector3(0.3f, 0.12f, 0.2f);
-            nose.GetComponent<MeshRenderer>().sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>(LocMat + "PlayerFacing.mat");
-            var lamp = new GameObject("CarryLight").AddComponent<Light>(); lamp.transform.SetParent(player.transform, false);
-            lamp.transform.localPosition = new Vector3(0, 2.2f, 0); lamp.type = LightType.Point; lamp.range = 6f; lamp.intensity = 0.6f;
-            lamp.color = new Color(1f, 0.8f, 0.6f); lamp.shadows = LightShadows.None;
-
             var camGo = new GameObject("Main Camera"); camGo.tag = "MainCamera";
             var cam = camGo.AddComponent<Camera>(); cam.nearClipPlane = 0.05f; cam.farClipPlane = 900f; cam.fieldOfView = 62f;
             camGo.AddComponent<AudioListener>();
-            var orbit = camGo.AddComponent<OrbitCamera>(); orbit.target = player.transform;
-            var walker = player.AddComponent<PlayerWalker>();
-            walker.cameraTransform = camGo.transform; walker.body = bodyPivot; walker.spawn = spawn; walker.points = points;
-            new GameObject("HUD").AddComponent<WalkerHUD>().player = walker;
-            RigPlayerBody.Attach(player);      // тело человека вместо капсулы (риг v3)
+            camGo.transform.SetPositionAndRotation(spawn + new Vector3(0, 2.2f, -3.5f), Quaternion.Euler(15f, 0f, 0f));
         }
     }
 }

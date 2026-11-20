@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace Fortress.Grid
 {
-    /// <summary>База для интерактивности элемента. Игрок (PlayerWalker) ищет ближайший Interactable в радиусе
+    /// <summary>База для интерактивности элемента. Персонаж ищет ближайший Interactable в радиусе
     /// и по E вызывает Interact. Наследуй, чтобы дать элементу поведение.</summary>
     public abstract class Interactable : MonoBehaviour
     {

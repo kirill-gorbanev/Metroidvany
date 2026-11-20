@@ -160,7 +160,7 @@ namespace Fortress.EditorTools
             Debug.Log("[Hero] модель поставлена вместо кубиков");
         }
 
-        /// <summary>Hero.prefab без своего управления (HeroController, CharacterController) + блок ProtoHeroModel на точках прототипа.</summary>
+        /// <summary>Hero.prefab (без своего управления) + блок ProtoHeroModel на точках прототипа.</summary>
         static GameObject AddModel(HeroProto proto)
         {
             foreach (var old in Object.FindObjectsOfType<ProtoHeroModel>()) Object.DestroyImmediate(old.gameObject);
@@ -170,8 +170,6 @@ namespace Fortress.EditorTools
             go.name = ModelName;
             var root = proto.transform.parent;                            // «Прототип героя»
             if (root) go.transform.SetParent(root, false);
-            foreach (var c in go.GetComponents<MonoBehaviour>())
-                if (c && c.GetType().Name == "HeroController") Object.DestroyImmediate(c);
             var cc = go.GetComponent<CharacterController>(); if (cc) Object.DestroyImmediate(cc);
             var b = proto.bodyCube.position;
             go.transform.SetPositionAndRotation(new Vector3(b.x, 0f, b.z),

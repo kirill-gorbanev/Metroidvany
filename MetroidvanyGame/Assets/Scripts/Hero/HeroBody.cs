@@ -6,11 +6,11 @@ namespace Fortress.Hero
     /// Каждый кадр: поза покоя из бинда → посадка/положение ничком (prone 0..1) → наклон и поворот корпуса к руке →
     /// IK правой руки (две кости, аналитически) → ладонь на поверхности → голова и глаз на цель → лицо (шейп-кеи).
     /// Работает в мировых направлениях (вперёд/вверх/вправо — у root), к осям костей не привязан.
-    /// Вход ставит <see cref="HeroController"/>.</summary>
+    /// Вход ставит прототип (ProtoHeroModel).</summary>
     [DefaultExecutionOrder(200)]
     public class HeroBody : MonoBehaviour
     {
-        [Header("Вход (ставит HeroController)")]
+        [Header("Вход (ставит ProtoHeroModel)")]
         [Range(0f, 1f)] public float prone;
         public Vector3 handTarget;
         [Range(0f, 1f)] public float handWeight = 1f;
@@ -97,7 +97,7 @@ namespace Fortress.Hero
             blinkNext = Random.Range(blinkMin, blinkMax);
         }
 
-        /// <summary>Насколько и куда вытолкнуть тело (голова/грудь вошли в предмет). Читает HeroController.</summary>
+        /// <summary>Насколько и куда вытолкнуть тело (голова/грудь вошли в предмет). </summary>
         public Vector3 Penetration { get; private set; }
 
         Vector3 Pen(Vector3 p, float r)

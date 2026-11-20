@@ -9,8 +9,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6078546862846672240}
-  - component: {fileID: 1198002373935664600}
-  - component: {fileID: 6658145043449838757}
   - component: {fileID: 1165669250305091985}
   m_Layer: 0
   m_Name: Hero
@@ -35,57 +33,6 @@ Transform:
   - {fileID: 6420599388764398579}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!143 &1198002373935664600
-CharacterController:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2211268095943272260}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Height: 0.9
-  m_Radius: 0.28
-  m_SlopeLimit: 50
-  m_StepOffset: 0.2
-  m_SkinWidth: 0.02
-  m_MinMoveDistance: 0
-  m_Center: {x: 0, y: 0.45, z: 0}
---- !u!114 &6658145043449838757
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2211268095943272260}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8df2b2148678e464592d4e9a4d244ef7, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Fortress.Hero.HeroController
-  body: {fileID: 2171245679615484262}
-  cam: {fileID: 0}
-  reachFrac: 0.97
-  leanReach: 0.28
-  maxSpeedSit: 0.55
-  maxSpeedProne: 0.85
-  bodyMass: 45
-  grabRadius: 0.15
-  scripted: 0
-  scriptPoint: {x: 0, y: 0, z: 0}
-  scriptHold: 0
-  scriptToggleProne: 0
-  scriptLoop: 0
-  logEvents: 0
 --- !u!114 &1165669250305091985
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -240,6 +187,7 @@ MonoBehaviour:
   lookTarget: {x: 0, y: 0, z: 0}
   effort: 0
   gripping: 0
+  elbowTarget: 0.97
   root: {fileID: 6078546862846672240}
   sitPelvisHeight: 0.13
   pronePelvisHeight: 0.11
