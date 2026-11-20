@@ -28,3 +28,11 @@ export/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# Скриншоты Unity
+MetroidvanyGame/Assets/Screenshots/
+MetroidvanyGame/Assets/Screenshots.meta

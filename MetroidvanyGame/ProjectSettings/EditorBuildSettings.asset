@@ -11,8 +11,5 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Grid_test.unity
     guid: 5f5b14edbdf99dc4bbe4533a558d8ed0
-  - enabled: 1
-    path: Assets/Scenes/Fortress.unity
-    guid: 5c12c9b328fd524478246b9a87e6bc44
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
