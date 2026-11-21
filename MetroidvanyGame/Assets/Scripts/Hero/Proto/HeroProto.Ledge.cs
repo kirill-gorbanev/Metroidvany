@@ -33,6 +33,7 @@ namespace Fortress.Hero.Proto
 
         ProtoNub nubLit; Renderer nubLitR; Color nubLitC;
         bool onNubFoot; ProtoNub footNub; float footCool;
+        void LedgeReset() { onNubFoot = false; footNub = null; footCool = 0f; nubRaise = 0f; letGoPx = letGoBack = letGoIdle = 0f; letGoCount = 0; letGoLog.Clear(); grabLog.Clear(); letGoLast = null; }
         [Tooltip("Сошёл с камня без руки — столько секунд на следующий камень не встаёшь (успевает начаться сползание).")]
         public float nubFootCool = 0.3f;
 

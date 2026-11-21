@@ -23,6 +23,90 @@ namespace Fortress.EditorTools
             return true;
         }
 
+        /// <summary>Мир в начальное состояние: платформы в начальную фазу, герой на старт, камера за спину.
+        /// Вызывать в начале каждого замера (общий прогон All) — тогда одно и то же зерно даёт одни и те же числа.</summary>
+        public static string ResetWorld()
+        {
+            if (!Setup()) return "нет Play / героя";
+            try
+            {
+                foreach (var m in Movers) if (m) m.ResetPhase();
+                H.DiagReset();
+                if (Cam) Cam.ResetView();
+                return "ok";
+            }
+            finally { End(); }
+        }
+
+        // ---------------- ЖИВАЯ ПРОВЕРКА (настоящий цикл игры, не ручные шаги) ----------------
+        static ProtoLiveWatch live;
+        /// <summary>Бот-бродяга в живом цикле (Update, реальные кадры) + живой сторож. Через N секунд — LiveReport().
+        /// Окно Unity может быть не в фокусе: runInBackground включается на время Play.</summary>
+        public static string LiveStart(int seed)
+        {
+            string r = ResetWorld(); if (r != "ok") return r;
+            Application.runInBackground = true;
+            var rng = new System.Random(seed * 7919 + 1);
+            Bounds sb = H.DiagSurfaceBounds;
+            var bot = new ProtoBot(H, H.cam, seed) { randomness = 1f };
+            bot.pickTarget = () => new Vector3(Mathf.Lerp(sb.min.x + 0.5f, sb.max.x - 0.5f, (float)rng.NextDouble()), 0f,
+                                               Mathf.Lerp(sb.min.z + 0.5f, sb.max.z - 0.5f, (float)rng.NextDouble()));
+            bot.Start(null);
+            H.driver = bot.Frame;
+            if (live) Object.Destroy(live);
+            live = H.gameObject.AddComponent<ProtoLiveWatch>();
+            live.W = new ProtoWatch(H);
+            return "живой прогон начат";
+        }
+        public static string LiveReport()
+        {
+            if (!live) return "живой прогон не начат";
+            string r = "[живой бродяга] " + live.Report();
+            if (H) H.driver = null;
+            Object.Destroy(live); live = null;
+            return r;
+        }
+
+        /// <summary>ПОДЪЁМ ПО КАМНЯМ: держусь за камень k, беру k+1 (правая колонка), тяну «на себя» по 10 px за шаг, пока тело
+        /// не встанет; пикселей на каждый камень. Пауза gap шагов между хватами — рука отпущена (как у человека).
+        /// Мёртвая зона «на себя ничего не делает» видна как «тело y → то же за 40 px».</summary>
+        public static string Climb7()
+        {
+            var sb = new StringBuilder("ПОДЪЁМ ПО КАМНЯМ (арена 7), px «на себя» на камень\n");
+            if (!Setup()) return "нет Play / героя";
+            try
+            {
+                foreach (var lane in new[] { "Склон 1", "Склон 3", "Склон 8" })
+                foreach (int gap in new[] { 0, 15 })
+                {
+                    ProtoHold first = null; foreach (var x in H.Holds) if (x.name == lane + ": камень 1п") first = x;
+                    if (!first) { sb.Append(lane).Append(": нет камней\n"); break; }
+                    Vector3 c = first.At(0.5f);
+                    H.DiagTeleport(new Vector3(c.x - 0.1f, c.y - 0.25f, c.z - 0.2f), 0f);
+                    H.driver = () => Free(); for (int i = 0; i < 5; i++) Step();
+                    sb.Append($"{lane}, пауза {gap * 20} мс: ");
+                    int total = 0;
+                    for (int k = 1; k <= 6; k++)
+                    {
+                        ProtoHold u = null; foreach (var x in H.Holds) if (x.name == lane + ": камень " + k + "п") u = x;
+                        if (!u) break;
+                        float bs = -1f, bd = 9f; for (int i = 0; i <= 20; i++) { Vector3 P = u.At(i / 20f); float d = (P - H.ShoulderPos3).magnitude; if (H.DiagHoldOk(P, u) && d < bd) { bd = d; bs = i / 20f; } }
+                        if (bs < 0f) { sb.Append($"{k}п не достать (тело {H.BodyY:F2}); "); break; }
+                        H.BeginGripHold(u, bs); H.driver = () => Hold(-10f);
+                        int px = 0, still = 0; float y0 = H.BodyY, yl = -1f;
+                        for (int i = 0; i < 100; i++) { Step(); px += 10; if (Mathf.Abs(H.BodyY - yl) < 0.001f && H.LineT > 0.97f) { if (++still >= 3) break; } else still = 0; yl = H.BodyY; }
+                        total += px;
+                        sb.Append($"{k}п {y0:F2}→{H.BodyY:F2} за {px}; ");
+                        if (gap > 0) { H.driver = () => Free(); for (int i = 0; i < gap; i++) Step(); }
+                    }
+                    sb.Append($"всего {total} px, тело {H.BodyY:F2}\n");
+                }
+                sb.Append(W.Report());
+            }
+            finally { End(); }
+            return sb.ToString();
+        }
+
         public static void End() { HeroProto.ManualTick = false; if (H) H.driver = null; }
 
         public static void Step()

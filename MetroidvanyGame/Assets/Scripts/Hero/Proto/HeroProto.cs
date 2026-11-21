@@ -147,6 +147,14 @@ namespace Fortress.Hero.Proto
             ClimbReset();
             Place();
         }
+        /// <summary>Симуляция: герой на место старта, всё состояние с нуля — прогоны повторяемы.</summary>
+        public void DiagReset()
+        {
+            DiagTeleport(spawnPos, spawnYaw);
+            t = tTarget = 0f; lastGestureAlong = lastGestureSide = Vector2.zero; mouseAcc = default; mouseHave = false; driver = null;
+            LedgeReset();
+        }
+        Vector3 spawnPos; float spawnYaw;
         public Bounds DiagSurfaceBounds { get { var b = new Bounds(Body, Vector3.one); foreach (var s in surfBounds) b.Encapsulate(s); return b; } }
 
         /// <summary>Поверхность под кистью со своего уровня (не выше handUp); внутри сплошного — TooHigh.</summary>
@@ -313,6 +321,7 @@ namespace Fortress.Hero.Proto
             groundY = Height(Body);
             handY = DrawHeight(hand);
             camOffset = cam.transform.position - bodyCube.position;
+            spawnPos = new Vector3(bodyCube.position.x, groundY, bodyCube.position.z); spawnYaw = bodyCube.eulerAngles.y;
             hand = Shoulder + Face * L * 0.6f;                      // кисть — перед лицом, а не по мировой оси
             lnArm = Line("Рука", new Color(1f, 0.85f, 0.55f), 0.025f);
             lnTraj = Line("Траектория (ход тела)", new Color(0.2f, 0.85f, 0.25f), 0.03f);

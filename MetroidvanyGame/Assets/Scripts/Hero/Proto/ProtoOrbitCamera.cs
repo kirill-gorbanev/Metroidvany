@@ -25,8 +25,19 @@ namespace Fortress.Hero.Proto
         Vector3 focus;
         float lastBodyYaw;
 
+        float pitch0 = float.NaN, distance0;
+        /// <summary>Симуляция: камера за спину телу, наклон и дальность — как на старте.</summary>
+        public void ResetView()
+        {
+            if (float.IsNaN(pitch0)) return;
+            pitch = pitch0; distance = distance0;
+            if (target) { focus = target.position + Vector3.up * lookHeight; lastBodyYaw = target.eulerAngles.y; yaw = target.eulerAngles.y; }
+            Apply();
+        }
+
         void Start()
         {
+            pitch0 = pitch; distance0 = distance;
             if (target)
             {
                 focus = target.position + Vector3.up * lookHeight; lastBodyYaw = target.eulerAngles.y;

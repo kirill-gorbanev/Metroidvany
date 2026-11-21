@@ -71,6 +71,9 @@ namespace Fortress.Hero.Proto
             StepId++;
         }
 
+        /// <summary>Симуляция: в начальную фазу (место, поворот, время) — прогоны повторяемы.</summary>
+        public void ResetPhase() { transform.SetPositionAndRotation(start, startRot); time = phase; Delta = Matrix4x4.identity; Omega = 0f; }
+
         static float Smooth(float x) => x * x * (3f - 2f * x);
     }
 }
