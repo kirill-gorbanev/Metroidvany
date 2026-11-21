@@ -795,7 +795,7 @@ namespace Fortress.EditorTools
             {
                 float x0 = X(k), x1 = x0 + Lane;
                 Ramp5("Склон " + ramps[k].label.Split('\n')[0], x0, x1, StandZ1, Deck, ramps[k].ang, false, false);
-                if (ramps[k].nubs) NubsOnRamp("Склон " + (k + 1), x0, x1, StandZ1, Deck, ramps[k].ang, ramps[k].ang > 50f ? 0.17f : 0.25f);
+                if (ramps[k].nubs) NubsOnRamp("Склон " + (k + 1), x0, x1, StandZ1, Deck, ramps[k].ang, 0.25f);
                 Sign(ramps[k].label, new Vector3((x0 + x1) * 0.5f, MAIN, 2.0f));
             }
 
@@ -925,7 +925,7 @@ namespace Fortress.EditorTools
             Sign("2 · спуск по камням\nсъезжай, лови камни рукой", new Vector3(5.6f, UP, 0.5f), 1f, E);
             float x2 = 7f + run60;
             WedgeX("Спуск 2 · 60° камни", x2, 7f, 1f, 3f, MAIN, UP - MAIN, TunC, surf);
-            NubsOnRampX("Спуск 2", x2, 7f, ZA, UP, 0.17f);
+            NubsOnRampX("Спуск 2", x2, 7f, ZA, UP, 0.25f);   // шаг 0.25, как на 45° (автор: на 60° камней слишком много — трудно)
             // 3 · 45° камни только для руки (встать нельзя) на настил 2
             Sign("3 · 45° камни\nтолько рука", new Vector3(8.8f, MAIN, 0.5f), 1f, E);
             float x3 = 9.6f, x3t = x3 + run45;
