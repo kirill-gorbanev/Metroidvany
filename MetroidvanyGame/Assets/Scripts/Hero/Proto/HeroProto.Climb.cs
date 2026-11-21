@@ -203,7 +203,7 @@ namespace Fortress.Hero.Proto
             Vector3 d = down.normalized * handSlipSpeed * dt;
             gripHand += d; farEnd += d; nearEnd += d; hand = gripHand;
             slipDist += d.magnitude;
-            if (slipDist >= handSlipMax) { mode = Mode.Free; gripSlip = false; pendingTurn = 0f; slipFlash = 0.5f; }   // отпустила
+            if (slipDist >= handSlipMax) ReleaseGrip("кисть съехала по крутому", true);   // отпустила
         }
 
         // ---------------- крутой склон без опоры — сползание ----------------
@@ -226,7 +226,7 @@ namespace Fortress.Hero.Proto
                 if (mode == Mode.Grip)
                 {
                     // кисть (съезжающая) не удержит тело дальше руки — отпускает
-                    if (Flat(gripHand - Shoulder).magnitude > gripL + 0.01f) { mode = Mode.Free; gripSlip = false; pendingTurn = 0f; slipFlash = 0.5f; }
+                    if (Flat(gripHand - Shoulder).magnitude > gripL + 0.01f) ReleaseGrip("тело сползло дальше руки", true);
                     else { float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0); }
                 }
             }
@@ -305,7 +305,7 @@ namespace Fortress.Hero.Proto
             Vector3 np = Slide(Body, v / d * over);
             bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
             float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0);
-            if (Flat(gripHand - Shoulder).magnitude > gripL + 0.03f) { mode = Mode.Free; pendingTurn = 0f; gripHold = null; gripSlip = false; slipFlash = 0.5f; }
+            if (Flat(gripHand - Shoulder).magnitude > gripL + 0.03f) ReleaseGrip("рука не достаёт (тело ниже зацепа)", true);
         }
 
         // ---------------- видимый отклик ----------------

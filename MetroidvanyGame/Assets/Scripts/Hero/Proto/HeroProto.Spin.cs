@@ -51,7 +51,7 @@ namespace Fortress.Hero.Proto
         /// <summary>Внешняя сила (платформа, унос, слёт) завела руку в тело — хват срывается (тело не крутится сквозь руку).</summary>
         bool ArmCutsBody() => armKeepOut > 0f && mode == Mode.Grip && ArmToBody(Body, Shoulder, gripHand) < armKeepOut * 0.7f;
 
-        void ReleaseSpin() { mode = Mode.Free; pendingTurn = 0f; gripHold = null; gripSlip = false; spinSlip = false; handMover = null; slipFlash = 0.5f; }
+        void ReleaseSpin() => ReleaseGrip("сорвало с диска", true);
 
         void SpinStep(float dt)
         {

@@ -191,7 +191,7 @@ namespace Fortress.Hero.Proto
             if (!atFar && !stuck) { LetGoWhy("сброс: тело отходит (сдвиг " + ((Body - letGoFrom).magnitude * 100f).ToString("F0") + " см, t " + t.ToString("F2") + ")"); letGoPx = 0f; return false; }       // тело отходит — пусть отходит, окно заново
             LetGoWhy("ОТПУСТИЛ (" + (atFar ? "рука прямая" : "тело стоит") + ")");
             letGoPx = 0f; letGoCount++;
-            mode = Mode.Free; pendingTurn = 0f; gripHold = null; gripSlip = false; spinSlip = false; handMover = null;
+            ReleaseGrip("«от себя» — отпустил");
             lastGestureAlong = lastGestureSide = Vector2.zero;
             return true;
         }

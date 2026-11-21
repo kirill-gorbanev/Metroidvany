@@ -784,7 +784,7 @@ namespace Fortress.Hero.Proto
                 float dh = Flat(gripHand - Shoulder).magnitude;
                 bool lost = gripHold ? (gripHold.At(gripHoldS) - Shoulder3).magnitude > L + 0.02f : (dh > ComputeGripL() + 0.02f || !HandOk(gripHand));   // досягаемость с учётом высоты (не L)
                 lost |= ArmCutsBody();                                   // диск повернул тело, кисть на полу — рука прошла бы сквозь тело
-                if (lost) { mode = Mode.Free; pendingTurn = 0f; handMover = null; gripHold = null; }   // сорвался
+                if (lost) ReleaseGrip("сорвался: опора ушла дальше руки");   // сорвался
                 else { float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0); }
             }
         }
@@ -879,7 +879,7 @@ namespace Fortress.Hero.Proto
             }
             else
             {
-                if (!inp.pressed && !testHold) { mode = Mode.Free; pendingTurn = 0f; lastGestureAlong = lastGestureSide = Vector2.zero; gripHold = null; gripSlip = false; spinSlip = false; }
+                if (!inp.pressed && !testHold) { ReleaseGrip("отпустил ЛКМ"); lastGestureAlong = lastGestureSide = Vector2.zero; }
                 else if (!orbit) Gesture(inp.delta);
                 HandSlipStep(dt);                                     // кисть на крутом (не зацеп) — съезжает и отпускает
                 hand = gripHand;

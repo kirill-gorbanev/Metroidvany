@@ -85,18 +85,30 @@ namespace Fortress.Hero.Proto
             holdTime = straining ? holdTime + dt : 0f;
             if (straining && holdTime > gripStamina)
             {
-                mode = Mode.Free; pendingTurn = 0f; gripHold = null; gripSlip = false; spinSlip = false; handMover = null; slipFlash = 0.5f; holdTime = 0f;
+                ReleaseGrip("кончилась выносливость", true); holdTime = 0f;
             }
             var s = SelectState(out stateWhy);
             if (s != state)
             {
                 string key = StateName(state) + " → " + StateName(s);
                 transitions[key] = transitions.TryGetValue(key, out int c) ? c + 1 : 1;
-                stateLog.Add($"{Time.time:F2}  {key}  ({stateWhy})");
+                bool released = mode == Mode.Free && lastRelease.Length > 0;
+                stateLog.Add($"{Time.time:F2}  {key}  ({stateWhy}{(released ? "; отпустил: " + lastRelease : "")})");
+                if (released) lastRelease = "";
                 if (stateLog.Count > 40) stateLog.RemoveAt(0);
                 state = s;
             }
         }
+
+        /// <summary>ВЫХОД ИЗ ХВАТА — один на всех (этап 2). Раньше девять мест сбрасывали каждое свой набор
+        /// (где-то оставался старый зацеп, опора кисти или флаг съезда). Причина пишется в журнал переходов.</summary>
+        void ReleaseGrip(string why, bool flash = false)
+        {
+            mode = Mode.Free; pendingTurn = 0f; gripHold = null; gripSlip = false; spinSlip = false; handMover = null;
+            if (flash) slipFlash = 0.5f;
+            lastRelease = why;
+        }
+        string lastRelease = "";
 
         void StateReset() { state = HeroState.Stand; stateWhy = ""; gestureOwner = ""; holdTime = 0f; stateLog.Clear(); transitions.Clear(); }
 
