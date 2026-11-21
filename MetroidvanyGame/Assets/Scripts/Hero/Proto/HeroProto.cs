@@ -128,7 +128,7 @@ namespace Fortress.Hero.Proto
         public Vector3 FarEnd => farEnd;
         public Vector3 NearEnd => nearEnd;
         /// <summary>Тело заходит в препятствие (прямоугольник) глубже допуска.</summary>
-        public bool DiagBodyInWall(float tol) { foreach (var o in obstacles) { float cx = Mathf.Clamp(Body.x, o.xMin, o.xMax), cz = Mathf.Clamp(Body.z, o.yMin, o.yMax); float dx = Body.x - cx, dz = Body.z - cz; if (dx * dx + dz * dz < (bodyRadius - tol) * (bodyRadius - tol)) return true; } return false; }
+        public bool DiagBodyInWall(float tol) { if (boxBody && bodyCube) { foreach (var o in obstacles) if (BoxHitsRect(Body, o, tol)) return true; return false; } foreach (var o in obstacles) { float cx = Mathf.Clamp(Body.x, o.xMin, o.xMax), cz = Mathf.Clamp(Body.z, o.yMin, o.yMax); float dx = Body.x - cx, dz = Body.z - cz; if (dx * dx + dz * dz < (bodyRadius - tol) * (bodyRadius - tol)) return true; } return false; }
         /// <summary>Центр тела внутри сплошного (уступ / ящик выше порога).</summary>
         public bool DiagBodyInSolid => HasSurface && float.IsInfinity(LevelHeight(Body, BodyLevel, maxStep));
         public bool DiagHandInWall => !gripHold && !hoverHold && sinceHold > 0.3f && InObstacle(hand, -0.005f);   // кисть над стойкой перил после хвата — не в стене
@@ -534,6 +534,16 @@ namespace Fortress.Hero.Proto
         /// <summary>Круг радиуса r в точке p задевает препятствие или уступ выше порога (центр + 4 точки по краю)?</summary>
         bool Blocked(Vector3 p, float r)
         {
+            if (boxBody && r == bodyRadius && bodyCube)
+            {
+                // тело — своим кубиком (блок Body): стены — пересечение прямоугольников, уступы и обрывы — пробы по углам и сторонам
+                foreach (var o in obstacles) if (BoxHitsRect(p, o, 0.001f)) return true;
+                if (ShoulderBlocked(p)) return true;
+                if (!HasSurface) return false;
+                if (!Climbable(p)) return true;
+                foreach (var q in BodyProbes(p)) if (!Climbable(q)) return true;
+                return false;
+            }
             foreach (var o in obstacles)
             {
                 float cx = Mathf.Clamp(p.x, o.xMin, o.xMax), cz = Mathf.Clamp(p.z, o.yMin, o.yMax);
@@ -592,6 +602,7 @@ namespace Fortress.Hero.Proto
         /// <summary>Нормаль от препятствий в точке (сумма от всех задетых, наружу).</summary>
         Vector3 ContactNormal(Vector3 p, float r)
         {
+            if (boxBody && r == bodyRadius) r = BodyReach + 0.01f;      // кубик: касание — до угла (блок Body)
             Vector3 n = Vector3.zero;
             foreach (var o in obstacles)
             {
@@ -895,6 +906,7 @@ namespace Fortress.Hero.Proto
                 {
                     float step = pendingTurn * (1f - Mathf.Exp(-turnSmooth * dt));
                     Quaternion was = bodyCube.rotation;
+                    bool wasBlocked = boxBody && Blocked(Body, bodyRadius);
                     float armBefore = ArmToBody(Body, Shoulder, gripHand);
                     bodyCube.rotation = Quaternion.AngleAxis(step, Vector3.up) * was;
                     pendingTurn -= step;
@@ -920,7 +932,8 @@ namespace Fortress.Hero.Proto
                             dh = Flat(gripHand - Shoulder).magnitude;
                         }
                         bool armIn = armKeepOut > 0f && ArmToBody(Body, Shoulder, gripHand) < armKeepOut && ArmToBody(Body, Shoulder, gripHand) < armBefore;
-                        if (dh > gl + 0.005f || dh < dMin - 0.005f || ShoulderBlocked(Body) || armIn)
+                        bool boxIn = boxBody && !wasBlocked && Blocked(Body, bodyRadius);   // угол кубика вошёл бы в стену / уступ (блок Body)
+                        if (dh > gl + 0.005f || dh < dMin - 0.005f || ShoulderBlocked(Body) || armIn || boxIn)
                         { bodyCube.rotation = was; bodyCube.position = bodyWas; pendingTurn = 0f; }
                         else { float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0); }
                     }

@@ -27,10 +27,13 @@ return Fortress.EditorTools.HeroSim.ResetWorld();
   done
   [ -z "$ok" ] && echo "АРЕНА $n: Play не включился" | tee -a $R
   echo "===== АРЕНА $n" >> $R
-  out=$(T=900 ./ex.sh a$n.cs | grep -v '^Code executed successfully')
-  if [ "$out" = "None" ] || [ -z "$out" ]; then out=$(T=900 ./ex.sh a$n.cs | grep -v '^Code executed successfully'); fi   # пустой ответ — ещё раз
-  if [ "$out" = "None" ] || [ -z "$out" ]; then out="ЗАМЕРЫ ЗОНЫ $n НЕ ВЕРНУЛИСЬ"; fi
-  echo "$out" >> $R
+  for f in a$n.cs a${n}b.cs; do                 # долгие замеры зоны — вторым вызовом (один вызов не дождаться)
+    [ -f $f ] || continue
+    out=$(T=900 ./ex.sh $f | grep -v '^Code executed successfully' | grep -v '^None$')
+    if [ -z "$out" ]; then out=$(T=900 ./ex.sh $f | grep -v '^Code executed successfully' | grep -v '^None$'); fi   # пустой ответ — ещё раз
+    if [ -z "$out" ]; then out="ЗАМЕРЫ $f НЕ ВЕРНУЛИСЬ"; fi
+    echo "$out" >> $R
+  done
   if [ $n = 7 ] || [ $n = 8 ]; then
     T=60 ./ex.sh live_start.cs >/dev/null; sleep 20
     T=60 ./ex.sh live_report.cs | grep -v '^Code executed' | sed 's/^/~ /' >> $R   # «~» — живое, числа плавают, в сравнение не идёт
@@ -39,4 +42,6 @@ return Fortress.EditorTools.HeroSim.ResetWorld();
 done
 call '{"name":"manage_editor","arguments":{"action":"stop"}}'
 PYTHONIOENCODING=utf-8 python diff.py baseline.txt $R
-if [ "$1" = "accept" ]; then cp $R baseline.txt; echo "эталон обновлён"; fi
+# часть зон (ARENAS=…) — в эталон вписываются только они, остальные зоны эталона остаются
+if [ -n "$ARENAS" ]; then PYTHONIOENCODING=utf-8 python merge.py baseline.txt $R > out/merged.txt; else cp $R out/merged.txt; fi
+if [ "$1" = "accept" ]; then cp out/merged.txt baseline.txt; echo "эталон обновлён"; fi
