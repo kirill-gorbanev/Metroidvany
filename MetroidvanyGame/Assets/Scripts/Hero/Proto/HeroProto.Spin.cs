@@ -37,6 +37,12 @@ namespace Fortress.Hero.Proto
         public Vector3 FlingVel => flingV;
         public float SpinAccelHere => rideMover ? rideMover.SpinAccel(Body) : 0f;
 
+        /// <summary>Пол под курсором не держит из-за вращения: точка в зоне уноса своей карусели, или тело само уже в зоне.
+        /// Тогда зацепы рядом берутся с большим радиусом, как над склоном (автор: «за камень на карусели ни разу не ухватил»).</summary>
+        bool FloorSpins(ProtoMover m, Vector3 p) => spinSnapWide && (onSpin || (m && m.SpinAccel(p) > spinGrip));
+        [Tooltip("Над полом карусели в зоне уноса (или в зоне сам) зацепы берутся с большим радиусом, как над склоном.")]
+        public bool spinSnapWide = true;
+
         void SpinReset() { onSpin = spinSlip = false; spinTimer = spinV = 0f; flingV = carryVel = spinPrevVel = Vector3.zero; spinPrevRide = null; spinPrevZone = false; }
 
         /// <summary>Держит ли опора против течения: зацеп той же карусели или кисть на диске, которая не съезжает.</summary>

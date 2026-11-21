@@ -113,11 +113,11 @@ namespace Fortress.Hero.Proto
         }
 
         // ---------------- зацепы ----------------
-        bool HoldOk(Vector3 P)
+        bool HoldOk(Vector3 P, ProtoHold hd = null)
         {
             if ((P - Shoulder3).magnitude > L - 0.01f) return false;
             Vector3 v = Flat(P) - Shoulder;
-            if (v.magnitude > 0.03f)
+            if (v.magnitude > 0.03f && !LadderReach(hd, P))                         // стоя на камне — камень ниже берётся и за спиной (Ledge)
             {
                 float a = Vector3.SignedAngle(Face, v, Vector3.up);
                 if (a < -sectorLeft - 5f || a > sectorRight + 5f) return false;
@@ -135,7 +135,7 @@ namespace Fortress.Hero.Proto
             bool haveFloor = FloorPoint(px, out var fp);
             // под курсором хороший пол (достижим и не крутой) — поручень берётся только рядом; иначе (склон, кромка, пустота) — издалека
             bool floorGood = false;
-            if (haveFloor && HandOk(fp)) { HandHit(fp, out _, out var fn); floorGood = Vector3.Angle(fn, Vector3.up) <= steepAngle; }
+            if (haveFloor && HandOk(fp)) { HandHit(fp, out var fm, out var fn); floorGood = Vector3.Angle(fn, Vector3.up) <= steepAngle && !FloorSpins(fm, fp); }   // пол карусели в зоне уноса — не хороший пол
             float bestScore = float.MaxValue;
             foreach (var hd in holds)
             {
@@ -150,7 +150,7 @@ namespace Fortress.Hero.Proto
                     Vector3 sp = cam.WorldToScreenPoint(P);
                     float d = sp.z > 0f ? ((Vector2)sp - px).magnitude : float.MaxValue;
                     if (d < dAny) dAny = d;
-                    if (!HoldOk(P)) continue;
+                    if (!HoldOk(P, hd)) continue;
                     if (d < dOk) { dOk = d; sOk = si; }
                     if (haveFloor) wOk = Mathf.Min(wOk, Flat(P - fp).magnitude);
                 }
@@ -210,7 +210,7 @@ namespace Fortress.Hero.Proto
             float a = Vector3.Angle(bodyNormal, Vector3.up);
             if (!onSteep && a > steepAngle) onSteep = true;
             else if (onSteep && a < steepExit) onSteep = false;
-            bool held = mode == Mode.Grip && !gripSlip;
+            bool held = (mode == Mode.Grip && !gripSlip) || onNubFoot;      // стоит на камне — тоже опора (Ledge)
             if (onSteep && !held && !Hanging)
             {
                 steepTimer += dt;
@@ -233,7 +233,9 @@ namespace Fortress.Hero.Proto
 
         // ---------------- уступ: подтягивание ----------------
         /// <summary>Хват за кромку уступа выше порога.</summary>
-        bool ClimbGrip => (mode == Mode.Grip && !gripHold && gripTop > groundY + maxStep + 0.005f) || NubHang;   // кромка или вис на выступе (Ledge)
+        // кромка или вис на выступе (Ledge). Съезжающая кисть (крутой склон) — не кромка: иначе склон без опоры брался
+        // «как уступ» — вис, перевал (зелёная вспышка), и цепочкой хватов по диагонали залезал на 60° без перил (автор, 2026-11-20).
+        bool ClimbGrip => (mode == Mode.Grip && !gripHold && !gripSlip && gripTop > groundY + maxStep + 0.005f) || NubHang;
 
         /// <summary>Тело упёрлось в уступ на пути к кисти (не стена-препятствие, а уступ выше шага).</summary>
         bool AtLedge()

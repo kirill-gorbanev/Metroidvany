@@ -504,7 +504,7 @@ namespace Fortress.Hero.Proto
             float h = LevelHeight(p, BodyLevel, maxStep);
             if (float.IsInfinity(h)) return false;
             if (climbLift < -0.01f) return true;                        // докатывается после перевала: кромка за спиной — не обрыв
-            return h >= groundY - maxDrop;
+            return h >= groundY - maxDrop - NubRaise;                   // стоит на камне — спуск меряется от склона под камнем (Ledge)
         }
 
         /// <summary>Кисть может лечь в точку p: не выше своего уровня + handUp и не ниже − handDown.</summary>
@@ -709,8 +709,23 @@ namespace Fortress.Hero.Proto
             return false;
         }
 
+        /// <summary>Кисть уехала с опорой дальше руки — тело подтягивается к ней по полу на излишек (через скольжение: в стену не входит).
+        /// Излишек больше armFollowMax за шаг — это рывок опоры, а не езда: рука не выдерживает, хват срывается (как раньше).</summary>
+        void ArmFollowsHand()
+        {
+            float gl = ComputeGripL();
+            Vector3 v = Flat(gripHand - Shoulder); float d = v.magnitude;
+            float over = d - gl;
+            if (over <= 0.002f || d < 1e-4f || over > armFollowMax) return;
+            Vector3 np = Slide(Body, v / d * over);
+            bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
+        }
+
+        [Tooltip("Держишься за едущее: рука подтягивает тело не больше чем на столько за шаг (м); больше — рывок, хват срывается.")]
+        public float armFollowMax = 0.05f;
+
         /// <summary>ПЛАТФОРМЫ: тело на подвижной поверхности едет с ней (сдвиг, подъём, поворот); кисть, держащаяся за платформу, — тоже.
-        /// Тело и кисть на разных опорах: линия хода через новое плечо; рука не достаёт (дальше L или за порогом кисти) — хват срывается.</summary>
+        /// Тело и кисть на разных опорах: линия хода через новое плечо; кисть уехала — тело едет за ней (буксир); не достаёт (тело упёрлось или рывок) — хват срывается.</summary>
         void Carry()
         {
             bool bodyMoved = false, handMoved = false;
@@ -739,6 +754,23 @@ namespace Fortress.Hero.Proto
             }
             if (mode == Mode.Grip && (bodyMoved || handMoved) && !(bodyMoved && handMoved && rideMover == handMover))
             {
+                // ДЕРЖИШЬСЯ ЗА ЕДУЩЕЕ (автор 2026-11-20: «зацепился — и держусь, тело тянется за подвижной стеной»):
+                // опора кисти уехала дальше руки — рука ведёт тело за ней по полу (как ArmReachStep на склоне и поворот на месте).
+                // Срыв — только если телу некуда идти (стена, уступ, край за порогом). Тело на своей платформе, кисть на неподвижном —
+                // по-прежнему срыв (платформа сильнее руки).
+                // Автор: «зацепился — и катаешься; тело должно двигаться за стеной, а не стоять»: тело едет ВМЕСТЕ с опорой кисти
+                // на тот же сдвиг (буксир), сразу, а не только когда рука натянулась. Упёрлось (стена, край) — доводит рука (ArmFollowsHand),
+                // не достаёт — срыв. Сдвиг больше armFollowMax за шаг (рывок опоры) — не буксир.
+                if (handMoved && rideMover != handMover)
+                {
+                    Vector3 b = Body, tow = Flat(handMover.Delta.MultiplyPoint3x4(b)) - b;
+                    if (tow.sqrMagnitude > 1e-10f && tow.magnitude <= armFollowMax)
+                    {
+                        Vector3 np = Slide(b, tow);
+                        bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
+                    }
+                    ArmFollowsHand();
+                }
                 float dh = Flat(gripHand - Shoulder).magnitude;
                 bool lost = gripHold ? (gripHold.At(gripHoldS) - Shoulder3).magnitude > L + 0.02f : (dh > ComputeGripL() + 0.02f || !HandOk(gripHand));   // досягаемость с учётом высоты (не L)
                 lost |= ArmCutsBody();                                   // диск повернул тело, кисть на полу — рука прошла бы сквозь тело
@@ -922,6 +954,8 @@ namespace Fortress.Hero.Proto
 
         public void Gesture(Vector2 md)
         {
+            // Ledge: «от себя» до упора — отпустить; камень ниже плеча — «на себя» спускает к нему. До проверки линии: она бывает короткой на экране.
+            if (LetGoPush(-md.y) || LadderConvert(-md.y)) return;
             Vector2 s0 = cam.WorldToScreenPoint(farEnd), s1 = cam.WorldToScreenPoint(nearEnd);
             Vector2 axis = s1 - s0;                         // экранное направление «к кисти» (тело едет так)
             float axisLen = axis.magnitude;
@@ -942,7 +976,7 @@ namespace Fortress.Hero.Proto
             float moveK = phi >= 0f
                 ? 1f - Mathf.Clamp01((phi - sectorRight) / Mathf.Max(1f, moveFadeRight - sectorRight))
                 : 1f - Mathf.Clamp01((-phi - sectorLeft) / Mathf.Max(1f, moveFadeLeft - sectorLeft));
-            if (!moveAllAround) k *= moveK;
+            if (!moveAllAround && !LadderDown) k *= moveK;                       // лестница вниз: камень у ног / за спиной — езда без затухания (Ledge)
             lastSpeedK = k;
             // ВСКАРАБКИВАНИЕ: у кромки, за которую держишься, жест «на себя» поднимает тело (а не двигает)
             if (!ClimbConvert(along))
@@ -970,6 +1004,7 @@ namespace Fortress.Hero.Proto
             // уровень тела — поверхность под центром СО СВОЕГО уровня (мост/перекрытие сверху не поднимают; вниз — падает)
             float gWant = LevelHit(Body, BodyLevel, maxStep, out var rm, out var bn);
             if (rm != rideMover) { rideMover = rm; rideStep = rm ? rm.StepId : 0; }   // встал на платформу / сошёл
+            gWant = NubFootLevel(gWant);                                   // камень под телом — ступенька (Ledge)
             if (!float.IsInfinity(gWant))
             {
                 bodyNormal = bn;
