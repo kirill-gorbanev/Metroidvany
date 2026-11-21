@@ -154,6 +154,7 @@ namespace Fortress.Hero.Proto
             t = tTarget = 0f; lastGestureAlong = lastGestureSide = Vector2.zero; mouseAcc = default; mouseHave = false; driver = null;
             LedgeReset();
             StateReset();
+            FallReset();
         }
         Vector3 spawnPos; float spawnYaw; bool spawnSet;
         /// <summary>Зоны одной арены (ProtoZones): старт героя в активной зоне.</summary>
@@ -875,6 +876,7 @@ namespace Fortress.Hero.Proto
             // зона ввода сдвинута вниз: точка руки = курсор + сдвиг вверх (жесты — по смещению мыши, их сдвиг не меняет)
             Vector2 px = inp.pos + new Vector2(0f, inputShift * Screen.height);
             bool orbit = inp.orbit;                                 // ПКМ — облёт камеры: рука и жест замирают
+            if (FallStep(dt, ref inp, px)) { ClimbVisuals(dt); StateStep(dt); Draw(); return; }   // полёт / оглушение (блок Fall)
 
             if (mode == Mode.Free)
             {
@@ -1031,6 +1033,7 @@ namespace Fortress.Hero.Proto
             // Ledge: «от себя» до упора — отпустить; камень ниже плеча — «на себя» спускает к нему. До проверки линии: она бывает короткой на экране.
             if (LetGoPush(-md.y)) { gestureOwner = "отпустить"; return; }
             if (LadderConvert(-md.y)) { gestureOwner = "лестница"; return; }
+            if (BackFallPush(-md.y)) { gestureOwner = "срыв спиной"; return; }
             Vector2 s0 = cam.WorldToScreenPoint(farEnd), s1 = cam.WorldToScreenPoint(nearEnd);
             Vector2 axis = s1 - s0;                         // экранное направление «к кисти» (тело едет так)
             float axisLen = axis.magnitude;
@@ -1084,6 +1087,10 @@ namespace Fortress.Hero.Proto
             float gWant = LevelHit(Body, BodyLevel, maxStep, out var rm, out var bn);
             if (rm != rideMover) { rideMover = rm; rideStep = rm ? rm.StepId : 0; }   // встал на платформу / сошёл
             gWant = NubFootLevel(gWant);                                   // камень под телом — ступенька (Ledge)
+            // ОПОРА УШЛА (блок Fall): под центром перепад глубже maxDrop, а рука тело не держит — падение
+            if (allowFall && !falling && !float.IsInfinity(gWant) && gWant < groundY + climbLift - maxDrop - 0.02f
+                && !(mode == Mode.Grip && !gripSlip && (ClimbGrip || gripHold)))
+            { StartFall("опора ушла", carryVel, Vector3.zero); return; }
             if (!float.IsInfinity(gWant))
             {
                 bodyNormal = bn;

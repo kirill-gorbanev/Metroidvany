@@ -147,6 +147,57 @@ namespace Fortress.EditorTools
             finally { End(); }
         }
 
+        /// <summary>ПАДЕНИЕ (зона 9): спиной с края каждой площадки («от себя» после упора) — сорвался ли, через сколько, исход;
+        /// лицом к краю «на себя» 6 с — падений быть не должно; склон в обрыв — сполз и упал.</summary>
+        public static string Fall9()
+        {
+            if (!Setup()) return "нет Play / героя";
+            var sb = new StringBuilder("ПАДЕНИЕ (зона 9)\n");
+            feelLog.Length = 0;
+            try
+            {
+                float[] hs = { 1.2f, 1.8f, 3.2f, 4.6f };
+                for (int i = 0; i < hs.Length; i++)
+                {
+                    float xc = 0.5f + i * 3f + 1.2f, h = hs[i];
+                    TP(new Vector3(xc, h, 4.5f), 0f); H.driver = () => Free(); for (int k = 0; k < 5; k++) Step();
+                    H.BeginGrip(new Vector3(xc + 0.2f, 0f, 4.85f)); H.driver = () => Hold(8f);
+                    int f0 = H.fallCount, d0 = H.deathCount, at = -1; string land = "НЕ ПРИЗЕМЛИЛСЯ";
+                    for (int k = 0; k < 500; k++) { Step(); if (at < 0 && H.fallCount > f0) at = k; if (at >= 0 && !H.Falling) { land = H.lastLanding; break; } }
+                    sb.Append($"спиной с края {h:F1} м: {(at < 0 ? "НЕ СОРВАЛСЯ" : "сорвался через " + Sec(at))} — {(at < 0 ? "" : land)}{(H.deathCount > d0 ? " [смерть → старт зоны]" : "")}\n");
+                    H.driver = () => Free(); for (int k = 0; k < 10; k++) Step();
+                }
+                {
+                    float xc = 0.5f + 3f + 1.2f;
+                    TP(new Vector3(xc, 1.8f, 4.9f), 180f); H.driver = () => Free(); for (int k = 0; k < 5; k++) Step();
+                    H.BeginGrip(new Vector3(xc - 0.2f, 0f, 4.35f)); H.driver = () => Hold(-8f);
+                    int f0 = H.fallCount; for (int k = 0; k < 300; k++) Step();
+                    sb.Append($"лицом к краю 1.8, «на себя» 6 с: падений {H.fallCount - f0} (цель 0), тело z {H.BodyXZ.z:F2}, край z 4.00\n");
+                    H.driver = () => Free(); for (int k = 0; k < 5; k++) Step();
+                    TP(new Vector3(xc, 1.8f, 4.5f), 0f); for (int k = 0; k < 5; k++) Step();
+                    H.BeginGrip(new Vector3(xc + 0.2f, 0f, 4.85f)); H.driver = () => Hold(8f);
+                    for (int k = 0; k < 5; k++) Step();
+                    H.driver = () => Hold(-30f); for (int k = 0; k < 3; k++) Step();          // передумал: «на себя» — счёт сброшен
+                    H.driver = () => Hold(8f); f0 = H.fallCount; int at = -1;
+                    for (int k = 0; k < 200; k++) { Step(); if (H.fallCount > f0) { at = k; break; } }
+                    sb.Append($"спиной: начал дожим, передумал («на себя»), снова «от себя» — сорвался через {(at < 0 ? "—" : Sec(at))} (дожим заново)\n");
+                    H.driver = () => Free(); for (int k = 0; k < 150; k++) Step();
+                }
+                {
+                    float xc = 13.7f;
+                    TP(new Vector3(xc, 3.2f, 7.2f), 0f); H.driver = () => Free();
+                    int f0 = H.fallCount, at = -1; string land = "не упал";
+                    for (int k = 0; k < 400; k++) { Step(); if (at < 0 && H.fallCount > f0) at = k; if (at >= 0 && !H.Falling) { land = H.lastLanding; break; } }
+                    sb.Append($"склон 45° в обрыв: {(at < 0 ? "НЕ УПАЛ" : "упал через " + Sec(at))} — {land}\n");
+                    H.driver = () => Free(); for (int k = 0; k < 150; k++) Step();
+                }
+                TP(new Vector3(H.BodyXZ.x, H.BodyY, H.BodyXZ.z), 0f);
+                sb.Append(feelLog.Length > 0 ? "сторожа:" + feelLog : "сторожа: нарушений нет");
+            }
+            finally { End(); }
+            return sb.ToString();
+        }
+
         public static void End() { HeroProto.ManualTick = false; if (H) H.driver = null; }
 
         public static void Step()

@@ -95,6 +95,7 @@ namespace Fortress.Hero.Proto
             gripHold = null; hoverHold = null; climbLift = 0f; gripSlip = false; slipDist = 0f;
             steepTimer = 0f; slideV = 0f; onSteep = false; crestFlash = slipFlash = 0f; gripL = L;
             SpinReset();
+            falling = false; stunT = 0f; fallPx = 0f; fallVy = 0f;   // перенос тела — полёт и оглушение прерваны (Fall)
         }
 
         // ---------------- досягаемость ----------------
@@ -228,7 +229,7 @@ namespace Fortress.Hero.Proto
                 Vector3 down = Flat(bodyNormal);
                 if (down.sqrMagnitude < 1e-6f) return;
                 Vector3 np = Slide(Body, down.normalized * slideV * dt);
-                if ((np - Body).sqrMagnitude < 1e-10f) slideV = 0f;          // упёрся (стена, стойка) — стоит
+                if ((np - Body).sqrMagnitude < 1e-10f) { if (SlideOffEdge(down, slideV)) return; slideV = 0f; }   // упёрся: край обрыва — падение (Fall), стена — стоит
                 bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
                 if (mode == Mode.Grip)
                 {
@@ -297,6 +298,7 @@ namespace Fortress.Hero.Proto
             crestFlash = Mathf.Max(0f, crestFlash - dt); slipFlash = Mathf.Max(0f, slipFlash - dt);
             bool holding = ClimbGrip && climbLift > 0f;
             if (holding) return;
+            if (allowFall && climbLift > maxDrop + 0.01f) { StartFall("отпустил вис", Vector3.zero, Vector3.zero); return; }   // над полом глубже порога — падение (Fall)
             if (Mathf.Abs(climbLift) < 0.002f) { climbLift = 0f; return; }
             climbLift = Mathf.Lerp(climbLift, 0f, 1f - Mathf.Exp(-fallBack * dt));    // назад вниз / докатиться на уступ
         }

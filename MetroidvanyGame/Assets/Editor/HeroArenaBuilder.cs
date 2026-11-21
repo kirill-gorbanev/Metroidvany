@@ -985,6 +985,42 @@ namespace Fortress.EditorTools
             PlaceHero(new Vector3(0.8f, 0f, ZA), 90f);
         }
 
+        // ================= ЗОНА 9 — ПАДЕНИЕ (шаг 7 долга) =================
+        /// <summary>Площадки 1.2 / 1.8 / 3.2 / 4.6 м, край на юге — обрыв на пол (y 0). На каждую — лифт с севера.
+        /// Встань у южного края лицом на север (спиной к обрыву), кисть на пол перед собой, «от себя» — упор, дожим — падение.
+        /// Цена по высоте: присел / оглушение / тяжёлое / смерть (4.6). Пятая дорожка — склон 45° обрывается на 1.7: сполз — упал.</summary>
+        static void Fill9()
+        {
+            walls = new GameObject("Арена: стены").transform;
+            surf = new GameObject("Арена: поверхность").transform;
+            decor = new GameObject("Арена: декор (не опора)").transform;
+            Box("Земля", -2f, 18f, -0.05f, 0f, -2f, 13f, GroundC, decor);
+            float[] hs = { 1.2f, 1.8f, 3.2f, 4.6f };
+            string[] cost = { "присел", "оглушение", "тяжёлое", "смерть" };
+            for (int i = 0; i < hs.Length; i++)
+            {
+                float x0 = 0.5f + i * 3f, x1 = x0 + 2.4f, xc = (x0 + x1) * 0.5f, h = hs[i];
+                Box($"Площадка {h:F1}", x0, x1, 0f, h, 4f, 9f, i % 2 == 0 ? StepA : StepB, surf);
+                var lift = Mover($"Лифт {h:F1}", new Vector3(xc, 0f, 9.9f), new Vector3(0f, h, 0f), 3f, 3f, 0f, i * 1.5f);
+                Box($"Лифт {h:F1}: площадка", x0 + 0.3f, x1 - 0.3f, -0.14f, 0.01f, 9.0f, 10.8f, DeckC, lift);
+                Sign($"{h:F1} м — {cost[i]}\nспиной к краю, «от себя»", new Vector3(xc, 0f, 2.6f));
+            }
+            {
+                // склон 45° вниз на юг, у подножия — обрыв 1.7 на пол
+                float x0 = 12.5f, x1 = 14.9f, xc = (x0 + x1) * 0.5f;
+                Box("Склон-обрыв: настил", x0, x1, 0f, 3.2f, 7.5f, 9f, DeckC, surf);
+                Box("Склон-обрыв: подножие", x0, x1, 0f, 1.7f, 6f, 7.5f, StepA, surf);
+                Wedge("Склон-обрыв: склон 45°", x0, x1, 6f, 7.5f, 1.7f, 1.5f, Vector3.forward, MainC, surf);
+                var lift = Mover("Лифт склона", new Vector3(xc, 0f, 9.9f), new Vector3(0f, 3.2f, 0f), 3f, 3f, 0f, 0f);
+                Box("Лифт склона: площадка", x0 + 0.3f, x1 - 0.3f, -0.14f, 0.01f, 9.0f, 10.8f, DeckC, lift);
+                Sign("склон 45° в обрыв 1.7\nсполз — упал", new Vector3(xc, 0f, 2.6f));
+            }
+            var sun = new GameObject("Свет").AddComponent<Light>();
+            sun.type = LightType.Directional; sun.intensity = 1.1f; sun.shadows = LightShadows.Soft;
+            sun.transform.rotation = Quaternion.Euler(55f, -35f, 0f);
+            PlaceHero(new Vector3(0.5f + 3f + 1.2f, 0f, 4.6f), 0f);       // на площадке 1.8 у южного края, лицом на север
+        }
+
         // ================= ОДНА АРЕНА «ВСЁ СРАЗУ» (шаг 4 долга) =================
         public const string SceneAllPath = "Assets/Scenes/HeroArena.unity";
 
@@ -1004,7 +1040,7 @@ namespace Fortress.EditorTools
             var list = new (int n, string title, System.Action fill)[]
             {
                 (2, "ярусы", Fill), (3, "подвижные", Fill3), (4, "карусели и склоны", Fill4), (5, "вскарабкивание", Fill5),
-                (6, "полоса препятствий", Fill6), (7, "выступы", Fill7), (8, "полоса: выступы", Fill8),
+                (6, "полоса препятствий", Fill6), (7, "выступы", Fill7), (8, "полоса: выступы", Fill8), (9, "падение", Fill9),
             };
             const int StartZone = 8;
             foreach (var (n, title, fill) in list)

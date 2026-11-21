@@ -19,7 +19,7 @@ namespace Fortress.Hero.Proto
     /// Жест при хвате разбирается в том же порядке: «отпустить» → лестница → подъём у кромки → езда + поворот.</summary>
     public partial class HeroProto
     {
-        public enum HeroState { Stand, OnDisc, OnStone, SlopeWindow, Sliding, Flung, GripFloor, OnHold, HandSlipping, LadderDown, Hanging }
+        public enum HeroState { Stand, OnDisc, OnStone, SlopeWindow, Sliding, Flung, GripFloor, OnHold, HandSlipping, LadderDown, Hanging, Falling, Stunned }
 
         static readonly Dictionary<HeroState, string> stateName = new Dictionary<HeroState, string>
         {
@@ -27,6 +27,7 @@ namespace Fortress.Hero.Proto
             { HeroState.SlopeWindow, "окно склона" }, { HeroState.Sliding, "сползает" }, { HeroState.Flung, "слёт с карусели" },
             { HeroState.GripFloor, "хват за пол" }, { HeroState.OnHold, "на зацепе" }, { HeroState.HandSlipping, "кисть съезжает" },
             { HeroState.LadderDown, "лестница вниз" }, { HeroState.Hanging, "вис" },
+            { HeroState.Falling, "падает" }, { HeroState.Stunned, "оглушён" },
         };
 
         [Tooltip("Выносливость хвата (с): столько можно держаться на крутом / висеть, потом кисть разжимается. Бесконечность — без усталости (автор 2026-11-21: «пока не вижу причины, но переменную заведи»).")]
@@ -58,6 +59,8 @@ namespace Fortress.Hero.Proto
                 if (OnHold) { why = $"держишься за {(OnNub ? "камень" : "зацеп")} «{gripHold.name}»"; return HeroState.OnHold; }
                 why = onSteep ? "кисть на полу, тело на крутом — держит" : "кисть на полу"; return HeroState.GripFloor;
             }
+            if (falling) { why = $"{fallCause}, пролетел {fallStartY - fallY:F2} м"; return HeroState.Falling; }
+            if (stunT > 0f) { why = $"{lastLanding}, ещё {stunT:F1} с"; return HeroState.Stunned; }
             if (Flung) { why = "сорвался с диска, летишь"; return HeroState.Flung; }
             if (slideV > 0f || spinV > 0f) { why = slideV > 0f ? $"крутой склон без опоры, {slideV:F1} м/с" : "диск уносит"; return HeroState.Sliding; }
             if (onSteep && steepTimer > 0f) { why = $"крутой склон без опоры, {steepTimer * 1000f:F0} из {slideDelay * 1000f:F0} мс"; return HeroState.SlopeWindow; }

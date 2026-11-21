@@ -11,7 +11,7 @@ call '{"name":"set_active_instance","arguments":{"instance":"MetroidvanyGame@ed6
 call '{"name":"manage_editor","arguments":{"action":"stop"}}'; sleep 2
 E=$(./wait.sh | tail -1)
 if [ "$E" != "[]" ]; then echo "ОШИБКИ КОМПИЛЯЦИИ: $E"; exit 1; fi
-for n in ${ARENAS:-2 3 4 5 6 7 8}; do
+for n in ${ARENAS:-2 3 4 5 6 7 8 9}; do
   call "{\"name\":\"manage_editor\",\"arguments\":{\"action\":\"stop\"}}"; sleep 2
   call '{"name":"manage_scene","arguments":{"action":"load","path":"Assets/Scenes/HeroArena.unity"}}'   # одна арена, зоны 2–8
   printf 'Fortress.Hero.Proto.ProtoZones.Go(%s);

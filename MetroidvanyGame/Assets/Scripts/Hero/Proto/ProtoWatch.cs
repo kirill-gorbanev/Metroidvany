@@ -16,7 +16,7 @@ namespace Fortress.Hero.Proto
         /// <summary>Допуски (м за шаг 0.02 с).</summary>
         public float jumpXZ = 0.15f, jumpY = 0.15f, handJumpY = 0.35f;
 
-        Vector3 pb; float pg, phy; bool first = true;
+        Vector3 pb; float pg, phy; bool first = true, wasFalling;
 
         public ProtoWatch(HeroProto hero) { h = hero; }
 
@@ -42,7 +42,9 @@ namespace Fortress.Hero.Proto
             if (h.armKeepOut > 0f && h.DiagArmToBody < h.armKeepOut * 0.6f) Hit("рука сквозь тело", $"{h.DiagArmToBody:F2}");
             if (g < -0.01f) Hit("под полом", $"y {g:F2}");
             if (h.DiagCrushed) Hit("раздавлен", "подвижное прижало к неподвижному");
-            if (!first)
+            bool air = h.Falling || wasFalling || h.DiagRespawned;           // полёт, приземление, возврат на старт — не «скачок»
+            wasFalling = h.Falling;
+            if (!first && !air)
             {
                 // ожидаемое место: прошлое, сдвинутое платформой, если тело на ней
                 Vector3 prev3 = new Vector3(pb.x, pg, pb.z);
