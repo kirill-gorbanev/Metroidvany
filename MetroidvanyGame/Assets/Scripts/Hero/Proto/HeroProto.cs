@@ -935,9 +935,7 @@ namespace Fortress.Hero.Proto
             {
                 if (!inp.pressed && !testHold)
                 {
-                    bool regrab = gripHold && onSteep && !gripSlip;          // отпустил зацеп / камень на крутом — окно перехвата
                     ReleaseGrip("отпустил ЛКМ"); lastGestureAlong = lastGestureSide = Vector2.zero;
-                    if (regrab) regrabT = regrabWindow;
                 }
                 else if (!orbit) Gesture(inp.delta);
                 HandSlipStep(dt);                                     // кисть на крутом (не зацеп) — съезжает и отпускает

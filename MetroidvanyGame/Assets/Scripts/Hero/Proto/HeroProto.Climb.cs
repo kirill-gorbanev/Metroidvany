@@ -95,9 +95,7 @@ namespace Fortress.Hero.Proto
             gripHold = null; hoverHold = null; climbLift = 0f; gripSlip = false; slipDist = 0f;
             steepTimer = 0f; slideV = 0f; onSteep = false; crestFlash = slipFlash = 0f; gripL = L;
             SpinReset();
-            falling = false; stunT = 0f; fallPx = 0f; fallVy = 0f;   // перенос тела — полёт и оглушение прерваны (Fall)
-            regrabT = 0f;                                                // и окно перехвата
-        }
+            falling = false; stunT = 0f; fallPx = 0f; fallVy = 0f;   // перенос тела — полёт и оглушение прерваны (Fall)        }
 
         // ---------------- досягаемость ----------------
         /// <summary>Досягаемость по полу в текущем хвате: рука L по 3D; точка выше плеча — по полу ближе.</summary>
@@ -217,25 +215,13 @@ namespace Fortress.Hero.Proto
         }
 
         // ---------------- крутой склон без опоры — сползание ----------------
-        /// <summary>ОКНО ПЕРЕХВАТА (автор 2026-11-21: «хотел ухватиться за 4 — не успеваю»). Отпустил ЛКМ, держась за камень / поручень
-        /// на крутом, — тело ещё regrabWindow секунд не сползает: время довести курсор до следующего камня и кликнуть. Потом — обычное
-        /// окно склона и сползание. Не действует: «отпустить» жестом (цель — съехать), срыв, съезжающая кисть.</summary>
-        [Tooltip("Окно перехвата (с): отпустил камень / поручень на крутом — тело столько держится, потом сползает.")]
-        public float regrabWindow = 0.5f;
-        float regrabT;
-
+        // (окно перехвата 0.5 с после камня убрано — автор: «слишком долго зависаю»; после камня — то же окно склона slideDelay, что и без хвата)
         void SlopeStep(float dt)
         {
             float a = Vector3.Angle(bodyNormal, Vector3.up);
             if (!onSteep && a > steepAngle) onSteep = true;
             else if (onSteep && a < steepExit) onSteep = false;
             bool held = mode == Mode.Grip && !gripSlip;
-            if (regrabT > 0f)                                             // окно перехвата: тело держится, пока не взялся снова или не вышло время
-            {
-                regrabT -= dt;
-                if (held || !onSteep) regrabT = 0f;
-                else { steepTimer = 0f; slideV = 0f; return; }
-            }
             if (onSteep && !held && !Hanging)
             {
                 steepTimer += dt;
@@ -321,7 +307,7 @@ namespace Fortress.Hero.Proto
         /// <summary>Жест у кромки (в пикселях вдоль): «на себя» — поднять тело, «от себя» — опустить. true — жест ушёл в подъём.</summary>
         bool ClimbConvert(float px)
         {
-            float meters = px * Px1080 * (OnNub ? nubClimbPerPx : climbPerPx);   // камень — быстрее кромки, как езда (Ledge)
+            float meters = px * Px1080 * (OnNub ? nubClimbRate : climbPerPx);   // камень — быстрее кромки, как езда (Ledge)
             if (!ClimbGrip) return false;
             float need = ClimbNeed;                                       // уступ — пока не станет ступенькой; камень только для руки — кисть у пояса (Ledge)
             if (meters > 0f)
