@@ -157,6 +157,7 @@ namespace Fortress.Hero.Proto
             LedgeReset();
             StateReset();
             FallReset();
+            DragReset();
         }
         Vector3 spawnPos; float spawnYaw; bool spawnSet;
         /// <summary>Зоны одной арены (ProtoZones): старт героя в активной зоне.</summary>
@@ -559,6 +560,7 @@ namespace Fortress.Hero.Proto
             {
                 // тело — своим кубиком (блок Body): стены — пересечение прямоугольников, уступы и обрывы — пробы по углам и сторонам
                 foreach (var o in obstacles) if (BoxHitsRect(p, o, 0.001f)) return true;
+                if (ItemBlocksBody(p)) return true;                  // лежащий предмет — стена для тела (блок Drag)
                 if (ShoulderBlocked(p)) return true;
                 if (!HasSurface) return false;
                 if (!Climbable(p)) return true;
@@ -571,6 +573,7 @@ namespace Fortress.Hero.Proto
                 float dx = p.x - cx, dz = p.z - cz;
                 if (dx * dx + dz * dz < r * r) return true;
             }
+            if (ItemBlocksBody(p, r)) return true;                  // лежащий предмет — стена для тела (блок Drag)
             if (ShoulderBlocked(p)) return true;                    // плечо сбоку тоже не входит в стену / уступ
             if (!HasSurface) return false;
             if (!Climbable(p)) return true;
@@ -634,6 +637,7 @@ namespace Fortress.Hero.Proto
                 if (m > 1e-5f) n += d / m;
                 else n += new Vector3(p.x - o.center.x, 0f, p.z - o.center.y).normalized;   // центр внутри — от середины
             }
+            n += ItemContactNormal(p, r);                             // лежащие предметы — тоже стены (блок Drag)
             // плечо упёрлось в стену — нормаль от стены к плечу
             if (shoulderSide != 0f)
             {
@@ -876,7 +880,7 @@ namespace Fortress.Hero.Proto
                 }
                 // КУРСОР НЕ УХОДИТ ЗА ОКНО, ПОКА ДЕРЖИШЬ (автор 2026-11-21: «мышка уже за экраном» — тяга «на себя» обрывалась у края
                 // окна). В хвате курсор не читается, только сдвиг мыши; отпустил ЛКМ — курсор свободен.
-                bool confine = holdConfinesCursor && mouseAcc.pressed && mode == Mode.Grip;
+                bool confine = holdConfinesCursor && mouseAcc.pressed && (mode == Mode.Grip || dragItem);
                 if (confine != cursorConfined) { Cursor.lockState = confine ? CursorLockMode.Confined : CursorLockMode.None; cursorConfined = confine; }
             }
             float rest = Mathf.Min(Time.deltaTime, maxCatchUp);
@@ -907,9 +911,13 @@ namespace Fortress.Hero.Proto
             // зона ввода сдвинута вниз: точка руки = курсор + сдвиг вверх (жесты — по смещению мыши, их сдвиг не меняет)
             Vector2 px = inp.pos + new Vector2(0f, inputShift * Screen.height);
             bool orbit = inp.orbit;                                 // ПКМ — облёт камеры: рука и жест замирают
-            if (FallStep(dt, ref inp, px)) { ClimbVisuals(dt); StateStep(dt); Draw(); return; }   // полёт / оглушение (блок Fall)
+            if (FallStep(dt, ref inp, px)) { EndDrag("падение — предмет выпал"); ClimbVisuals(dt); StateStep(dt); Draw(); return; }   // полёт / оглушение (блок Fall)
 
-            if (mode == Mode.Free)
+            if (mode == Mode.Free && DragFreeStep(dt, inp, px, orbit))
+            {
+                // ПРЕДМЕТ (блок Drag): навёлся на предмет / тащишь его — кисть занята предметом, тело стоит
+            }
+            else if (mode == Mode.Free)
             {
                 // ЗАЦЕП: курсор рядом с перилами / столбом — кисть прилипает к ним (иначе — на поверхность, как раньше)
                 hoverHold = null;
@@ -1089,7 +1097,12 @@ namespace Fortress.Hero.Proto
             float fwd = Vector3.Dot(travel, face);                                   // +1 лицом, −1 спиной
             // ПЕРЕДАЧА (задний ход, автор 2026-11-21): тело явно едет спиной — включается «задний», лицом — «передний»;
             // вбок / без хода — передача та же, что была (без дёрганья на границе)
-            if (Mathf.Abs(along) >= 0.5f) { if (fwd < -0.3f) reverseGear = true; else if (fwd > 0.3f) reverseGear = false; }
+            // ПЕРЕДАЧА — ТОЛЬКО ОТ ЯВНОЙ ЕЗДЫ (автор 2026-11-21: «поворачиваю налево — а он сильнее направо, из-за движения назад»):
+            // кисть сбоку (у края сектора, ~70°) — линия хода почти поперёк тела, «от кисти» = чуть назад (fwd −0.34). Полпикселя мыши
+            // вверх при повороте включали задний ход (порог был −0.3), руль переворачивался до конца хвата.
+            // Теперь передача меняется, только если жест — езда (вертикаль больше боковой) и ход явно спиной / лицом (дальше 120° / ближе 60° от лица).
+            if (Mathf.Abs(along) >= 0.5f && Mathf.Abs(along) > Mathf.Abs(md.x))
+            { if (fwd < -0.5f) reverseGear = true; else if (fwd > 0.5f) reverseGear = false; }
             float k = Mathf.Lerp(backSpeed, forwardSpeed, (fwd + 1f) * 0.5f);
             // слой ДВИЖЕНИЯ: кисть внутри разброса — едет полностью; в слое поворота — езда гаснет к краю (только поворот)
             Vector3 Bn = Vector3.Lerp(farEnd, nearEnd, t);

@@ -197,6 +197,7 @@ namespace Fortress.Hero.Proto
         float HandTargetY()
         {
             if (mode == Mode.Grip && gripHold) return gripHold.At(gripHoldS).y - handLift;
+            if (mode == Mode.Free && (dragItem || hoverItem)) return ItemHandY();       // кисть на предмете (блок Drag)
             if (mode == Mode.Free && hoverHold) return hoverHold.At(hoverS).y - handLift;
             return HandLevel(hand);
         }

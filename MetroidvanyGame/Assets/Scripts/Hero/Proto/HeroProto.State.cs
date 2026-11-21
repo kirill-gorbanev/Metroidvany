@@ -15,11 +15,11 @@ namespace Fortress.Hero.Proto
     ///
     /// ПРИОРИТЕТЫ (сверху — сильнее):
     ///   хват:     Вис (подтянулся у кромки / на камне) → Лестница вниз → Кисть съезжает → На зацепе → Хват за пол
-    ///   свободна: Слёт с карусели → Сползает → Окно склона → Стоит на камне → На диске → Стоит
+    ///   свободна: (падает, оглушён) → Тащит предмет → Слёт с карусели → Сползает → Окно склона → Стоит на камне → На диске → Стоит
     /// Жест при хвате разбирается в том же порядке: «отпустить» → лестница → подъём у кромки → езда + поворот.</summary>
     public partial class HeroProto
     {
-        public enum HeroState { Stand, OnDisc, SlopeWindow, Sliding, Flung, GripFloor, OnHold, HandSlipping, Hanging, Falling, Stunned }
+        public enum HeroState { Stand, OnDisc, SlopeWindow, Sliding, Flung, GripFloor, OnHold, HandSlipping, Hanging, Falling, Stunned, Dragging }
 
         static readonly Dictionary<HeroState, string> stateName = new Dictionary<HeroState, string>
         {
@@ -27,7 +27,7 @@ namespace Fortress.Hero.Proto
             { HeroState.SlopeWindow, "окно склона" }, { HeroState.Sliding, "сползает" }, { HeroState.Flung, "слёт с карусели" },
             { HeroState.GripFloor, "хват за пол" }, { HeroState.OnHold, "на зацепе" }, { HeroState.HandSlipping, "кисть съезжает" },
             { HeroState.Hanging, "вис" },
-            { HeroState.Falling, "падает" }, { HeroState.Stunned, "оглушён" },
+            { HeroState.Falling, "падает" }, { HeroState.Stunned, "оглушён" }, { HeroState.Dragging, "тащит предмет" },
         };
 
         [Tooltip("Выносливость хвата (с): столько можно держаться на крутом / висеть, потом кисть разжимается. Бесконечность — без усталости (автор 2026-11-21: «пока не вижу причины, но переменную заведи»).")]
@@ -60,6 +60,7 @@ namespace Fortress.Hero.Proto
             }
             if (falling) { why = $"{fallCause}, пролетел {fallStartY - fallY:F2} м"; return HeroState.Falling; }
             if (stunT > 0f) { why = $"{lastLanding}, ещё {stunT:F1} с"; return HeroState.Stunned; }
+            if (dragItem) { why = $"кисть держит «{dragItem.name}», ЛКМ зажата"; return HeroState.Dragging; }
             if (Flung) { why = "сорвался с диска, летишь"; return HeroState.Flung; }
             if (slideV > 0f || spinV > 0f) { why = slideV > 0f ? $"крутой склон без опоры, {slideV:F1} м/с" : "диск уносит"; return HeroState.Sliding; }
             if (onSteep && steepTimer > 0f) { why = $"крутой склон без опоры, {steepTimer * 1000f:F0} из {slideDelay * 1000f:F0} мс"; return HeroState.SlopeWindow; }

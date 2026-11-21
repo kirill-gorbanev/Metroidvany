@@ -42,6 +42,7 @@ namespace Fortress.Hero.Proto
             Key[] keys = { Key.Digit2, Key.Digit3, Key.Digit4, Key.Digit5, Key.Digit6, Key.Digit7, Key.Digit8, Key.Digit9 };
             for (int i = 0; i < keys.Length; i++)
                 if (k[keys[i]].wasPressedThisFrame && Find(i + 2) != null) Activate(i + 2);
+            if (k[Key.Digit0].wasPressedThisFrame && Find(10) != null) Activate(10);          // зона 10 — клавиша 0
         }
 
         Zone Find(int n) { foreach (var z in zones) if (z.number == n) return z; return null; }
@@ -77,7 +78,7 @@ namespace Fortress.Hero.Proto
         {
             if (!hero || !hero.showHints || HeroProto.ManualTick) return;
             var z = Find(Current);
-            GUI.Label(new Rect(12, 30, 1400, 24), $"Зона {Current}: {(z != null ? z.title : "?")}   ·   клавиши 2–8 — другая зона");
+            GUI.Label(new Rect(12, 30, 1400, 24), $"Зона {Current}: {(z != null ? z.title : "?")}   ·   клавиши 2–9, 0 — другая зона");
         }
     }
 }
