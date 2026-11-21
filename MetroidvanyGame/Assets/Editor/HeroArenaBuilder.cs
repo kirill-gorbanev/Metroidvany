@@ -758,7 +758,7 @@ namespace Fortress.EditorTools
             for (float z = z0 + 0.08f; z < topZ - 0.05f; z += stepZ, k++)
             {
                 float y = MAIN + rise * (z - z0) / run;
-                foreach (float dx in new[] { -0.3f, 0.3f })
+                foreach (float dx in new[] { -0.35f, 0.35f })   // колонки ±0.35: тело 0.3 проходит между ними (камни сбоку твёрдые)
                     Nub($"{n}: камень {k + 1}{(dx < 0 ? "л" : "п")}", new Vector3(xc + dx, y + 0.03f, z), new Vector3(0.24f, 0.1f, 0.12f), decor);
             }
         }
@@ -890,7 +890,7 @@ namespace Fortress.EditorTools
             for (float s = 0.08f; s < run - 0.05f; s += stepX, k++)
             {
                 float x = xLow + dir * s, y = MAIN + rise * s / run;
-                foreach (float dz in new[] { -0.3f, 0.3f })
+                foreach (float dz in new[] { -0.35f, 0.35f })   // колонки ±0.35: тело 0.3 проходит между ними (камни сбоку твёрдые)
                     Nub($"{n}: камень {k + 1}{(dz < 0 ? "ю" : "с")}", new Vector3(x, y + 0.03f, zc + dz), new Vector3(0.12f, 0.1f, 0.24f), decor);
             }
         }
