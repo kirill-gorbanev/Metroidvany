@@ -74,7 +74,7 @@ namespace Fortress.Hero.Proto
         public bool DiagHandOk(Vector3 p) => HandOk(Flat(p));
         /// <summary>До какой высоты поднимает «на себя» у кромки / на камне: уступ — пока не станет ступенькой;
         /// камень только для руки (Ledge) — пока кисть не у пояса (nubHangKeep).</summary>
-        public float ClimbNeed => OnNub && !NubStandable ? gripTop - groundY - nubHangKeep : gripTop - groundY - maxStep + 0.03f;
+        public float ClimbNeed => OnNub ? gripTop - groundY - nubHangKeep : gripTop - groundY - maxStep + 0.03f;
 
         /// <summary>Уровень, от которого тело меряет «шаг вверх»: пол + подъём на кромке.</summary>
         float BodyLevel => groundY + Mathf.Max(climbLift, 0f);
@@ -221,7 +221,7 @@ namespace Fortress.Hero.Proto
             float a = Vector3.Angle(bodyNormal, Vector3.up);
             if (!onSteep && a > steepAngle) onSteep = true;
             else if (onSteep && a < steepExit) onSteep = false;
-            bool held = (mode == Mode.Grip && !gripSlip) || onNubFoot;      // стоит на камне — тоже опора (Ledge)
+            bool held = mode == Mode.Grip && !gripSlip;
             if (onSteep && !held && !Hanging)
             {
                 steepTimer += dt;

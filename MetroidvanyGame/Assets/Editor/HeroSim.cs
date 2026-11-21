@@ -671,7 +671,7 @@ namespace Fortress.EditorTools
                         H.driver = () => Free();
                         for (int i = 0; i < 150; i++) { Step(); if (H.BodyY < 0.85f) { stop = i; break; } }
                     }
-                    sb.Append($"  съезд по колонке камней z {zc:F1}: {(stop < 0 ? "НЕ СЪЕХАЛ, тело " + H.BodyY.ToString("F2") + (H.OnNubFoot ? " (на камне)" : "") : "внизу с " + tries + "-го хвата")} (цель: 1–2 хвата; первый может поставить на верхний камень) | {W.Report()}\n");
+                    sb.Append($"  съезд по колонке камней z {zc:F1}: {(stop < 0 ? "НЕ СЪЕХАЛ, тело " + H.BodyY.ToString("F2") : "внизу с " + tries + "-го хвата")} (цель: 1–2 хвата) | {W.Report()}\n");
                 }
 
                 // буксир: схватиться за камень стены-челнока, пока она стоит у восточного конца, держать 8 с — тело едет с ней
@@ -863,27 +863,6 @@ namespace Fortress.EditorTools
                         sb.Append($"F2 {(onDisc ? "тело на диске (в зоне)" : "тело на полу у диска")}, {(nub ? "камень" : "ручка")}: берётся с курсора до {far} px (на 1080)\n");
                     }
                 }
-                // G. СТУПЕНЬКА: тело на камне посреди 60° без руки — стоит 5 с (цель: смещение ≤ 1 см, на камне)
-                {
-                    ProtoHold foot = null; foreach (var x in H.Holds) if (x is ProtoNub && x.name == "Склон 1: камень 2п") foot = x;
-                    if (!foot) sb.Append("G нет камня «Склон 1: камень 2п»\n");
-                    else
-                    {
-                        Vector3 c = foot.At(0.5f);
-                        TP(new Vector3(c.x - 0.05f, c.y, c.z), 0f); H.driver = () => Free();
-                        for (int i = 0; i < 20; i++) Step();
-                        Vector3 p0 = new Vector3(H.BodyXZ.x, H.BodyY, H.BodyXZ.z);
-                        for (int i = 0; i < 250; i++) Step();
-                        float drift = (new Vector3(H.BodyXZ.x, H.BodyY, H.BodyXZ.z) - p0).magnitude;
-                        sb.Append($"G стоит на камне на 60° без руки 5 с: смещение {drift * 100f:F1} см (цель ≤ 1), на камне {(H.OnNubFoot ? "да" : "НЕТ")}, тело {H.BodyY:F2} (верх камня {c.y:F2})\n");
-                        // между камнями (левее на 0.3) — без камня сползает, как раньше
-                        TP(new Vector3(c.x - 0.3f, c.y, c.z), 0f); H.driver = () => Free();
-                        for (int i = 0; i < 3; i++) Step();
-                        p0 = new Vector3(H.BodyXZ.x, H.BodyY, H.BodyXZ.z);
-                        for (int i = 0; i < 60; i++) Step();
-                        sb.Append($"G2 между камнями без руки 1.2 с: съехал {(new Vector3(H.BodyXZ.x, H.BodyY, H.BodyXZ.z) - p0).magnitude * 100f:F0} см (цель > 10 — сползает, как раньше)\n");
-                    }
-                }
                 // H1. ДЫРА ЗАКРЫТА: склон 60° без камней, 4 хвата за склон выше по диагоналям с «на себя» — ни виса, ни перевала, не выше
                 {
                     TP(new Vector3(3.3f, M, 5.25f), 0f); H.driver = () => Free(); for (int i = 0; i < 3; i++) Step();
@@ -906,25 +885,7 @@ namespace Fortress.EditorTools
                     int n0 = H.letGoCount, rel = -1; float y0 = H.BodyY;
                     for (int i = 0; i < 75; i++) { Step(); if (!H.Gripping) { rel = i; break; } }
                     H.driver = () => Free(); for (int i = 0; i < 50; i++) Step();
-                    sb.Append($"H2 «от себя» у камня выше: отпустил {(rel < 0 ? "НЕТ" : "через " + Sec(rel))} (цель ≤ 0.5 с, отпускание жестом {(H.letGoCount > n0 ? "да" : "нет")}), потом 1 с: на камне {(H.OnNubFoot ? "да" : "НЕТ")}, тело {y0:F2} → {H.BodyY:F2}\n");
-                }
-                // H3. ЛЕСТНИЦА ВНИЗ: стою на камне 4п (левее его центра), курсор на камень 3п у ног справа-сзади — берётся; «на себя» 2 с — спустился на него
-                {
-                    ProtoHold s2 = null, s4 = null; foreach (var x in H.Holds) { if (x.name == "Склон 1: камень 3п") s2 = x; if (x.name == "Склон 1: камень 4п") s4 = x; }
-                    Vector3 c = s4.At(0.5f);
-                    TP(new Vector3(c.x - 0.14f, c.y, c.z), 0f); H.driver = () => Free(); for (int i = 0; i < 20; i++) Step();
-                    bool onTop = H.OnNubFoot; float y0 = H.BodyY;
-                    var got = H.DiagHoldAt(H.cam.WorldToScreenPoint(s2.At(0.5f)));
-                    bool ok = false; for (int i = 0; i <= 20 && !ok; i++) ok = H.DiagHoldOk(s2.At(i / 20f), s2);
-                    if (!ok) sb.Append($"H3 стою на камне 4п ({(onTop ? "на камне" : "НЕ на камне")}): камень 3п у ног рука не берёт\n");
-                    else
-                    {
-                        float bs = 0f, bd = float.MaxValue; for (int i = 0; i <= 20; i++) { Vector3 P = s2.At(i / 20f); float d = (P - H.ShoulderPos3).magnitude; if (H.DiagHoldOk(P, s2) && d < bd) { bd = d; bs = i / 20f; } }
-                        H.BeginGripHold(s2, bs); H.driver = () => Hold(-10f);
-                        for (int i = 0; i < 100; i++) Step();
-                        H.driver = () => Free(); for (int i = 0; i < 25; i++) Step();
-                        sb.Append($"H3 лестница вниз: стою на 4п ({(onTop ? "да" : "НЕТ")}), курсор на 3п у ног → {(got == s2 ? "берётся" : got ? "берётся ДРУГОЙ: " + got.name : "НЕ берётся")}; «на себя» 2 с и отпустил: тело {y0:F2} → {H.BodyY:F2} (цель ≈ верх 3п {s2.At(0.5f).y:F2}), на камне {(H.OnNubFoot ? "да" : "НЕТ")}\n");
-                    }
+                    sb.Append($"H2 «от себя» у камня выше: отпустил {(rel < 0 ? "НЕТ" : "через " + Sec(rel))} (цель ≤ 0.5 с, отпускание жестом {(H.letGoCount > n0 ? "да" : "нет")}), потом 1 с: тело {y0:F2} → {H.BodyY:F2}\n");
                 }
                 // H4. НАЗАД НА 60° И 45°: стою на камне, держусь за камень выше, «от себя» 2 с — тело отошло или кисть отпустила (не «застыл»)
                 foreach (var lane in new[] { "Склон 1", "Склон 3" })

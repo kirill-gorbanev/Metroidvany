@@ -11,8 +11,6 @@ namespace Fortress.Hero.Proto
     {
         [Tooltip("Насколько урезать отрезок с концов (м мира).")]
         public float inset = 0.03f;
-        [Tooltip("Ступенька: тело может встать на камень (не сползает). Выкл — камень только для руки, как раньше.")]
-        public bool foothold = true;
 
         void Awake() => Fit();
         void OnValidate() => Fit();

@@ -751,7 +751,7 @@ namespace Fortress.EditorTools
         }
 
         /// <summary>Камни на склоне (как Ramp5 без перил): две колонки (x ± 0.3 от середины), шаг по Z.</summary>
-        static void NubsOnRamp(string n, float x0, float x1, float topZ, float top, float ang, float stepZ, bool foothold = true)
+        static void NubsOnRamp(string n, float x0, float x1, float topZ, float top, float ang, float stepZ)
         {
             float rise = top - MAIN, run = rise / Mathf.Tan(ang * Mathf.Deg2Rad), z0 = topZ - run, xc = (x0 + x1) * 0.5f;
             int k = 0;
@@ -759,8 +759,7 @@ namespace Fortress.EditorTools
             {
                 float y = MAIN + rise * (z - z0) / run;
                 foreach (float dx in new[] { -0.3f, 0.3f })
-                    Nub($"{n}: камень {k + 1}{(dx < 0 ? "л" : "п")}", new Vector3(xc + dx, y + 0.03f, z), new Vector3(0.24f, 0.1f, 0.12f), decor)
-                        .GetComponent<ProtoNub>().foothold = foothold;
+                    Nub($"{n}: камень {k + 1}{(dx < 0 ? "л" : "п")}", new Vector3(xc + dx, y + 0.03f, z), new Vector3(0.24f, 0.1f, 0.12f), decor);
             }
         }
 
@@ -804,8 +803,8 @@ namespace Fortress.EditorTools
             {
                 float x0 = X(6), x1 = x0 + Lane;
                 Ramp5("Склон 8 · 60° камни только для руки", x0, x1, StandZ1, Deck, 60f, false, false);
-                NubsOnRamp("Склон 8", x0, x1, StandZ1, Deck, 60f, 0.17f, false);
-                Sign("8 · 60° камни\nвстать нельзя —\nтолько рука, как раньше", new Vector3((x0 + x1) * 0.5f, MAIN, 2.0f));
+                NubsOnRamp("Склон 8", x0, x1, StandZ1, Deck, 60f, 0.17f);
+                Sign("8 · 60° камни\nтолько рука", new Vector3((x0 + x1) * 0.5f, MAIN, 2.0f));
             }
 
             // 4: стена 1.2 (выше кромки) с камнями на южной грани: 0.5 — вис, 0.8 — только с перехватом
@@ -892,7 +891,7 @@ namespace Fortress.EditorTools
         }
 
         /// <summary>Камни на склоне вдоль X (подъём от xLow к xHigh): два ряда z = zc ± 0.3, шаг stepX по горизонтали.</summary>
-        static void NubsOnRampX(string n, float xLow, float xHigh, float zc, float top, float stepX, bool foothold)
+        static void NubsOnRampX(string n, float xLow, float xHigh, float zc, float top, float stepX)
         {
             float rise = top - MAIN, run = Mathf.Abs(xHigh - xLow), dir = Mathf.Sign(xHigh - xLow);
             int k = 0;
@@ -900,8 +899,7 @@ namespace Fortress.EditorTools
             {
                 float x = xLow + dir * s, y = MAIN + rise * s / run;
                 foreach (float dz in new[] { -0.3f, 0.3f })
-                    Nub($"{n}: камень {k + 1}{(dz < 0 ? "ю" : "с")}", new Vector3(x, y + 0.03f, zc + dz), new Vector3(0.12f, 0.1f, 0.24f), decor)
-                        .GetComponent<ProtoNub>().foothold = foothold;
+                    Nub($"{n}: камень {k + 1}{(dz < 0 ? "ю" : "с")}", new Vector3(x, y + 0.03f, zc + dz), new Vector3(0.12f, 0.1f, 0.24f), decor);
             }
         }
 
@@ -926,21 +924,21 @@ namespace Fortress.EditorTools
 
             // ===== РЯД A (на восток) =====
             // 1 · 60° с камнями-ступеньками вверх на настил 1.8 (склон только посередине z 1–3, по бокам — стена настила)
-            Sign("1 · 60° камни\nвстать и тянуться", new Vector3(2.0f, MAIN, 0.5f), 1f, E);
+            Sign("1 · 60° камни\nтолько рука", new Vector3(2.0f, MAIN, 0.5f), 1f, E);
             float x1 = 3f, x1t = x1 + run60;
             WedgeX("Склон 1 · 60° камни", x1, x1t, 1f, 3f, MAIN, UP - MAIN, TunC, surf);
-            NubsOnRampX("Склон 1", x1, x1t, ZA, UP, 0.17f, true);
+            NubsOnRampX("Склон 1", x1, x1t, ZA, UP, 0.17f);
             Box("Настил 1", x1t, 7f, 0f, UP, 0f, AZ1, DeckC, surf);
             // 2 · спуск 60° по камням (встать на камень, взять нижний у ног, «на себя»; или съехать)
-            Sign("2 · спуск по камням\nкамень у ног — «на себя»", new Vector3(5.6f, UP, 0.5f), 1f, E);
+            Sign("2 · спуск по камням\nсъезжай, лови камни рукой", new Vector3(5.6f, UP, 0.5f), 1f, E);
             float x2 = 7f + run60;
             WedgeX("Спуск 2 · 60° камни", x2, 7f, 1f, 3f, MAIN, UP - MAIN, TunC, surf);
-            NubsOnRampX("Спуск 2", x2, 7f, ZA, UP, 0.17f, true);
+            NubsOnRampX("Спуск 2", x2, 7f, ZA, UP, 0.17f);
             // 3 · 45° камни только для руки (встать нельзя) на настил 2
             Sign("3 · 45° камни\nтолько рука", new Vector3(8.8f, MAIN, 0.5f), 1f, E);
             float x3 = 9.6f, x3t = x3 + run45;
             WedgeX("Склон 3 · 45° камни только рука", x3, x3t, 1f, 3f, MAIN, UP - MAIN, TunC, surf);
-            NubsOnRampX("Склон 3", x3, x3t, ZA, UP, 0.25f, false);
+            NubsOnRampX("Склон 3", x3, x3t, ZA, UP, 0.25f);
             Box("Настил 2", x3t, 14f, 0f, UP, 0f, AZ1, DeckC, surf);
             var down = new float[10]; for (int i = 0; i < 10; i++) down[i] = UP - 0.12f * (i + 1);
             for (int i = 0; i < 10; i++) Box("Лестница вниз " + (i + 1), 14f + 0.3f * i, 14.3f + 0.3f * i, 0f, down[i], 0f, AZ1, i % 2 == 0 ? StepA : StepB, surf);

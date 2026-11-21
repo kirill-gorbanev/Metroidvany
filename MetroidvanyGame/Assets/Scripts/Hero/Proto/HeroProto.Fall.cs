@@ -47,7 +47,7 @@ namespace Fortress.Hero.Proto
         {
             if (!HasSurface) return false;
             float h = LevelHeight(q, BodyLevel, maxStep);
-            return !float.IsInfinity(h) && h < groundY - maxDrop - NubRaise;
+            return !float.IsInfinity(h) && h < groundY - maxDrop;
         }
 
         void StartFall(string cause, Vector3 vel, Vector3 clearDir)
@@ -59,7 +59,7 @@ namespace Fortress.Hero.Proto
             fallVel = Vector3.ClampMagnitude(Flat(vel), fallCarryMax);
             fallClearDir = Flat(clearDir); if (fallClearDir.sqrMagnitude > 1e-6f) fallClearDir.Normalize();
             fallClearT = fallClearDir.sqrMagnitude > 0f ? fallClearTime : 0f;
-            footNub = null; onNubFoot = false; nubRaise = 0f; rideMover = null; slideV = 0f; steepTimer = 0f; fallPx = 0f;
+            rideMover = null; slideV = 0f; steepTimer = 0f; fallPx = 0f;
             hand = Flat(Shoulder + Face * 0.35f);                          // кисть сразу перед плечом: не тянется через тело с пола
         }
 

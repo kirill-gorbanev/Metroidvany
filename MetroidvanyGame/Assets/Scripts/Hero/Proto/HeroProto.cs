@@ -541,7 +541,7 @@ namespace Fortress.Hero.Proto
             float h = LevelHeight(p, BodyLevel, maxStep);
             if (float.IsInfinity(h)) return false;
             if (climbLift < -0.01f) return true;                        // докатывается после перевала: кромка за спиной — не обрыв
-            return h >= groundY - maxDrop - NubRaise;                   // стоит на камне — спуск меряется от склона под камнем (Ledge)
+            return h >= groundY - maxDrop;
         }
 
         /// <summary>Кисть может лечь в точку p: не выше своего уровня + handUp и не ниже − handDown.</summary>
@@ -1053,7 +1053,6 @@ namespace Fortress.Hero.Proto
         {
             // Ledge: «от себя» до упора — отпустить; камень ниже плеча — «на себя» спускает к нему. До проверки линии: она бывает короткой на экране.
             if (LetGoPush(-md.y)) { gestureOwner = "отпустить"; return; }
-            if (LadderConvert(-md.y)) { gestureOwner = "лестница"; return; }
             if (BackFallPush(-md.y)) { gestureOwner = "срыв спиной"; return; }
             Vector2 s0 = cam.WorldToScreenPoint(farEnd), s1 = cam.WorldToScreenPoint(nearEnd);
             Vector2 axis = s1 - s0;                         // экранное направление «к кисти» (тело едет так)
@@ -1107,7 +1106,6 @@ namespace Fortress.Hero.Proto
             // уровень тела — поверхность под центром СО СВОЕГО уровня (мост/перекрытие сверху не поднимают; вниз — падает)
             float gWant = LevelHit(Body, BodyLevel, maxStep, out var rm, out var bn);
             if (rm != rideMover) { rideMover = rm; rideStep = rm ? rm.StepId : 0; }   // встал на платформу / сошёл
-            gWant = NubFootLevel(gWant);                                   // камень под телом — ступенька (Ledge)
             // ОПОРА УШЛА (блок Fall): под центром перепад глубже maxDrop, а рука тело не держит — падение
             if (allowFall && !falling && !float.IsInfinity(gWant) && gWant < groundY + climbLift - maxDrop - 0.02f
                 && !(mode == Mode.Grip && !gripSlip && (ClimbGrip || gripHold)))

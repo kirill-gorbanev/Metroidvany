@@ -19,14 +19,14 @@ namespace Fortress.Hero.Proto
     /// Жест при хвате разбирается в том же порядке: «отпустить» → лестница → подъём у кромки → езда + поворот.</summary>
     public partial class HeroProto
     {
-        public enum HeroState { Stand, OnDisc, OnStone, SlopeWindow, Sliding, Flung, GripFloor, OnHold, HandSlipping, LadderDown, Hanging, Falling, Stunned }
+        public enum HeroState { Stand, OnDisc, SlopeWindow, Sliding, Flung, GripFloor, OnHold, HandSlipping, Hanging, Falling, Stunned }
 
         static readonly Dictionary<HeroState, string> stateName = new Dictionary<HeroState, string>
         {
-            { HeroState.Stand, "стоит" }, { HeroState.OnDisc, "на диске" }, { HeroState.OnStone, "стоит на камне" },
+            { HeroState.Stand, "стоит" }, { HeroState.OnDisc, "на диске" },
             { HeroState.SlopeWindow, "окно склона" }, { HeroState.Sliding, "сползает" }, { HeroState.Flung, "слёт с карусели" },
             { HeroState.GripFloor, "хват за пол" }, { HeroState.OnHold, "на зацепе" }, { HeroState.HandSlipping, "кисть съезжает" },
-            { HeroState.LadderDown, "лестница вниз" }, { HeroState.Hanging, "вис" },
+            { HeroState.Hanging, "вис" },
             { HeroState.Falling, "падает" }, { HeroState.Stunned, "оглушён" },
         };
 
@@ -54,7 +54,6 @@ namespace Fortress.Hero.Proto
             if (mode == Mode.Grip)
             {
                 if (Hanging) { why = $"подтянулся на {climbLift:F2} м у {(OnNub ? "камня" : "кромки")}, держишься"; return HeroState.Hanging; }
-                if (LadderDown && onNubFoot) { why = "стоишь на камне, кисть на камне ниже плеча"; return HeroState.LadderDown; }
                 if (GripSlipping) { why = spinSlip ? "кисть на диске срывает" : "кисть на крутом без зацепа"; return HeroState.HandSlipping; }
                 if (OnHold) { why = $"держишься за {(OnNub ? "камень" : "зацеп")} «{gripHold.name}»"; return HeroState.OnHold; }
                 why = onSteep ? "кисть на полу, тело на крутом — держит" : "кисть на полу"; return HeroState.GripFloor;
@@ -64,7 +63,6 @@ namespace Fortress.Hero.Proto
             if (Flung) { why = "сорвался с диска, летишь"; return HeroState.Flung; }
             if (slideV > 0f || spinV > 0f) { why = slideV > 0f ? $"крутой склон без опоры, {slideV:F1} м/с" : "диск уносит"; return HeroState.Sliding; }
             if (onSteep && steepTimer > 0f) { why = $"крутой склон без опоры, {steepTimer * 1000f:F0} из {slideDelay * 1000f:F0} мс"; return HeroState.SlopeWindow; }
-            if (onNubFoot) { why = $"камень «{(footNub ? footNub.name : "?")}» под ногами"; return HeroState.OnStone; }
             if (onSpin) { why = "в зоне уноса карусели"; return HeroState.OnDisc; }
             why = "опора под ногами"; return HeroState.Stand;
         }

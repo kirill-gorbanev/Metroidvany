@@ -93,8 +93,8 @@ namespace Fortress.Hero.Proto
             {
                 // ЛАЗАНИЕ: держишься на крутом, висишь, кисть заметно выше плеча — смотреть вверх, к кисти
                 var st = hero.State;
-                // стоишь на камне-ступеньке, на крутом, висишь, держишься выше плеча (на камнях тело стоит на камне, не на крутом)
-                bool climb = st == HeroProto.HeroState.Hanging || st == HeroProto.HeroState.LadderDown || hero.OnNubFoot || hero.OnSteep
+                // на крутом, висишь, держишься выше плеча
+                bool climb = st == HeroProto.HeroState.Hanging || hero.OnSteep
                              || (hero.Gripping && hero.handCube && hero.handCube.position.y > hero.shoulderCube.position.y + 0.1f);
                 climbK = Mathf.MoveTowards(climbK, climb ? 1f : 0f, dt * 2.5f);
                 Vector3 face = hero.FaceDir;
