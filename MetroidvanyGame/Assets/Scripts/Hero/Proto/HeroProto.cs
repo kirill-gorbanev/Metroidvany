@@ -155,7 +155,11 @@ namespace Fortress.Hero.Proto
             LedgeReset();
             StateReset();
         }
-        Vector3 spawnPos; float spawnYaw;
+        Vector3 spawnPos; float spawnYaw; bool spawnSet;
+        /// <summary>Зоны одной арены (ProtoZones): старт героя в активной зоне.</summary>
+        public void DiagSetSpawn(Vector3 p, float yaw) { spawnPos = p; spawnYaw = yaw; spawnSet = true; }
+        /// <summary>Зоны одной арены: включилась другая зона — заново собрать стены, поверхность, платформы и зацепы (только активные).</summary>
+        public void DiagRecollect() { CollectObstacles(); CollectSurface(); CollectHolds(); rideMover = handMover = null; }
         public Bounds DiagSurfaceBounds { get { var b = new Bounds(Body, Vector3.one); foreach (var s in surfBounds) b.Encapsulate(s); return b; } }
 
         /// <summary>Поверхность под кистью со своего уровня (не выше handUp); внутри сплошного — TooHigh.</summary>
@@ -322,7 +326,7 @@ namespace Fortress.Hero.Proto
             groundY = Height(Body);
             handY = DrawHeight(hand);
             camOffset = cam.transform.position - bodyCube.position;
-            spawnPos = new Vector3(bodyCube.position.x, groundY, bodyCube.position.z); spawnYaw = bodyCube.eulerAngles.y;
+            if (!spawnSet) { spawnPos = new Vector3(bodyCube.position.x, groundY, bodyCube.position.z); spawnYaw = bodyCube.eulerAngles.y; }
             hand = Shoulder + Face * L * 0.6f;                      // кисть — перед лицом, а не по мировой оси
             lnArm = Line("Рука", new Color(1f, 0.85f, 0.55f), 0.025f);
             lnTraj = Line("Траектория (ход тела)", new Color(0.2f, 0.85f, 0.25f), 0.03f);
@@ -396,7 +400,9 @@ namespace Fortress.Hero.Proto
         void CollectMovers()
         {
             movers.Clear();
-            foreach (var pm in FindObjectsOfType<ProtoMover>())
+            var pms = FindObjectsOfType<ProtoMover>();
+            System.Array.Sort(pms, (a, b) => string.CompareOrdinal(a.name, b.name));   // порядок по имени — не по внутренним номерам (пересборка сцены)
+            foreach (var pm in pms)
             {
                 var ms = new MoverSurf { m = pm, rends = pm.GetComponentsInChildren<Renderer>() };
                 Matrix4x4 toLocal = pm.transform.worldToLocalMatrix;
@@ -845,6 +851,7 @@ namespace Fortress.Hero.Proto
         {
             dtNow = dt;
             Carry();
+            PushStep();                                               // подвижная стена толкает тело / зажим (блок Push)
             if (!cam) return;
             InputFrame inp;
             if (driver != null) inp = driver();

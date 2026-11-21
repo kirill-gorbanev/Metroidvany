@@ -41,6 +41,7 @@ namespace Fortress.Hero.Proto
             if (h.Gripping && arm > h.GripReach + 0.03f) Hit("рука длиннее L", $"{arm:F2} > {h.GripReach:F2}");
             if (h.armKeepOut > 0f && h.DiagArmToBody < h.armKeepOut * 0.6f) Hit("рука сквозь тело", $"{h.DiagArmToBody:F2}");
             if (g < -0.01f) Hit("под полом", $"y {g:F2}");
+            if (h.DiagCrushed) Hit("раздавлен", "подвижное прижало к неподвижному");
             if (!first)
             {
                 // ожидаемое место: прошлое, сдвинутое платформой, если тело на ней

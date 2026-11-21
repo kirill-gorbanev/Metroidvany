@@ -17,6 +17,7 @@ namespace Fortress.EditorTools
             H = Object.FindObjectOfType<HeroProto>();
             if (!H) return false;
             Movers = Object.FindObjectsOfType<ProtoMover>();
+            System.Array.Sort(Movers, (a, b) => string.CompareOrdinal(a.name, b.name));
             Cam = Object.FindObjectOfType<ProtoOrbitCamera>();
             W = new ProtoWatch(H);
             HeroProto.ManualTick = true;
@@ -116,6 +117,34 @@ namespace Fortress.EditorTools
             var sb = new StringBuilder($"переходы ({keys.Count}): ");
             foreach (var k in keys) sb.Append(k).Append(" ×").Append(H.DiagTransitions[k]).Append("; ");
             return sb.ToString();
+        }
+
+        /// <summary>ТОЛЧОК (зона 8): тело стоит на пути стены-челнока, рука свободна, 10 с — самый большой сдвиг за шаг
+        /// (рывок выталкивания или ровный толчок), куда унесло, толчков, зажимов.</summary>
+        public static string Push8()
+        {
+            if (!Setup()) return "нет Play / героя";
+            try
+            {
+                ProtoMover sh = null; foreach (var m in Movers) if (m && m.name == "Стена-челнок") sh = m;
+                if (!sh) return "ТОЛЧОК: нет стены-челнока";
+                var sb = new StringBuilder();
+                bool was = H.moverPush;
+                foreach (bool push in new[] { false, true })
+                {
+                    H.moverPush = push;
+                    sh.ResetPhase();
+                    TP(new Vector3(17.6f, 0.6f, 8.05f), 90f);
+                    H.driver = () => Free();
+                    Vector3 start = H.BodyXZ, prev = start; float maxJump = 0f; int p0 = H.pushCount, c0 = H.crushCount;
+                    for (int i = 0; i < 500; i++) { Step(); Vector3 b = H.BodyXZ; maxJump = Mathf.Max(maxJump, (b - prev).magnitude); prev = b; }
+                    sb.Append($"ТОЛЧОК {(push ? "есть" : "нет (как раньше)")} (стена-челнок, тело на пути, рука свободна, 10 с): тело ({start.x:F2}, {start.z:F2}) → ({prev.x:F2}, {prev.z:F2}), ")
+                      .Append($"самый большой сдвиг за шаг {maxJump * 100f:F1} см, толчков {H.pushCount - p0}, зажимов {H.crushCount - c0} | ").Append(W.Report()).Append("\n");
+                }
+                H.moverPush = was;
+                return sb.ToString().TrimEnd();
+            }
+            finally { End(); }
         }
 
         public static void End() { HeroProto.ManualTick = false; if (H) H.driver = null; }

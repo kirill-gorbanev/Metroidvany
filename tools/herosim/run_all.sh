@@ -1,5 +1,5 @@
 #!/bin/bash
-# ОБЩИЙ ПРОГОН ГЕРОЯ: все арены 2–8 (бродяга на 3 зёрнах + замеры каждой арены) и живая проверка на аренах 7 и 8.
+# ОБЩИЙ ПРОГОН ГЕРОЯ: одна арена HeroArena.unity, зоны 2–8 (прежние арены) (бродяга на 3 зёрнах + замеры каждой арены) и живая проверка на аренах 7 и 8.
 # Результат — out/report.txt; сравнение с эталоном baseline.txt — каждое изменённое число (diff.py).
 #   ./run_all.sh            прогон + сравнение
 #   ./run_all.sh accept     прогон + сравнение + новый эталон (после «ок» автора)
@@ -13,18 +13,24 @@ E=$(./wait.sh | tail -1)
 if [ "$E" != "[]" ]; then echo "ОШИБКИ КОМПИЛЯЦИИ: $E"; exit 1; fi
 for n in ${ARENAS:-2 3 4 5 6 7 8}; do
   call "{\"name\":\"manage_editor\",\"arguments\":{\"action\":\"stop\"}}"; sleep 2
-  call "{\"name\":\"manage_scene\",\"arguments\":{\"action\":\"load\",\"path\":\"Assets/Scenes/HeroArena$n.unity\"}}"
+  call '{"name":"manage_scene","arguments":{"action":"load","path":"Assets/Scenes/HeroArena.unity"}}'   # одна арена, зоны 2–8
+  printf 'Fortress.Hero.Proto.ProtoZones.Go(%s);
+return Fortress.EditorTools.HeroSim.ResetWorld();
+' $n > out/probe.cs
   # Play включается не всегда с первого раза — проверка: герой найден и мир сброшен («ok»)
   ok=""
   for try in 1 2 3 4 5; do
     call '{"name":"manage_editor","arguments":{"action":"play"}}'; sleep 5; ./wait.sh >/dev/null
-    T=60 ./ex.sh probe.cs >/dev/null 2>&1        # первый вызов после входа в Play возвращает null
-    if T=60 ./ex.sh probe.cs | grep -q '^ok$'; then ok=1; break; fi
+    T=60 ./ex.sh out/probe.cs >/dev/null 2>&1        # первый вызов после входа в Play возвращает null
+    if T=60 ./ex.sh out/probe.cs | grep -q '^ok$'; then ok=1; break; fi
     sleep 3
   done
   [ -z "$ok" ] && echo "АРЕНА $n: Play не включился" | tee -a $R
   echo "===== АРЕНА $n" >> $R
-  T=900 ./ex.sh a$n.cs | grep -v '^Code executed successfully' >> $R
+  out=$(T=900 ./ex.sh a$n.cs | grep -v '^Code executed successfully')
+  if [ "$out" = "None" ] || [ -z "$out" ]; then out=$(T=900 ./ex.sh a$n.cs | grep -v '^Code executed successfully'); fi   # пустой ответ — ещё раз
+  if [ "$out" = "None" ] || [ -z "$out" ]; then out="ЗАМЕРЫ ЗОНЫ $n НЕ ВЕРНУЛИСЬ"; fi
+  echo "$out" >> $R
   if [ $n = 7 ] || [ $n = 8 ]; then
     T=60 ./ex.sh live_start.cs >/dev/null; sleep 20
     T=60 ./ex.sh live_report.cs | grep -v '^Code executed' | sed 's/^/~ /' >> $R   # «~» — живое, числа плавают, в сравнение не идёт

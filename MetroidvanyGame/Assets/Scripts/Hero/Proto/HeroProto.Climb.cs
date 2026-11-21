@@ -81,7 +81,14 @@ namespace Fortress.Hero.Proto
         float ShoulderY => BodyLevel + shoulderLift;
         Vector3 Shoulder3 { get { Vector3 s = Shoulder; return new Vector3(s.x, ShoulderY, s.z); } }
 
-        void CollectHolds() { holds.Clear(); holds.AddRange(FindObjectsOfType<ProtoHold>()); }
+        void CollectHolds()
+        {
+            holds.Clear(); holds.AddRange(FindObjectsOfType<ProtoHold>());
+            // порядок — по имени и месту, а не по внутренним номерам Unity (они меняются при пересборке сцены): в ничьих хват
+            // и бот выбирают одно и то же — прогоны сравнимы с эталоном и после пересборки арены
+            holds.Sort((a, b) => { int c = string.CompareOrdinal(a.name, b.name); if (c != 0) return c; Vector3 pa = a.transform.position, pb = b.transform.position;
+                c = pa.x.CompareTo(pb.x); if (c != 0) return c; c = pa.z.CompareTo(pb.z); return c != 0 ? c : pa.y.CompareTo(pb.y); });
+        }
 
         void ClimbReset()
         {

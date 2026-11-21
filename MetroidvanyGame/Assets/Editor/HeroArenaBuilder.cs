@@ -34,7 +34,6 @@ namespace Fortress.EditorTools
 
         static Transform walls, surf, decor;
 
-        [MenuItem("Fortress/Hero/Build Arena 2 (ярусы)")]
         public static void Build()
         {
             if (EditorApplication.isPlaying) { Debug.LogWarning("[Hero] арена: выйди из Play"); return; }
@@ -195,7 +194,6 @@ namespace Fortress.EditorTools
         ///   Лифт 0.6 ↔ 1.8 (галерея только через него; с галереи — лестница вниз).
         ///   Поворотный круг вровень с полом, 25 °/с — тело крутится вместе с ним.
         ///   Пропасть 4 м (вниз 0.6 — за порогом): перейти только на челноке; за ней финиш.</summary>
-        [MenuItem("Fortress/Hero/Build Arena 3 (подвижные)")]
         public static void Build3()
         {
             if (EditorApplication.isPlaying) { Debug.LogWarning("[Hero] арена 3: выйди из Play"); return; }
@@ -303,7 +301,6 @@ namespace Fortress.EditorTools
         ///   Юг: три карусели 30 / 60 / 120 °/с — столб по центру и 4 поручня по краю (будущие зацепы).
         ///   Север: уступ 1.8; к нему склоны 30° и 45° (перила с двух сторон), 60° перила справа (сторона руки),
         ///   60° перила слева (через грудь), 60° без перил; лестница — вернуться.</summary>
-        [MenuItem("Fortress/Hero/Build Arena 4 (карусели и склоны)")]
         public static void Build4()
         {
             if (EditorApplication.isPlaying) { Debug.LogWarning("[Hero] арена 4: выйди из Play"); return; }
@@ -432,7 +429,6 @@ namespace Fortress.EditorTools
         ///   Восток — склоны на настил 1.8: 30° как пол, 45° без перил (сползает), 45° и 60° с перилами справа,
         ///   60° с перилами слева (через грудь), 60° без перил (нельзя); лестница — спуститься.
         ///   Дорожки разделены стенками (препятствия), у каждого уступа — угол «стенка + уступ».</summary>
-        [MenuItem("Fortress/Hero/Build Arena 5 (вскарабкивание)")]
         public static void Build5()
         {
             if (EditorApplication.isPlaying) { Debug.LogWarning("[Hero] арена 5: выйди из Play"); return; }
@@ -571,7 +567,6 @@ namespace Fortress.EditorTools
         ///                    крутой спуск 60° без перил (съехать).
         ///   Ряд C (восток):  пропасть с челноком → поворотный круг → лифт на балкон 1.8 → лестница вниз → финиш.
         /// Логика героя не меняется. Меню Fortress → Hero → Build Arena 6 (полоса препятствий).</summary>
-        [MenuItem("Fortress/Hero/Build Arena 6 (полоса препятствий)")]
         public static void Build6()
         {
             if (EditorApplication.isPlaying) { Debug.LogWarning("[Hero] арена 6: выйди из Play"); return; }
@@ -724,7 +719,6 @@ namespace Fortress.EditorTools
         ///   4 · стена 1.2 с камнями — вис (подтянуться), залезть — только с перехватом (блок 3);
         ///   5 · камень и поручень на низкой стене — пол рядом остаётся полом, поручень сильнее;
         ///   6 · камень на челноке — кисть едет с ним, не достаёт — срыв;   7 · карусель 120°/с с камнями и ручками.</summary>
-        [MenuItem("Fortress/Hero/Build Arena 7 (выступы)")]
         public static void Build7()
         {
             if (EditorApplication.isPlaying) { Debug.LogWarning("[Hero] арена 7: выйди из Play"); return; }
@@ -876,7 +870,6 @@ namespace Fortress.EditorTools
         ///   Ряд B (запад):  4 · стена-челнок с камнем — держись, довезёт → 5 · карусель 90°/с с камнями поперёк коридора
         ///                   (по бокам 0.6 — не пройти, только через диск) → 6 · финиш.
         /// Меню Fortress → Hero → Build Arena 8 (полоса: выступы).</summary>
-        [MenuItem("Fortress/Hero/Build Arena 8 (полоса: выступы)")]
         public static void Build8()
         {
             if (EditorApplication.isPlaying) { Debug.LogWarning("[Hero] арена 8: выйди из Play"); return; }
@@ -990,6 +983,60 @@ namespace Fortress.EditorTools
             RenderSettings.ambientLight = new Color(0.45f, 0.45f, 0.47f);
 
             PlaceHero(new Vector3(0.8f, 0f, ZA), 90f);
+        }
+
+        // ================= ОДНА АРЕНА «ВСЁ СРАЗУ» (шаг 4 долга) =================
+        public const string SceneAllPath = "Assets/Scenes/HeroArena.unity";
+
+        /// <summary>Одна сцена со всем, что было на аренах 2–8: каждая прежняя арена — зона на своих прежних координатах,
+        /// активна одна зона за раз (ProtoZones, клавиши 2–8). Прежние координаты — замеры HeroSim и эталон общего прогона
+        /// переносятся без правок. Один герой, один свет; корни «Арена: стены / поверхность / декор» общие, зона — их дети.</summary>
+        [MenuItem("Fortress/Hero/Build Arena (всё сразу)")]
+        public static void BuildAll()
+        {
+            if (EditorApplication.isPlaying) { Debug.LogWarning("[Hero] арена: выйди из Play"); return; }
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var gWalls = new GameObject("Арена: стены").transform;
+            var gSurf = new GameObject("Арена: поверхность").transform;
+            var gDecor = new GameObject("Арена: декор (не опора)").transform;
+            var zones = new System.Collections.Generic.List<ProtoZones.Zone>();
+            GameObject keepRig = null; bool haveSun = false;
+            var list = new (int n, string title, System.Action fill)[]
+            {
+                (2, "ярусы", Fill), (3, "подвижные", Fill3), (4, "карусели и склоны", Fill4), (5, "вскарабкивание", Fill5),
+                (6, "полоса препятствий", Fill6), (7, "выступы", Fill7), (8, "полоса: выступы", Fill8),
+            };
+            const int StartZone = 8;
+            foreach (var (n, title, fill) in list)
+            {
+                var before = new System.Collections.Generic.HashSet<GameObject>(scene.GetRootGameObjects());
+                fill();
+                var z = new ProtoZones.Zone { number = n, title = title, walls = walls.gameObject, surface = surf.gameObject, decor = decor.gameObject };
+                foreach (var g in scene.GetRootGameObjects())
+                {
+                    if (before.Contains(g) || g == walls.gameObject || g == surf.gameObject || g == decor.gameObject) continue;
+                    var hp = g.GetComponentInChildren<HeroProto>(true);
+                    if (hp)
+                    {
+                        z.spawn = new Vector3(hp.bodyCube.position.x, 0f, hp.bodyCube.position.z); z.spawnYaw = hp.bodyCube.eulerAngles.y;
+                        if (n == StartZone) keepRig = g; else Object.DestroyImmediate(g);
+                        continue;
+                    }
+                    if (g.GetComponent<Light>()) { if (haveSun) Object.DestroyImmediate(g); else haveSun = true; continue; }
+                    g.transform.SetParent(decor, true);                       // прочее (если есть) — в декор зоны
+                }
+                walls.name = surf.name = decor.name = $"Зона {n} · {title}";
+                walls.SetParent(gWalls, true); surf.SetParent(gSurf, true); decor.SetParent(gDecor, true);
+                zones.Add(z);
+            }
+            var proto = keepRig.GetComponentInChildren<HeroProto>(true);
+            proto.obstaclesRoot = gWalls; proto.surfaceRoot = gSurf;
+            var zo = new GameObject("Зоны (клавиши 2–8)").AddComponent<ProtoZones>();
+            zo.zones = zones.ToArray(); zo.startZone = StartZone; zo.hero = proto;
+            zo.cam = keepRig.GetComponentInChildren<ProtoOrbitCamera>(true);
+            foreach (var z in zones) { bool on = z.number == StartZone; z.walls.SetActive(on); z.surface.SetActive(on); z.decor.SetActive(on); }
+            EditorSceneManager.SaveScene(scene, SceneAllPath);
+            Debug.Log("[Hero] арена «всё сразу»: " + SceneAllPath);
         }
 
         /// <summary>Герой — тот же префаб прототипа (герой + камера), на старте лицом на север, камера за спиной.</summary>
