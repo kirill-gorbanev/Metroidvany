@@ -1126,20 +1126,31 @@ namespace Fortress.Hero.Proto
             if (!float.IsInfinity(hl)) handY = Mathf.MoveTowards(handY, Mathf.Lerp(handY, hl, 1f - Mathf.Exp(-handFollow * dtNow)), 5f * dtNow);   // не быстрее 5 м/с
             float sy = groundY + climbLift + shoulderLift, hy = handY + handLift;
             shoulderCube.position = new Vector3(S.x, sy, S.z);
-            handCube.position = new Vector3(hand.x, hy, hand.z);
-            // локоть: два звена, сгиб наружу (вправо от направления плечо→кисть)
-            Vector3 v = hand - S; float d = Mathf.Clamp(v.magnitude, 1e-4f, L * 0.999f);
-            Vector3 dn = v.sqrMagnitude > 1e-8f ? v.normalized : Vector3.forward;
-            Vector3 outw = Vector3.Cross(Vector3.up, dn);
+            // ЛОКОТЬ — два звена в 3D, ДЛИНЫ ЗВЕНЬЕВ СОХРАНЯЮТСЯ (автор 2026-11-21: «рука научилась растягиваться» — при быстром
+            // движении снизу вверх локоть считался по полу, а высота — отдельно: звенья тянулись раньше, чем локоть успевал вывернуться).
+            // Теперь как при медленном движении: локоть всегда там, где сходятся плечо (upperArm) и кисть (foreArm).
+            // Сгиб — наружу (вправо); локоть ушёл бы в поверхность — плоскость сгиба поворачивается вокруг оси плечо → кисть к «вверх».
+            Vector3 S3 = new Vector3(S.x, sy, S.z), H3 = new Vector3(hand.x, hy, hand.z);
+            Vector3 v = H3 - S3;
+            Vector3 dn = v.sqrMagnitude > 1e-8f ? v.normalized : Face;
+            // кисть по высоте ещё догоняет (не быстрее 5 м/с), а рука уже прямая — рисунок кисти на длине руки, звенья не тянутся
+            if (v.magnitude > L * 0.999f) { H3 = S3 + dn * (L * 0.999f); }
+            handCube.position = H3;
+            float d = Mathf.Clamp((H3 - S3).magnitude, 1e-4f, L * 0.999f);
             float a = upperArm, b = foreArm;
-            float cosA = Mathf.Clamp((a * a + d * d - b * b) / (2f * a * d), -1f, 1f);
-            float A = Mathf.Acos(cosA);
-            Vector3 E = S + (dn * Mathf.Cos(A) + outw * Mathf.Sin(A)) * a;
-            // локоть: опирается только на поверхность своего уровня (до порога); над уступом выше порога — висит между плечом и кистью
-            float el = LevelHeight(E, BodyLevel, maxStep), mid = Mathf.Lerp(sy, hy, 0.5f) - 0.05f;
-            float ey = float.IsInfinity(el) ? mid : Mathf.Max(el + elbowLift, mid);
-            ey = ElbowAboveSurface(S, sy, E, ey, hand, hy);                  // рука не сквозь склон (шаг 5, часть 3)
-            elbowCube.position = new Vector3(E.x, ey, E.z);
+            float A = Mathf.Acos(Mathf.Clamp((a * a + d * d - b * b) / (2f * a * d), -1f, 1f));
+            Vector3 outw = Vector3.Cross(Vector3.up, dn);
+            if (outw.sqrMagnitude < 1e-6f) outw = SideDir;
+            outw = Vector3.ProjectOnPlane(outw, dn).normalized;
+            Vector3 upw = Vector3.Cross(dn, outw); if (upw.y < 0f) upw = -upw;
+            float lo = Mathf.Min(sy, hy) - 0.3f, up = Mathf.Max(sy, hy) - lo + 0.05f;
+            Vector3 E = S3 + (dn * Mathf.Cos(A) + outw * Mathf.Sin(A)) * a;
+            for (int k = 1; k <= 9 && ElbowUnder(E, lo, up); k++)
+            {
+                float ang = k * 10f * Mathf.Deg2Rad;
+                E = S3 + (dn * Mathf.Cos(A) + (outw * Mathf.Cos(ang) + upw * Mathf.Sin(ang)) * Mathf.Sin(A)) * a;
+            }
+            elbowCube.position = E;
         }
 
         [Tooltip("Рука (плечо → локоть → кисть) не проходит сквозь поверхность: локоть поднимается так, чтобы оба звена шли над ней с таким зазором (м).")]
@@ -1158,27 +1169,13 @@ namespace Fortress.Hero.Proto
             return min;
         }
 
-        /// <summary>РУКА НЕ СКВОЗЬ СКЛОН (автор: «руки пролезли»). Плечо внизу склона, кисть наверху — прямые звенья резали склон.
-        /// Локоть поднимается ровно настолько, чтобы оба звена шли над поверхностью между высотами плеча и кисти (крыша тоннеля
-        /// над рукой не в счёт — только то, что между ними). Только рисунок: досягаемость и хват по-прежнему считаются по точкам.</summary>
-        float ElbowAboveSurface(Vector3 S, float sy, Vector3 E, float ey, Vector3 H, float hy)
+        /// <summary>Локоть ниже поверхности под собой (между высотами плеча и кисти; крыша тоннеля над рукой не в счёт)?
+        /// Тогда плоскость сгиба поворачивается к «вверх» (длины звеньев не меняются). Только рисунок.</summary>
+        bool ElbowUnder(Vector3 E, float lo, float up)
         {
-            if (!HasSurface) return ey;
-            float lo = Mathf.Min(sy, hy, ey) - 0.3f, up = Mathf.Max(sy, hy, ey) - lo + 0.05f;
-            float need = ey;
-            for (int k = 1; k <= 8; k++)
-            {
-                float f = k / 9f;
-                // плечо → локоть: y = sy + (ey − sy)·f ≥ h + зазор
-                Vector3 p1 = Vector3.Lerp(S, E, f); p1.y = 0f;
-                float h1 = LevelHeight(p1, lo, up);
-                if (!float.IsInfinity(h1)) need = Mathf.Max(need, sy + (h1 + armClearance - sy) / f);
-                // локоть → кисть: y = ey + (hy − ey)·f ≥ h + зазор
-                Vector3 p2 = Vector3.Lerp(E, H, f); p2.y = 0f;
-                float h2 = LevelHeight(p2, lo, up);
-                if (!float.IsInfinity(h2) && f < 0.95f) need = Mathf.Max(need, (h2 + armClearance - hy * f) / (1f - f));
-            }
-            return Mathf.Min(need, Mathf.Max(sy, hy) + L * 0.5f);         // не выше разумного (рука длиной L)
+            if (!HasSurface) return false;
+            float h = LevelHeight(new Vector3(E.x, 0f, E.z), lo, up);
+            return !float.IsInfinity(h) && E.y < h + armClearance;
         }
 
         // ---------------- рисование ----------------
