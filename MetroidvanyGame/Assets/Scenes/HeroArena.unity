@@ -24,7 +24,7 @@ RenderSettings:
   m_AmbientEquatorColor: {r: 0.114, g: 0.125, b: 0.133, a: 1}
   m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
   m_AmbientIntensity: 1
-  m_AmbientMode: 3
+  m_AmbientMode: 0
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
   m_SkyboxMaterial: {fileID: 0}
   m_HaloStrength: 0.5
@@ -3312,7 +3312,7 @@ Transform:
   m_GameObject: {fileID: 44914663}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 7.10282, y: 1.6519103, z: 2.35}
+  m_LocalPosition: {x: 7.202, y: 1.439, z: 2.35}
   m_LocalScale: {x: 0.12, y: 0.1, z: 0.24}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -5708,7 +5708,7 @@ Transform:
   m_GameObject: {fileID: 73934438}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 7.44282, y: 1.0630128, z: 1.65}
+  m_LocalPosition: {x: 7.497, y: 0.991, z: 1.65}
   m_LocalScale: {x: 0.12, y: 0.1, z: 0.24}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -45767,7 +45767,7 @@ Transform:
   m_GameObject: {fileID: 519566585}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 7.44282, y: 1.0630128, z: 2.35}
+  m_LocalPosition: {x: 7.497, y: 0.991, z: 2.35}
   m_LocalScale: {x: 0.12, y: 0.1, z: 0.24}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -55873,7 +55873,7 @@ Transform:
   m_GameObject: {fileID: 633891377}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 7.27282, y: 1.3574616, z: 1.65}
+  m_LocalPosition: {x: 7.335, y: 1.199, z: 1.65}
   m_LocalScale: {x: 0.12, y: 0.1, z: 0.24}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -74682,6 +74682,112 @@ Material:
     - _UVMappingMaskEmissive: {r: 1, g: 0, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
+--- !u!1 &829346970
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 829346971}
+  - component: {fileID: 829346974}
+  - component: {fileID: 829346973}
+  - component: {fileID: 829346972}
+  m_Layer: 0
+  m_Name: "\u0421\u043F\u0443\u0441\u043A 2: \u043A\u0430\u043C\u0435\u043D\u044C 4\u0441 (1)"
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &829346971
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 829346970}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 7.1080003, y: 1.6345514, z: 2.35}
+  m_LocalScale: {x: 0.12, y: 0.1, z: 0.24}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1706748107}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &829346972
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 829346970}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 145970bd78d4dcd4f8e2fdba2ba9c87c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Fortress.Hero.Proto.ProtoNub
+  a: {x: 0, y: 0.5, z: -0.375}
+  b: {x: 0, y: 0.5, z: 0.375}
+  inset: 0.03
+--- !u!23 &829346973
+MeshRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 829346970}
+  m_Enabled: 1
+  m_CastShadows: 1
+  m_ReceiveShadows: 1
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 2
+  m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 874065857}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 1
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_MaskInteraction: 0
+  m_AdditionalVertexStreams: {fileID: 0}
+--- !u!33 &829346974
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 829346970}
+  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!1 &829539157
 GameObject:
   m_ObjectHideFlags: 0
@@ -118959,7 +119065,7 @@ Transform:
   m_GameObject: {fileID: 1313709319}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 7.10282, y: 1.6519103, z: 1.65}
+  m_LocalPosition: {x: 7.202, y: 1.439, z: 1.65}
   m_LocalScale: {x: 0.12, y: 0.1, z: 0.24}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -157529,7 +157635,9 @@ Transform:
   - {fileID: 633891378}
   - {fileID: 2052400599}
   - {fileID: 1313709320}
+  - {fileID: 1760785804}
   - {fileID: 44914664}
+  - {fileID: 829346971}
   - {fileID: 587192358}
   - {fileID: 663892490}
   - {fileID: 452211101}
@@ -161439,6 +161547,112 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1757260866}
+  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &1760785803
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1760785804}
+  - component: {fileID: 1760785807}
+  - component: {fileID: 1760785806}
+  - component: {fileID: 1760785805}
+  m_Layer: 0
+  m_Name: "\u0421\u043F\u0443\u0441\u043A 2: \u043A\u0430\u043C\u0435\u043D\u044C 4\u044E (1)"
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1760785804
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1760785803}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 7.1080003, y: 1.6345514, z: 1.65}
+  m_LocalScale: {x: 0.12, y: 0.1, z: 0.24}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1706748107}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1760785805
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1760785803}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 145970bd78d4dcd4f8e2fdba2ba9c87c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Fortress.Hero.Proto.ProtoNub
+  a: {x: 0, y: 0.5, z: -0.375}
+  b: {x: 0, y: 0.5, z: 0.375}
+  inset: 0.03
+--- !u!23 &1760785806
+MeshRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1760785803}
+  m_Enabled: 1
+  m_CastShadows: 1
+  m_ReceiveShadows: 1
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 2
+  m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 305093147}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 1
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_MaskInteraction: 0
+  m_AdditionalVertexStreams: {fileID: 0}
+--- !u!33 &1760785807
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1760785803}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!21 &1762022488
 Material:
@@ -191082,7 +191296,7 @@ Transform:
   m_GameObject: {fileID: 2052400598}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 7.27282, y: 1.3574616, z: 2.35}
+  m_LocalPosition: {x: 7.335, y: 1.199, z: 2.35}
   m_LocalScale: {x: 0.12, y: 0.1, z: 0.24}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -200494,7 +200708,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Fortress.Hero.Proto.HeroProto
   boxBody: 1
   boxProbe: 1
-  stonesSolid: 1
   steepAngle: 35
   steepExit: 32
   slideDelay: 0.2
@@ -200509,7 +200722,6 @@ MonoBehaviour:
   climbPerPx: 0.0012
   mantleSpeed: 0.8
   fallBack: 10
-  regrabWindow: 0.5
   allowFall: 1
   fallPushPx: 60
   fallClearDist: 0.3
@@ -200534,7 +200746,7 @@ MonoBehaviour:
   letGoPause: 0.5
   nubHangMin: 0.05
   nubHangKeep: 0.1
-  nubClimbPerPx: 0.0024
+  nubClimbRate: 0.0012
   moverPush: 1
   spinGrip: 1.5
   spinExitK: 0.9
