@@ -171,12 +171,14 @@ namespace Fortress.Hero.Proto
             // ПЛАВНО (автор 2026-11-21: «рывками»): раньше ход за шаг пробовался целиком — не влез, предмет стоял весь шаг,
             // потом прыгал. Теперь ход идёт кусками по 1 см до упора; упёрся — остаток вдоль стены (по осям).
             Vector3 next = cur; float g = dragItemY;
+            itemFrom = cur;
             if (!ItemFits(cur, b, it, dragItemY, out g)) g = dragItemY;      // уже стоит плохо (не должно) — высоту не трогать
             Vector3 move = want - cur;
             int n = Mathf.Clamp(Mathf.CeilToInt(move.magnitude / 0.015f), 1, 20);
             Vector3 stepV = move / n;
             for (int k = 0; k < n; k++)
             {
+                itemFrom = next;
                 Vector3 c = next + stepV;
                 if (ItemFits(c, b, it, dragItemY, out float gc)) { next = c; g = gc; continue; }
                 Vector3 cx = next + new Vector3(stepV.x, 0f, 0f), cz = next + new Vector3(0f, 0f, stepV.z);
@@ -194,6 +196,9 @@ namespace Fortress.Hero.Proto
             it.SetLook(false, true);
             hand = next - dragOff;                                          // кисть — всегда на предмете (предмет мог отстать от курсора)
         }
+
+        Vector3 itemFrom;                    // откуда пробуется ход (ItemFits: в зазоре у тела — только не ближе к телу)
+        static float RectDist(Vector3 p, Rect r) { float dx = p.x - Mathf.Clamp(p.x, r.xMin, r.xMax), dz = p.z - Mathf.Clamp(p.z, r.yMin, r.yMax); return Mathf.Sqrt(dx * dx + dz * dz); }
 
         static Rect FootRect(Vector3 c, Vector3 e) => Rect.MinMaxRect(c.x - e.x, c.z - e.z, c.x + e.x, c.z + e.z);
         static Rect FootRect(Bounds b) => Rect.MinMaxRect(b.min.x, b.min.z, b.max.x, b.max.z);
@@ -213,7 +218,15 @@ namespace Fortress.Hero.Proto
             // стены и тело — по следу всей стопки (верхний, свесившийся за край, тоже не входит)
             Rect rs = self == dragItem && riders.Count > 0 ? Rect.MinMaxRect(c.x + stackMin.x, c.z + stackMin.y, c.x + stackMax.x, c.z + stackMax.y) : r;
             foreach (var o in obstacles) if (rs.Overlaps(o)) return false;
-            if (BoxHitsRect(Body, rs, -itemBodyGap)) return false;                // в кубик тела (с зазором)
+            // ТЕЛО: наложение — никогда; в зазоре itemBodyGap — только не ближе, чем было (автор 2026-11-22: «стою плотно — не могу
+            // перетаскивать, приходится отдаляться»: тело встаёт к предмету вплотную, а зазор запрещал любой ход, даже от тела)
+            if (BoxHitsRect(Body, rs, 0.001f)) return false;
+            if (BoxHitsRect(Body, rs, -itemBodyGap))
+            {
+                Vector3 f = itemFrom - c;
+                Rect from = Rect.MinMaxRect(rs.xMin + f.x, rs.yMin + f.z, rs.xMax + f.x, rs.yMax + f.z);
+                if (RectDist(Body, rs) < RectDist(Body, from) - 1e-4f) return false;
+            }
             // ДРУГОЙ ПРЕДМЕТ под следом (укладка, автор 2026-11-21: «положить один объект на второй и т. д.»): его верх — опора,
             // если рука поднимет туда (не выше низа + itemLift и не выше своего уровня + handUp); выше — стена, как раньше
             float stackTop = float.NegativeInfinity;

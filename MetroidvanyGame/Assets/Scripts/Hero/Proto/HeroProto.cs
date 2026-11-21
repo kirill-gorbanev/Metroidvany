@@ -609,6 +609,20 @@ namespace Fortress.Hero.Proto
                     Vector3 n = m > 1e-5f ? d / m : new Vector3(c.x - o.center.x, 0f, c.z - o.center.y).normalized;
                     rep += n * Mathf.Clamp01((reach - m) / avoidMargin);
                 }
+                // ЛЕЖАЩИЕ ПРЕДМЕТЫ — тоже отталкивают тело (автор 2026-11-22: «застреваю в items, спотыкаюсь — для углов было
+                // автопроскальзывание, сюда тоже надо»). Только тело: плечо над предметом проходит.
+                if (withStones)
+                    foreach (var it in ProtoItem.Live)
+                    {
+                        if (!it || it.held) continue;
+                        Bounds ib = it.WorldBounds;
+                        float cx = Mathf.Clamp(c.x, ib.min.x, ib.max.x), cz = Mathf.Clamp(c.z, ib.min.z, ib.max.z);
+                        Vector3 d = new Vector3(c.x - cx, 0f, c.z - cz);
+                        float m = d.magnitude, reach = rad + avoidMargin;
+                        if (m >= reach) continue;
+                        Vector3 n = m > 1e-5f ? d / m : new Vector3(c.x - ib.center.x, 0f, c.z - ib.center.z).normalized;
+                        rep += n * Mathf.Clamp01((reach - m) / avoidMargin);
+                    }
             }
             FromRects(p, boxBody ? BodyHalf.x : bodyRadius, true);
             if (shoulderSide != 0f) FromRects(p + SideOff, ShoulderR, false);   // плечу камни не мешают (зацеп)
