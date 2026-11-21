@@ -293,16 +293,28 @@ namespace Fortress.Hero.Proto
             // ВВЕРХ ПО СКЛОНУ (а не прямо в камень): камни сбоку твёрдые — тело идёт между колонками и скользит вдоль камней (Slide)
             Vector3 upDir = -Flat(nAhead); if (upDir.sqrMagnitude < 1e-4f) upDir = to; upDir.Normalize();
             if (Vector3.Dot(upDir, to) < 0f) return;                      // камень ниже по склону — тянуть вверх незачем
-            Vector3 np = Slide(Body, upDir * Mathf.Min(run, dist));
-            if ((np - Body).sqrMagnitude < 1e-8f) return;                 // упёрлось (камень, стена, уступ)
-            float h = LevelHeight(np, BodyLevel, maxStep);
-            if (float.IsInfinity(h)) return;
-            if (P.y - h < nubHangKeep) return;                            // камень уже у пояса
-            Vector3 S3n = Flat(np) + SideOff; S3n.y = h + shoulderLift;
-            if ((P - S3n).magnitude < dMin) return;                       // рука согнута до упора
-            if (!ZoneAllows(np, 0f)) return;                              // край зоны руки
-            bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
-            float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0);
+            // ОБХОД КАМНЯ (автор 2026-11-21: «не могу подняться наверх» — тело под колонкой, камень прямо впереди, стенка поперёк хода,
+            // скольжению некуда): прямо вверх упёрлось — пробуем под 30° и 60°, сначала в сторону кисти, потом в другую;
+            // берём первый ход, который поднимает тело (уходит из-за камня в щель между колонками)
+            float sideSign = Mathf.Sign(Vector3.Dot(Vector3.Cross(Vector3.up, upDir), to)); if (sideSign == 0f) sideSign = 1f;
+            float step = Mathf.Min(run, dist);
+            float[] tries = { 0f, 30f * sideSign, -30f * sideSign, 60f * sideSign, -60f * sideSign };
+            foreach (float tr in tries)
+            {
+                Vector3 dir = Quaternion.AngleAxis(tr, Vector3.up) * upDir;    // + — вправо от хода вверх (как sideSign)
+                Vector3 np = Slide(Body, dir * step);
+                if ((np - Body).sqrMagnitude < 1e-8f) continue;           // упёрлось (камень, стена, уступ) — другой угол
+                float h = LevelHeight(np, BodyLevel, maxStep);
+                if (float.IsInfinity(h)) continue;
+                if (tr != 0f && h < groundY - 0.002f) continue;           // обход не вниз
+                if (P.y - h < nubHangKeep) return;                        // камень уже у пояса
+                Vector3 S3n = Flat(np) + SideOff; S3n.y = h + shoulderLift;
+                if ((P - S3n).magnitude < dMin) return;                   // рука согнута до упора
+                if (!ZoneAllows(np, 0f)) continue;                        // край зоны руки — другой угол
+                bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
+                float d1 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d1);
+                return;
+            }
         }
 
         /// <summary>Жест у кромки (в пикселях вдоль): «на себя» — поднять тело, «от себя» — опустить. true — жест ушёл в подъём.</summary>
