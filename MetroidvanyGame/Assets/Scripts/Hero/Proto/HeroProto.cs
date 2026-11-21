@@ -153,6 +153,7 @@ namespace Fortress.Hero.Proto
             DiagTeleport(spawnPos, spawnYaw);
             t = tTarget = 0f; lastGestureAlong = lastGestureSide = Vector2.zero; mouseAcc = default; mouseHave = false; driver = null;
             LedgeReset();
+            StateReset();
         }
         Vector3 spawnPos; float spawnYaw;
         public Bounds DiagSurfaceBounds { get { var b = new Bounds(Body, Vector3.one); foreach (var s in surfBounds) b.Encapsulate(s); return b; } }
@@ -960,6 +961,8 @@ namespace Fortress.Hero.Proto
             SpinStep(dt);                                             // карусель: центробежная зона, слёт
             ClimbDecay(dt);                                           // отпустил кромку до перевала — назад вниз
             Place();
+            if (mode == Mode.Free) gestureOwner = "";
+            StateStep(dt);                                            // состояния: выбрать, записать переход (блок State)
             ClimbVisuals(dt);
             Draw();
         }
@@ -1006,7 +1009,8 @@ namespace Fortress.Hero.Proto
         public void Gesture(Vector2 md)
         {
             // Ledge: «от себя» до упора — отпустить; камень ниже плеча — «на себя» спускает к нему. До проверки линии: она бывает короткой на экране.
-            if (LetGoPush(-md.y) || LadderConvert(-md.y)) return;
+            if (LetGoPush(-md.y)) { gestureOwner = "отпустить"; return; }
+            if (LadderConvert(-md.y)) { gestureOwner = "лестница"; return; }
             Vector2 s0 = cam.WorldToScreenPoint(farEnd), s1 = cam.WorldToScreenPoint(nearEnd);
             Vector2 axis = s1 - s0;                         // экранное направление «к кисти» (тело едет так)
             float axisLen = axis.magnitude;
@@ -1031,7 +1035,11 @@ namespace Fortress.Hero.Proto
             lastSpeedK = k;
             // ВСКАРАБКИВАНИЕ: у кромки, за которую держишься, жест «на себя» поднимает тело (а не двигает)
             if (!ClimbConvert(along))
+            {
                 tTarget = Mathf.Clamp01(tTarget + along * k / axisLen);
+                if (along != 0f || md.x != 0f) gestureOwner = "езда";
+            }
+            else gestureOwner = "подъём";
             lastGestureAlong = -a * along * k; lastGestureSide = side;
 
             // ПОВОРОТ НА МЕСТЕ («лопасти вертолёта»): боковой жест поворачивает тело на месте, кисть стоит на полу —

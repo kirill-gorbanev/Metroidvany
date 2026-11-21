@@ -109,6 +109,15 @@ namespace Fortress.EditorTools
             return sb.ToString();
         }
 
+        /// <summary>Переходы состояний, которые бот прошёл (блок State): таблица стыков, заполненная ботом.</summary>
+        public static string Transitions()
+        {
+            var keys = new System.Collections.Generic.List<string>(H.DiagTransitions.Keys); keys.Sort(System.StringComparer.Ordinal);
+            var sb = new StringBuilder($"переходы ({keys.Count}): ");
+            foreach (var k in keys) sb.Append(k).Append(" ×").Append(H.DiagTransitions[k]).Append("; ");
+            return sb.ToString();
+        }
+
         public static void End() { HeroProto.ManualTick = false; if (H) H.driver = null; }
 
         public static void Step()
@@ -137,7 +146,7 @@ namespace Fortress.EditorTools
                 H.driver = bot.Frame;
                 int n = Mathf.RoundToInt(seconds / Dt);
                 for (int i = 0; i < n && !bot.trapped; i++) Step();
-                return $"[бродяга seed {seed}, {seconds:F0} с] " + bot.Report() + "\n  " + W.Report();
+                return $"[бродяга seed {seed}, {seconds:F0} с] " + bot.Report() + "\n  " + W.Report() + "\n  " + Transitions();
             }
             finally { End(); }
         }
