@@ -253,11 +253,11 @@ namespace Fortress.Hero.Proto
             {
                 float sc = Mathf.Min(s, len);
                 Vector3 q = S + dir * sc;
-                if (InObstacle(q, HandGap) || !HandOk(q) || ArmThroughBody(q))
+                if (InObstacle(q, HandGap) || !HandOk(q) || ArmThroughBody(q) || ArmDownCutsSurface(q))
                 {
-                    // уточнить кромку между ok и sc (стена, уступ или своё тело)
+                    // уточнить кромку между ok и sc (стена, уступ, своё тело или край, через который вниз не дотянуться)
                     float lo = ok, hi = sc;
-                    for (int i = 0; i < 6; i++) { float mid = (lo + hi) * 0.5f; Vector3 m = S + dir * mid; if (InObstacle(m, HandGap) || !HandOk(m) || ArmThroughBody(m)) hi = mid; else lo = mid; }
+                    for (int i = 0; i < 6; i++) { float mid = (lo + hi) * 0.5f; Vector3 m = S + dir * mid; if (InObstacle(m, HandGap) || !HandOk(m) || ArmThroughBody(m) || ArmDownCutsSurface(m)) hi = mid; else lo = mid; }
                     ok = lo; break;
                 }
                 ok = sc;
@@ -1154,7 +1154,7 @@ namespace Fortress.Hero.Proto
             Vector3 upw = Vector3.Cross(dn, outw); if (upw.y < 0f) upw = -upw;
             float lo = Mathf.Min(sy, hy) - 0.3f, up = Mathf.Max(sy, hy) - lo + 0.05f;
             Vector3 E = S3 + (dn * Mathf.Cos(A) + outw * Mathf.Sin(A)) * a;
-            for (int k = 1; k <= 9 && ElbowUnder(E, lo, up); k++)
+            for (int k = 1; k <= 9 && (ElbowUnder(E, lo, up) || SegCutsSurface(S3, E, false) || SegCutsSurface(E, H3, false)); k++)
             {
                 float ang = k * 10f * Mathf.Deg2Rad;
                 E = S3 + (dn * Mathf.Cos(A) + (outw * Mathf.Cos(ang) + upw * Mathf.Sin(ang)) * Mathf.Sin(A)) * a;
@@ -1176,6 +1176,30 @@ namespace Fortress.Hero.Proto
                 if (!float.IsInfinity(h)) min = Mathf.Min(min, p.y - h);
             }
             return min;
+        }
+
+        /// <summary>ЛИМИТ УЧИТЫВАЕТ ПОВЕРХНОСТЬ (автор 2026-11-21: «лимит не учитывает поверхность» — кисть со склона дотягивалась
+        /// вниз через его край на пол, рука шла сквозь склон). Кисть НИЖЕ плеча: прямая плечо → кисть не может пройти под поверхностью.
+        /// Кисть выше плеча (кромка, камень) — можно: там рука перегибается через край. q — точка кисти по полу; высота — поверхность под ней.</summary>
+        bool ArmDownCutsSurface(Vector3 q)
+        {
+            float h = HandLevel(q);
+            return !float.IsInfinity(h) && SegCutsSurface(Shoulder3, new Vector3(q.x, h + handLift, q.z), true);
+        }
+
+        /// <summary>Отрезок a → b проходит под поверхностью (между их высотами; крыша над ними не в счёт)?
+        /// onlyDown — только если b ниже a (тянешься вниз).</summary>
+        bool SegCutsSurface(Vector3 a, Vector3 b, bool onlyDown)
+        {
+            if (!HasSurface || (onlyDown && b.y >= a.y)) return false;
+            float lo = Mathf.Min(a.y, b.y) - 0.3f, up = Mathf.Max(a.y, b.y) - lo + 0.05f;
+            for (int k = 1; k <= 8; k++)
+            {
+                Vector3 p = Vector3.Lerp(a, b, k / 9f);
+                float h = LevelHeight(new Vector3(p.x, 0f, p.z), lo, up);
+                if (!float.IsInfinity(h) && h > p.y + 0.02f) return true;
+            }
+            return false;
         }
 
         /// <summary>Локоть ниже поверхности под собой (между высотами плеча и кисти; крыша тоннеля над рукой не в счёт)?
