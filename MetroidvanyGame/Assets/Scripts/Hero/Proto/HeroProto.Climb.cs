@@ -216,12 +216,25 @@ namespace Fortress.Hero.Proto
         }
 
         // ---------------- крутой склон без опоры — сползание ----------------
+        /// <summary>ОКНО ПЕРЕХВАТА (автор 2026-11-21: «хотел ухватиться за 4 — не успеваю»). Отпустил ЛКМ, держась за камень / поручень
+        /// на крутом, — тело ещё regrabWindow секунд не сползает: время довести курсор до следующего камня и кликнуть. Потом — обычное
+        /// окно склона и сползание. Не действует: «отпустить» жестом (цель — съехать), срыв, съезжающая кисть.</summary>
+        [Tooltip("Окно перехвата (с): отпустил камень / поручень на крутом — тело столько держится, потом сползает.")]
+        public float regrabWindow = 0.5f;
+        float regrabT;
+
         void SlopeStep(float dt)
         {
             float a = Vector3.Angle(bodyNormal, Vector3.up);
             if (!onSteep && a > steepAngle) onSteep = true;
             else if (onSteep && a < steepExit) onSteep = false;
             bool held = mode == Mode.Grip && !gripSlip;
+            if (regrabT > 0f)                                             // окно перехвата: тело держится, пока не взялся снова или не вышло время
+            {
+                regrabT -= dt;
+                if (held || !onSteep) regrabT = 0f;
+                else { steepTimer = 0f; slideV = 0f; return; }
+            }
             if (onSteep && !held && !Hanging)
             {
                 steepTimer += dt;
