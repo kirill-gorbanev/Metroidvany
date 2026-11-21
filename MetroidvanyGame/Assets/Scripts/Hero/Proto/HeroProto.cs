@@ -1049,6 +1049,12 @@ namespace Fortress.Hero.Proto
             if (a.sqrMagnitude > 1f) Gesture(-a.normalized * px);
         }
 
+        [Tooltip("Задний ход как в автомате: тело едет спиной — поворот мышью переворачивается (мышь вправо — ход уходит вправо).")]
+        public bool reverseSteer = true;
+        bool reverseGear;
+        /// <summary>Сейчас задний ход и руль перевёрнут.</summary>
+        public bool ReverseSteering => reverseSteer && reverseGear && mode == Mode.Grip;
+
         public void Gesture(Vector2 md)
         {
             // Ledge: «от себя» до упора — отпустить; камень ниже плеча — «на себя» спускает к нему. До проверки линии: она бывает короткой на экране.
@@ -1067,6 +1073,9 @@ namespace Fortress.Hero.Proto
             Vector3 travel = (nearEnd - farEnd).normalized * Mathf.Sign(along);   // куда поедет тело
             Vector3 face = Vector3.ProjectOnPlane(bodyCube.forward, Vector3.up).normalized;
             float fwd = Vector3.Dot(travel, face);                                   // +1 лицом, −1 спиной
+            // ПЕРЕДАЧА (задний ход, автор 2026-11-21): тело явно едет спиной — включается «задний», лицом — «передний»;
+            // вбок / без хода — передача та же, что была (без дёрганья на границе)
+            if (Mathf.Abs(along) >= 0.5f) { if (fwd < -0.3f) reverseGear = true; else if (fwd > 0.3f) reverseGear = false; }
             float k = Mathf.Lerp(backSpeed, forwardSpeed, (fwd + 1f) * 0.5f);
             // слой ДВИЖЕНИЯ: кисть внутри разброса — едет полностью; в слое поворота — езда гаснет к краю (только поворот)
             Vector3 Bn = Vector3.Lerp(farEnd, nearEnd, t);
@@ -1080,7 +1089,7 @@ namespace Fortress.Hero.Proto
             if (!ClimbConvert(along))
             {
                 tTarget = Mathf.Clamp01(tTarget + along * k / axisLen);
-                if (along != 0f || md.x != 0f) gestureOwner = "езда";
+                if (along != 0f || md.x != 0f) gestureOwner = ReverseSteering ? "задний ход (руль наоборот)" : "езда";
             }
             else gestureOwner = "подъём";
             lastGestureAlong = -a * along * k; lastGestureSide = side;
@@ -1093,6 +1102,9 @@ namespace Fortress.Hero.Proto
             float r = Mathf.Max(0.12f, (gripHand - Bn).magnitude);
             // ЗАФИКСИРОВАНО автором (при камере за спиной тела): ЛКМ, мышь вправо = поворот вправо. Знак и расчёт стороны НЕ МЕНЯТЬ.
             float deg = -sidePx * mpp / r * Mathf.Rad2Deg * turnGain * turnSensitivity;
+            // ЗАДНИЙ ХОД КАК В АВТОМАТЕ (автор 2026-11-21): едешь спиной — руль сам переворачивается: мышь вправо — ход уходит вправо
+            // (тело поворачивается влево). Базовый знак выше не трогается: вперёд и на месте — как зафиксировано.
+            if (ReverseSteering) deg = -deg;
             // накопить (вместе с ещё не довёрнутым) и не выйти за слой поворота; тело доворачивается плавно в Update
             pendingTurn += deg;
             float half = turnZone * 0.5f;                                          // зона поворота: ±половина от лица

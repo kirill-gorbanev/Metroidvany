@@ -105,6 +105,7 @@ namespace Fortress.Hero.Proto
         /// (где-то оставался старый зацеп, опора кисти или флаг съезда). Причина пишется в журнал переходов.</summary>
         void ReleaseGrip(string why, bool flash = false)
         {
+            reverseGear = false;                                          // новый хват — с «переднего»
             mode = Mode.Free; pendingTurn = 0f; gripHold = null; gripSlip = false; spinSlip = false; handMover = null;
             if (flash) slipFlash = 0.5f;
             lastRelease = why;
