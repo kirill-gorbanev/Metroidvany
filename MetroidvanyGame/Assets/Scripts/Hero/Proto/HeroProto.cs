@@ -1075,7 +1075,7 @@ namespace Fortress.Hero.Proto
             float moveK = phi >= 0f
                 ? 1f - Mathf.Clamp01((phi - sectorRight) / Mathf.Max(1f, moveFadeRight - sectorRight))
                 : 1f - Mathf.Clamp01((-phi - sectorLeft) / Mathf.Max(1f, moveFadeLeft - sectorLeft));
-            if (!moveAllAround && !LadderDown) k *= moveK;                       // лестница вниз: камень у ног / за спиной — езда без затухания (Ledge)
+            if (!moveAllAround) k *= moveK;                                      // зона — без исключений (блок Zone), лестница тоже                       // лестница вниз: камень у ног / за спиной — езда без затухания (Ledge)
             lastSpeedK = k;
             // ВСКАРАБКИВАНИЕ: у кромки, за которую держишься, жест «на себя» поднимает тело (а не двигает)
             if (!ClimbConvert(along))

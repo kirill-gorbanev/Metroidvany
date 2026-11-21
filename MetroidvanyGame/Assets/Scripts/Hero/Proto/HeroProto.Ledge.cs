@@ -260,6 +260,7 @@ namespace Fortress.Hero.Proto
             // проходит у самого тела; в конце она сбоку на 0.15 м
             Vector3 np = Body + d / dist * Mathf.Min(alongPx * Px1080 * ladderPerPx, dist);
             if (LadderBlocked(np)) return true;
+            if (!ZoneAllows(np, climbLift)) return true;                  // кисть вышла бы из зоны — стоп (блок Zone)
             bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
             float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0);
             return true;

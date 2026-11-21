@@ -26,6 +26,7 @@ namespace Fortress.Hero.Proto
             DiagCrushed = false;
             Vector3 b = Body;
             if (!moverPush || !Blocked(b, bodyRadius)) { if (!Blocked(b, bodyRadius)) { lastSafe = b; haveSafe = true; } return; }
+            float zoneBefore = ZoneOut(b, climbLift);
             // кто задел: подвижный элемент рядом с телом (не тот, на котором стоишь), сдвинувшийся в этом шаге
             Vector3 push = Vector3.zero; bool byMover = false;
             foreach (var ms in movers)
@@ -62,7 +63,12 @@ namespace Fortress.Hero.Proto
                 np = q;
             }
             bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
-            if (mode == Mode.Grip) { float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0); }
+            if (mode == Mode.Grip)
+            {
+                // стена утащила тело так, что кисть вышла из зоны (блок Zone) — за зону нельзя: хват срывается
+                if (ZoneOut(Body, climbLift) > Mathf.Max(zoneBefore, zoneTolerance) + 0.01f) ReleaseGrip("стена вывела кисть из зоны", true);
+                else { float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0); }
+            }
             if (!Blocked(Body, bodyRadius)) { lastSafe = Body; haveSafe = true; }
         }
 

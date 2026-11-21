@@ -127,7 +127,7 @@ namespace Fortress.Hero.Proto
         {
             if ((P - Shoulder3).magnitude > L - 0.01f) return false;
             Vector3 v = Flat(P) - Shoulder;
-            if (v.magnitude > 0.03f && !LadderReach(hd, P))                         // стоя на камне — камень ниже берётся и за спиной (Ledge)
+            if (v.magnitude > 0.03f)                                                // зона — без исключений (блок Zone): камень у ног — только лицом к нему
             {
                 float a = Vector3.SignedAngle(Face, v, Vector3.up);
                 if (a < -sectorLeft - 5f || a > sectorRight + 5f) return false;
@@ -268,7 +268,7 @@ namespace Fortress.Hero.Proto
             {
                 if (climbLift >= need) return false;                      // уже поднялся — дальше обычный ход на уступ
                 if (!(OnNub ? NubAtWall() : AtLedge()) && climbLift <= 0.001f) return false;      // ещё не у кромки — едет к ней
-                climbLift = Mathf.Min(climbLift + meters, need);
+                climbLift = ZoneLiftLimit(Mathf.Min(climbLift + meters, need));   // не выше края зоны руки (блок Zone): кисть не уходит за спину
                 return true;
             }
             if (climbLift > 0.001f) { climbLift = Mathf.Max(0f, climbLift + meters); return true; }
@@ -286,6 +286,7 @@ namespace Fortress.Hero.Proto
             if (d < 0.03f) return;
             dir /= d;
             Vector3 np = Slide(Body, dir * Mathf.Min(mantleSpeed * dt, d - 0.03f));
+            if (!ZoneAllows(np, climbLift)) return;                       // кисть вышла бы из зоны — перевал стоит (блок Zone)
             bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
             float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0);
         }
