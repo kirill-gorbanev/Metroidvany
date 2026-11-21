@@ -230,9 +230,7 @@ namespace Fortress.Hero.Proto
                 slideV = Mathf.Min(slideV + slideAccel * Mathf.Sin(a * Mathf.Deg2Rad) * dt, slideMax);
                 Vector3 down = Flat(bodyNormal);
                 if (down.sqrMagnitude < 1e-6f) return;
-                ignoreStones = true;                                        // сползание камни не держат (иначе колонка — снова ступенька)
                 Vector3 np = Slide(Body, down.normalized * slideV * dt);
-                ignoreStones = false;
                 if ((np - Body).sqrMagnitude < 1e-10f) { if (SlideOffEdge(down, slideV)) return; slideV = 0f; }   // упёрся: край обрыва — падение (Fall), стена — стоит
                 bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
                 if (mode == Mode.Grip)
@@ -311,6 +309,13 @@ namespace Fortress.Hero.Proto
                 Vector3 S3n = Flat(np) + SideOff; S3n.y = h + shoulderLift;
                 if ((P - S3n).magnitude < dMin) return;                   // рука согнута до упора
                 if (!ZoneAllows(np, 0f)) continue;                        // край зоны руки — другой угол
+                // тело не налезает на камень, за который держится (автор: «я налез поверх»): коснулось его — подтягивание стоп.
+                // Другие камни телу не мешают никак (твёрдые камни вырезаны)
+                if (gripHold && gripHold.GetComponent<Renderer>())
+                {
+                    var hb = gripHold.GetComponent<Renderer>().bounds;
+                    if (BoxHitsRect(np, Rect.MinMaxRect(hb.min.x, hb.min.z, hb.max.x, hb.max.z), 0.001f)) return;
+                }
                 bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
                 float d1 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d1);
                 return;

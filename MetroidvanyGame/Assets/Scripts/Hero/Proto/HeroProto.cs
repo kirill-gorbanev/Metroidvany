@@ -162,7 +162,7 @@ namespace Fortress.Hero.Proto
         /// <summary>Зоны одной арены (ProtoZones): старт героя в активной зоне.</summary>
         public void DiagSetSpawn(Vector3 p, float yaw) { spawnPos = p; spawnYaw = yaw; spawnSet = true; }
         /// <summary>Зоны одной арены: включилась другая зона — заново собрать стены, поверхность, платформы и зацепы (только активные).</summary>
-        public void DiagRecollect() { CollectObstacles(); CollectSurface(); CollectHolds(); CollectStones(); rideMover = handMover = null; }
+        public void DiagRecollect() { CollectObstacles(); CollectSurface(); CollectHolds(); rideMover = handMover = null; }
         public Bounds DiagSurfaceBounds { get { var b = new Bounds(Body, Vector3.one); foreach (var s in surfBounds) b.Encapsulate(s); return b; } }
 
         /// <summary>Поверхность под кистью со своего уровня (не выше handUp); внутри сплошного — TooHigh.</summary>
@@ -341,7 +341,6 @@ namespace Fortress.Hero.Proto
             if (!surfaceRoot) { var r = GameObject.Find("Рельеф (Y)"); if (r) surfaceRoot = r.transform; }
             CollectSurface();
             CollectHolds();
-            CollectStones();
             // высоты кубиков над поверхностью — как их поставил сборщик на ровном полу
             bodyLift = bodyCube.position.y; shoulderLift = shoulderCube.position.y;
             elbowLift = elbowCube.position.y; handLift = handCube.position.y;
@@ -560,7 +559,6 @@ namespace Fortress.Hero.Proto
             {
                 // тело — своим кубиком (блок Body): стены — пересечение прямоугольников, уступы и обрывы — пробы по углам и сторонам
                 foreach (var o in obstacles) if (BoxHitsRect(p, o, 0.001f)) return true;
-                if (StoneHit(p)) return true;                       // камни — сбоку твёрдые для тела (блок Body)
                 if (ShoulderBlocked(p)) return true;
                 if (!HasSurface) return false;
                 if (!Climbable(p)) return true;
@@ -599,7 +597,7 @@ namespace Fortress.Hero.Proto
             Vector3 rep = Vector3.zero;
             void FromRects(Vector3 c, float rad, bool withStones)
             {
-                foreach (var o in withStones ? StoneAwareRects() : obstacles)   // тело обходит и камни (сбоку твёрдые) — уводит в щель между колонками
+                foreach (var o in obstacles)
                 {
                     float cx = Mathf.Clamp(c.x, o.xMin, o.xMax), cz = Mathf.Clamp(c.z, o.yMin, o.yMax);
                     Vector3 d = new Vector3(c.x - cx, 0f, c.z - cz);
@@ -627,7 +625,7 @@ namespace Fortress.Hero.Proto
         {
             if (boxBody && r == bodyRadius) r = BodyReach + 0.01f;      // кубик: касание — до угла (блок Body)
             Vector3 n = Vector3.zero;
-            foreach (var o in StoneAwareRects())
+            foreach (var o in obstacles)
             {
                 float cx = Mathf.Clamp(p.x, o.xMin, o.xMax), cz = Mathf.Clamp(p.z, o.yMin, o.yMax);
                 Vector3 d = new Vector3(p.x - cx, 0f, p.z - cz);

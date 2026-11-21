@@ -39,45 +39,7 @@ namespace Fortress.Hero.Proto
             return true;
         }
 
-        // ---------------- камни — сбоку твёрдые для тела ----------------
-        /// <summary>КАМНИ НЕ ПРОПУСКАЮТ ТЕЛО (автор 2026-11-21: «чтобы я на камни не налезал»; замер stone_overlap.cs: тело было в камнях
-        /// 168 шагов из 176 — лезло вдоль колонки сквозь пройденные камни). Камень — декор (не пол, не стена), поэтому отдельно:
-        /// кубик тела не входит в его след по полу. Стоять на камне по-прежнему нельзя (твёрдые камни вырезаны), руке и плечу камень
-        /// не мешает (зацеп). Сползание камни не держат (ignoreStones) — иначе колонка снова ступенька.</summary>
-        [Tooltip("Камни сбоку твёрдые для тела: кубик тела не входит в камень (стоять на нём нельзя, сползание не держат).")]
-        public bool stonesSolid = true;
-        struct StoneRect { public Rect r; public float top; }
-        readonly System.Collections.Generic.List<StoneRect> stones = new System.Collections.Generic.List<StoneRect>();
-        bool ignoreStones;
-
-        void CollectStones()
-        {
-            stones.Clear();
-            foreach (var hd in holds)
-            {
-                if (!(hd is ProtoNub) || hd.GetComponentInParent<ProtoMover>()) continue;     // на подвижном — только для руки
-                var rr = hd.GetComponent<Renderer>(); if (!rr) continue;
-                var b = rr.bounds;
-                stones.Add(new StoneRect { r = Rect.MinMaxRect(b.min.x, b.min.z, b.max.x, b.max.z), top = b.max.y });
-            }
-        }
-
-        /// <summary>Кубик тела в точке p входит в камень на своём уровне?</summary>
-        bool StoneHit(Vector3 p)
-        {
-            if (!stonesSolid || ignoreStones) return false;
-            foreach (var s in stones)
-                if (s.top > groundY - 0.3f && s.top < groundY + maxStep + 0.3f && BoxHitsRect(p, s.r, 0.001f)) return true;
-            return false;
-        }
-
-        /// <summary>Стены + камни (для нормали касания и выталкивания).</summary>
-        System.Collections.Generic.IEnumerable<Rect> StoneAwareRects()
-        {
-            foreach (var o in obstacles) yield return o;
-            if (!stonesSolid || ignoreStones) yield break;
-            foreach (var s in stones) if (s.top > groundY - 0.3f && s.top < groundY + maxStep + 0.3f) yield return s.r;
-        }
+        // (камни сбоку твёрдые — убрано 2026-11-21: автор — «МЫ УДАЛИЛИ твёрдые камни»; камни телу не мешают никак)
 
         /// <summary>Пробы кубика тела для уступов и обрывов: 4 угла и 4 середины сторон (на boxProbe от центра).</summary>
         Vector3[] BodyProbes(Vector3 p)
