@@ -96,6 +96,7 @@ namespace Fortress.Hero.Proto
             steepTimer = 0f; slideV = 0f; onSteep = false; crestFlash = slipFlash = 0f; gripL = L;
             SpinReset();
             falling = false; stunT = 0f; fallPx = 0f; fallVy = 0f;   // перенос тела — полёт и оглушение прерваны (Fall)
+            regrabT = 0f;                                                // и окно перехвата
         }
 
         // ---------------- досягаемость ----------------
