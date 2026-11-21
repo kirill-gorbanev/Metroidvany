@@ -23,7 +23,7 @@ namespace Fortress.Hero.Proto
 
         [Header("Умная камера (шаг 9 долга)")]
         [Tooltip("Камера подстраивается: смотрит вверх при лазании, чуть вперёд от тела, подъезжает, когда стена закрывает героя.")]
-        public bool smart = true;
+        public bool smartCamera = false;   // выключена автором 2026-11-21 («отключи этот эффект камеры»); камера — по описанию автора, позже
         [Tooltip("Лазание (держишься на крутом / висишь / кисть выше плеча): наклон камеры меньше на столько градусов — смотрит вверх.")]
         public float climbPitchDrop = 22f;
         [Tooltip("Лазание: точка взгляда смещается к кисти на эту долю пути тело → кисть.")]
@@ -89,7 +89,7 @@ namespace Fortress.Hero.Proto
                 lastBodyYaw = by;
             }
             Vector3 want = target.position + Vector3.up * lookHeight;
-            if (smart && Hero())
+            if (smartCamera && Hero())
             {
                 // ЛАЗАНИЕ: держишься на крутом, висишь, кисть заметно выше плеча — смотреть вверх, к кисти
                 var st = hero.State;
@@ -105,7 +105,7 @@ namespace Fortress.Hero.Proto
             focus = Vector3.Lerp(focus, want, 1f - Mathf.Exp(-follow * dt));
             // СТЕНА МЕЖДУ ГЕРОЕМ И КАМЕРОЙ: подъехать ближе (плавно; отъезжать — тоже плавно)
             float dWant = distance;
-            if (smart && Hero()) dWant = Mathf.Max(occlusionMinDistance, Mathf.Min(distance, Clear(Quaternion.Euler(PitchNow, yaw, 0f))));
+            if (smartCamera && Hero()) dWant = Mathf.Max(occlusionMinDistance, Mathf.Min(distance, Clear(Quaternion.Euler(PitchNow, yaw, 0f))));
             distEff = distEff < 0f ? dWant : Mathf.Lerp(distEff, dWant, 1f - Mathf.Exp(-(dWant < distEff ? 12f : smartFollow) * dt));
             Apply();
         }
@@ -144,8 +144,8 @@ namespace Fortress.Hero.Proto
 
         void Apply()
         {
-            var rot = Quaternion.Euler(smart ? PitchNow : pitch, yaw, 0f);
-            float d = smart && distEff > 0f ? distEff : distance;
+            var rot = Quaternion.Euler(smartCamera ? PitchNow : pitch, yaw, 0f);
+            float d = smartCamera && distEff > 0f ? distEff : distance;
             transform.SetPositionAndRotation(focus - rot * Vector3.forward * d, rot);
         }
     }
