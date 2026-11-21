@@ -286,7 +286,7 @@ namespace Fortress.Hero.Proto
         {
             Vector3 to = Flat(GripPoint3) - Body; float dist = to.magnitude;
             if (dist < 0.02f) return false;
-            Vector3 q = Body + to / dist * Mathf.Min(BodyReach + 0.05f, dist);
+            Vector3 q = Body + to / dist * Mathf.Min(0.1f, dist);       // сразу перед телом (у самого камня склон уже выше шага)
             float h = LevelHeight(q, BodyLevel, maxStep);
             return !float.IsInfinity(h) && h > groundY - maxDrop;
         }
@@ -308,6 +308,13 @@ namespace Fortress.Hero.Proto
             Vector3 S3n = Flat(np) + SideOff; S3n.y = h + shoulderLift;
             if ((P - S3n).magnitude < dMin) return;                       // рука согнута до упора
             if (Blocked(np, bodyRadius) || !ZoneAllows(np, 0f)) return;   // стена / уступ / край зоны руки
+            // тело не залезает на камень, за который держится (автор: «я налез поверх»): камень — декор, тело его не видит,
+            // поэтому подтягивание само останавливается, как только кубик тела касается камня
+            if (gripHold && gripHold.GetComponent<Renderer>())
+            {
+                var b = gripHold.GetComponent<Renderer>().bounds;
+                if (BoxHitsRect(np, Rect.MinMaxRect(b.min.x, b.min.z, b.max.x, b.max.z), 0.001f)) return;
+            }
             bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
             float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0);
         }
