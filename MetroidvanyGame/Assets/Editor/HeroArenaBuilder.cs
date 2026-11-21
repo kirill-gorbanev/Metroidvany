@@ -1085,6 +1085,15 @@ namespace Fortress.EditorTools
             zo.cam = keepRig.GetComponentInChildren<ProtoOrbitCamera>(true);
             foreach (var z in zones) { bool on = z.number == StartZone; z.walls.SetActive(on); z.surface.SetActive(on); z.decor.SetActive(on); }
             EditorSceneManager.SaveScene(scene, SceneAllPath);
+            // HDRP заводит атмосферу новой сцены как Untitled_Atmosphere (сцена ещё без имени) — переименовать в HeroArena_Atmosphere,
+            // старую заменить (ссылка из сцены — по guid, не рвётся): пересборка не плодит файлы
+            const string Unt = "Assets/Settings/HDRP/Scenes/Untitled_Atmosphere.asset", Own = "Assets/Settings/HDRP/Scenes/HeroArena_Atmosphere.asset";
+            if (AssetDatabase.LoadMainAssetAtPath(Unt) != null)
+            {
+                if (AssetDatabase.LoadMainAssetAtPath(Own) != null) AssetDatabase.DeleteAsset(Own);
+                AssetDatabase.MoveAsset(Unt, Own);
+                AssetDatabase.SaveAssets();
+            }
             Debug.Log("[Hero] арена «всё сразу»: " + SceneAllPath);
         }
 
