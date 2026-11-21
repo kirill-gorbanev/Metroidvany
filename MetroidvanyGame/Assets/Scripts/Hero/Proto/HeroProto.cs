@@ -1208,12 +1208,12 @@ namespace Fortress.Hero.Proto
         bool ArmDownCutsSurface(Vector3 q)
         {
             float h = HandLevel(q);
-            return !float.IsInfinity(h) && SegCutsSurface(Shoulder3, new Vector3(q.x, h + handLift, q.z), true);
+            return !float.IsInfinity(h) && SegCutsSurface(Shoulder3, new Vector3(q.x, h + handLift, q.z), true, armCutDepth);   // край ступени — не барьер: только глубоко сквозь
         }
 
         /// <summary>Отрезок a → b проходит под поверхностью (между их высотами; крыша над ними не в счёт)?
-        /// onlyDown — только если b ниже a (тянешься вниз).</summary>
-        bool SegCutsSurface(Vector3 a, Vector3 b, bool onlyDown)
+        /// onlyDown — только если b ниже a (тянешься вниз); depth — насколько глубоко под поверхностью считается «сквозь».</summary>
+        bool SegCutsSurface(Vector3 a, Vector3 b, bool onlyDown, float depth = 0.02f)
         {
             if (!HasSurface || (onlyDown && b.y >= a.y)) return false;
             float lo = Mathf.Min(a.y, b.y) - 0.3f, up = Mathf.Max(a.y, b.y) - lo + 0.05f;
@@ -1221,7 +1221,7 @@ namespace Fortress.Hero.Proto
             {
                 Vector3 p = Vector3.Lerp(a, b, k / 9f);
                 float h = LevelHeight(new Vector3(p.x, 0f, p.z), lo, up);
-                if (!float.IsInfinity(h) && h > p.y + 0.02f) return true;
+                if (!float.IsInfinity(h) && h > p.y + depth) return true;
             }
             return false;
         }

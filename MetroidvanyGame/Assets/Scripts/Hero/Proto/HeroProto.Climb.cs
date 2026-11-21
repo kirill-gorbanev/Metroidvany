@@ -126,7 +126,7 @@ namespace Fortress.Hero.Proto
         bool HoldOk(Vector3 P, ProtoHold hd = null)
         {
             if ((P - Shoulder3).magnitude > L - 0.01f) return false;
-            if (SegCutsSurface(Shoulder3, P, true)) return false;                   // ниже плеча через край — не дотянуться (лимит учитывает поверхность)
+            if (SegCutsSurface(Shoulder3, P, true, armCutDepth)) return false;                   // ниже плеча через край — не дотянуться (лимит учитывает поверхность)
             Vector3 v = Flat(P) - Shoulder;
             if (v.magnitude > 0.03f)                                                // зона — без исключений (блок Zone): камень у ног — только лицом к нему
             {
