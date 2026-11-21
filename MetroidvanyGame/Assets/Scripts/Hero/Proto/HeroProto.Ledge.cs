@@ -252,7 +252,7 @@ namespace Fortress.Hero.Proto
 
         bool LadderStep(float alongPx)
         {
-            Vector3 side = SideOff; side = side.sqrMagnitude > 1e-6f ? side.normalized : Vector3.zero;
+            Vector3 side = SideDir;                                  // вбок (справа): кисть в конце сбоку от тела
             Vector3 goal = Flat(gripHold.At(gripHoldS)) - side * 0.15f;
             Vector3 d = goal - Body; float dist = d.magnitude;
             if (dist < 0.02f) return true;

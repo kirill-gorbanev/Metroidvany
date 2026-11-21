@@ -1028,8 +1028,21 @@ namespace Fortress.EditorTools
         /// активна одна зона за раз (ProtoZones, клавиши 2–8). Прежние координаты — замеры HeroSim и эталон общего прогона
         /// переносятся без правок. Один герой, один свет; корни «Арена: стены / поверхность / декор» общие, зона — их дети.</summary>
         [MenuItem("Fortress/Hero/Build Arena (всё сразу)")]
-        public static void BuildAll()
+        public static void BuildAll() => BuildAll(false);
+
+        /// <summary>Проба: та же арена, тело лёжа на животе по размерам модели. Лазание с ним пока не работает (см. design/hero_todo.md, шаг 8).</summary>
+        [MenuItem("Fortress/Hero/Build Arena (всё сразу, тело лёжа — проба)")]
+        public static void BuildAllProne() => BuildAll(true);
+
+        /// <summary>ТЕЛО ЛЁЖА (шаг 8 долга): размеры с модели героя ничком (HeroBody.prone = 1, замер tools/herosim/measure_prone.cs):
+        /// длина 0.93 (таз → макушка; ног у модели нет), корпус ≈ 0.44 (с правой рукой — 1.18), спина ≈ 0.28; правое плечо — 0.20 вправо
+        /// и 0.27 вперёд от центра корпуса, на 0.26 над полом; рука 0.49. Сгиб до упора — пропорционально прежнему (0.18 × 0.49 / 0.62).</summary>
+        static bool proneBody = false;
+        const float ProneW = 0.44f, ProneH = 0.28f, ProneLen = 0.9f, ProneShSide = 0.2f, ProneShFwd = 0.27f, ProneShY = 0.26f;
+
+        public static void BuildAll(bool prone)
         {
+            proneBody = prone;
             if (EditorApplication.isPlaying) { Debug.LogWarning("[Hero] арена: выйди из Play"); return; }
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var gWalls = new GameObject("Арена: стены").transform;
@@ -1097,6 +1110,16 @@ namespace Fortress.EditorTools
             proto.showHints = true;                                       // подсказки и Gizmos включены
             // плечо — справа от тела
             proto.shoulderCube.position = body.position + body.right * proto.shoulderSide + Vector3.up * 0.14f;
+            if (proneBody)
+            {
+                // тело лёжа: кубик вдоль спины, плечо справа у головы, рука модели
+                body.localScale = new Vector3(ProneW, ProneH, ProneLen);
+                body.position = new Vector3(body.position.x, ProneH * 0.5f, body.position.z);
+                proto.shoulderSide = ProneShSide; proto.shoulderForward = ProneShFwd;
+                proto.shoulderCube.position = new Vector3(body.position.x, 0f, body.position.z) + body.right * ProneShSide + body.forward * ProneShFwd + Vector3.up * ProneShY;
+                proto.upperArm = 0.25f; proto.foreArm = 0.24f; proto.dMin = 0.14f;
+                proto.bodyRadius = ProneW * 0.5f;
+            }
             var orbit = rig.GetComponentInChildren<ProtoOrbitCamera>(true);
             if (orbit)
             {

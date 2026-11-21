@@ -28,6 +28,8 @@ namespace Fortress.Hero.Proto
         public float dMin = 0.18f;
         [Tooltip("Плечо — вбок от тела (0 — как на схеме: прямая через центр тела и кисть).")]
         public float shoulderSide = 0.2f;
+        [Tooltip("Плечо впереди центра тела (м): тело лёжа — плечо у головы (модель ничком: 0.27 от центра). Стоя — 0.")]
+        public float shoulderForward = 0f;
 
         [Header("Препятствия (без физики)")]
         [Tooltip("Корень препятствий: каждый дочерний куб — прямоугольник на полу (по габаритам).")]
@@ -326,7 +328,8 @@ namespace Fortress.Hero.Proto
         }
         Vector3 Body => Flat(bodyCube.position);
         /// <summary>Смещение плеча от центра тела: вправо от лица (рука у героя — правая), крутится вместе с телом.</summary>
-        Vector3 SideOff => Vector3.Cross(Vector3.up, Face) * shoulderSide;
+        Vector3 SideOff => Vector3.Cross(Vector3.up, Face) * shoulderSide + Face * shoulderForward;   // плечо: вбок (справа) и вперёд (к голове, тело лёжа)
+        Vector3 SideDir => Vector3.Cross(Vector3.up, Face);
         Vector3 Shoulder => Body + SideOff;
 
         static Vector3 Flat(Vector3 v) => new Vector3(v.x, 0f, v.z);
