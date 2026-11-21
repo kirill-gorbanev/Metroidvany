@@ -259,6 +259,30 @@ namespace Fortress.Hero.Proto
             return false;
         }
 
+        /// <summary>КАМЕНЬ НА СКЛОНЕ ТЯНЕТ ВВЕРХ ПО СКЛОНУ (автор 2026-11-21: «с 3 тянусь к 4 — меня резко дёргает вниз на 2, будто 2 твёрдый»).
+        /// Раньше «на себя» на камне поднимало тело вертикально над склоном (вис); отпустил камень, чтобы взять следующий, —
+        /// висевшее тело падало на склон рывком. Теперь на склоне тело подтягивается к камню ВДОЛЬ склона (по полу к кисти, высота —
+        /// склон под ним): всё время лежит на склоне, только выше. Отпустил — сползает по правилу склона (окно slideDelay, потом разгон),
+        /// успеваешь перехватиться. Стоп: камень у пояса (nubHangKeep), рука согнута до dMin (по 3D), стена / уступ, край зоны руки.
+        /// Отвесная стена (не склон) — по-прежнему вис вертикально.</summary>
+        void NubClimbAlongSlope(float meters)
+        {
+            Vector3 P = GripPoint3, to = Flat(P) - Body;
+            float dist = to.magnitude;
+            if (dist < 0.02f) return;
+            float ang = Vector3.Angle(bodyNormal, Vector3.up);
+            float run = meters / Mathf.Max(0.3f, Mathf.Tan(ang * Mathf.Deg2Rad));   // подъём на meters по склону = столько по полу
+            Vector3 np = Body + to / dist * Mathf.Min(run, dist);
+            float h = LevelHeight(np, BodyLevel, maxStep);
+            if (float.IsInfinity(h)) return;
+            if (P.y - h < nubHangKeep) return;                            // камень уже у пояса
+            Vector3 S3n = Flat(np) + SideOff; S3n.y = h + shoulderLift;
+            if ((P - S3n).magnitude < dMin) return;                       // рука согнута до упора
+            if (Blocked(np, bodyRadius) || !ZoneAllows(np, 0f)) return;   // стена / уступ / край зоны руки
+            bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
+            float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0);
+        }
+
         /// <summary>Жест у кромки (в пикселях вдоль): «на себя» — поднять тело, «от себя» — опустить. true — жест ушёл в подъём.</summary>
         bool ClimbConvert(float px)
         {
@@ -269,6 +293,7 @@ namespace Fortress.Hero.Proto
             {
                 if (climbLift >= need) return false;                      // уже поднялся — дальше обычный ход на уступ
                 if (!(OnNub ? NubAtWall() : AtLedge()) && climbLift <= 0.001f) return false;      // ещё не у кромки — едет к ней
+                if (OnNub && onSteep && climbLift <= 0.001f) { NubClimbAlongSlope(meters); return true; }   // склон: вверх ПО склону, не над ним
                 climbLift = ZoneLiftLimit(Mathf.Min(climbLift + meters, need));   // не выше края зоны руки (блок Zone): кисть не уходит за спину
                 return true;
             }
