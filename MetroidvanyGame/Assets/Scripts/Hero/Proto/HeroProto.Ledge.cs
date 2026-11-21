@@ -230,7 +230,28 @@ namespace Fortress.Hero.Proto
         /// по полу до него меньше сгиба руки dMin. true — жест ушёл в спуск.</summary>
         bool LadderConvert(float alongPx)
         {
+            if (alongPx > 0f && LadderUp) return LadderStep(alongPx);
             if (!LadderDown || alongPx <= 0f) return false;
+            return LadderStep(alongPx);
+        }
+
+        /// <summary>ЛЕСТНИЦА ВВЕРХ (зеркало спуска). Автор 2026-11-21: «чтобы залезть на 3 камень, надо тянуть в 2 раза больше…
+        /// как будто предел для сгибания локтя». Держишься за камень-ступеньку выше тела меньше чем на порог шага, рука согнута
+        /// до упора (езде некуда: камень почти над плечом, до него меньше dMin) — раньше «на себя» не делало НИЧЕГО (подъёма нет:
+        /// камень ниже порога считался ступенькой; езды нет). Теперь «на себя» ведёт тело к камню, пока оно не встанет на него
+        /// (рука держит — камень под телом берётся, Ledge.NubFootLevel).</summary>
+        bool LadderUp
+        {
+            get
+            {
+                if (!OnNub || !NubStandable || Hanging || t < 0.97f) return false;
+                float top = gripHold.At(gripHoldS).y;
+                return top > BodyLevel + nubHangMin && top <= BodyLevel + maxStep && footNub != gripHold;
+            }
+        }
+
+        bool LadderStep(float alongPx)
+        {
             Vector3 side = SideOff; side = side.sqrMagnitude > 1e-6f ? side.normalized : Vector3.zero;
             Vector3 goal = Flat(gripHold.At(gripHoldS)) - side * 0.15f;
             Vector3 d = goal - Body; float dist = d.magnitude;

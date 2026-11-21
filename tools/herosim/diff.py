@@ -15,6 +15,24 @@ def load(p):
 
 new = load(new_p)
 base = load(base_p)
+
+
+def sections(lines):
+    out, cur = {}, None
+    for l in lines:
+        if l.startswith('===== АРЕНА'):
+            cur = l
+            out[cur] = []
+        elif cur:
+            out[cur].append(l)
+    return out
+
+
+# прогон части арен (ARENAS="7 8") — сравниваем только их
+if base is not None:
+    bs, ns = sections(base), sections(new)
+    if set(ns) < set(bs):
+        base = [x for k in ns for x in [k] + bs.get(k, [])]
 print('----- живое (не сравнивается) -----')
 for l in open(new_p, encoding='utf-8'):
     if l.startswith('~'):

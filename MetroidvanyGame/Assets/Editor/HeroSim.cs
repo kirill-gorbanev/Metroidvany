@@ -74,6 +74,7 @@ namespace Fortress.EditorTools
         {
             var sb = new StringBuilder("ПОДЪЁМ ПО КАМНЯМ (арена 7), px «на себя» на камень\n");
             if (!Setup()) return "нет Play / героя";
+            feelLog.Length = 0;
             try
             {
                 foreach (var lane in new[] { "Склон 1", "Склон 3", "Склон 8" })
@@ -82,7 +83,7 @@ namespace Fortress.EditorTools
                     ProtoHold first = null; foreach (var x in H.Holds) if (x.name == lane + ": камень 1п") first = x;
                     if (!first) { sb.Append(lane).Append(": нет камней\n"); break; }
                     Vector3 c = first.At(0.5f);
-                    H.DiagTeleport(new Vector3(c.x - 0.1f, c.y - 0.25f, c.z - 0.2f), 0f);
+                    TP(new Vector3(c.x - 0.1f, c.y - 0.25f, c.z - 0.2f), 0f);        // сторож — заново: телепорт не скачок
                     H.driver = () => Free(); for (int i = 0; i < 5; i++) Step();
                     sb.Append($"{lane}, пауза {gap * 20} мс: ");
                     int total = 0;
@@ -101,7 +102,8 @@ namespace Fortress.EditorTools
                     }
                     sb.Append($"всего {total} px, тело {H.BodyY:F2}\n");
                 }
-                sb.Append(W.Report());
+                TP(new Vector3(H.BodyXZ.x, H.BodyY, H.BodyXZ.z), 0f);
+                sb.Append(feelLog.Length > 0 ? "сторожа:" + feelLog : "сторожа: нарушений нет");
             }
             finally { End(); }
             return sb.ToString();
