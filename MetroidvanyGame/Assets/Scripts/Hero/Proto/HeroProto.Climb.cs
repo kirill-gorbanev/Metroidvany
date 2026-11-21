@@ -95,7 +95,8 @@ namespace Fortress.Hero.Proto
             gripHold = null; hoverHold = null; climbLift = 0f; gripSlip = false; slipDist = 0f;
             steepTimer = 0f; slideV = 0f; onSteep = false; crestFlash = slipFlash = 0f; gripL = L;
             SpinReset();
-            falling = false; stunT = 0f; fallPx = 0f; fallVy = 0f;   // перенос тела — полёт и оглушение прерваны (Fall)        }
+            falling = false; stunT = 0f; fallPx = 0f; fallVy = 0f;   // перенос тела — полёт и оглушение прерваны (Fall)
+        }
 
         // ---------------- досягаемость ----------------
         /// <summary>Досягаемость по полу в текущем хвате: рука L по 3D; точка выше плеча — по полу ближе.</summary>
