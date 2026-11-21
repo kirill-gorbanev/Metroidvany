@@ -921,11 +921,11 @@ namespace Fortress.EditorTools
             WedgeX("Склон 1 · 45° камни", x1, x1t, 1f, 3f, MAIN, UP - MAIN, TunC, surf);
             NubsOnRampX("Склон 1", x1, x1t, ZA, UP, 0.25f);
             Box("Настил 1", x1t, 7f, 0f, UP, 0f, AZ1, DeckC, surf);
-            // 2 · спуск 45° по камням: съезжай, лови камни рукой
+            // 2 · спуск 60° по камням: съезжай, лови камни рукой (60° на спуске — норм, автор)
             Sign("2 · спуск по камням\nсъезжай, лови камни рукой", new Vector3(5.6f, UP, 0.5f), 1f, E);
-            float x2 = 7f + run45;
-            WedgeX("Спуск 2 · 45° камни", x2, 7f, 1f, 3f, MAIN, UP - MAIN, TunC, surf);
-            NubsOnRampX("Спуск 2", x2, 7f, ZA, UP, 0.25f);
+            float x2 = 7f + run60;
+            WedgeX("Спуск 2 · 60° камни", x2, 7f, 1f, 3f, MAIN, UP - MAIN, TunC, surf);
+            NubsOnRampX("Спуск 2", x2, 7f, ZA, UP, 0.17f);
             // 3 · 45° камни только для руки (встать нельзя) на настил 2
             Sign("3 · 45° камни\nтолько рука", new Vector3(8.8f, MAIN, 0.5f), 1f, E);
             float x3 = 9.6f, x3t = x3 + run45;
