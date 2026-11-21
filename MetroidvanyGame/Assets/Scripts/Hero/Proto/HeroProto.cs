@@ -202,6 +202,23 @@ namespace Fortress.Hero.Proto
             if (perp >= armKeepOut || p <= 0f) return L;
             return Mathf.Clamp(p - Mathf.Sqrt(armKeepOut * armKeepOut - perp * perp), Mathf.Min(dMin + 0.02f, L), L);
         }
+        /// <summary>СВОБОДНАЯ КИСТЬ НЕ СКВОЗЬ ТЕЛО (давний сторож «рука сквозь тело» у свободной кисти): кисть догоняет курсор плавно,
+        /// и по пути отрезок плечо → кисть мог пройти через тело. Если так — кисть поворачивается вокруг плеча (длина та же)
+        /// в ближайшую сторону, где рука тело не режет. Только свободная кисть: хват и его досягаемость не меняются.</summary>
+        Vector3 FreeHandAroundBody(Vector3 h)
+        {
+            if (armKeepOut <= 0f || !ArmThroughBody(h)) return h;
+            Vector3 S = Shoulder, v = Flat(h - S);
+            if (v.sqrMagnitude < 1e-6f) return Flat(S + Face * 0.2f);
+            for (int k = 1; k <= 18; k++)
+                foreach (float sgn in new[] { 1f, -1f })
+                {
+                    Vector3 q = Flat(S + Quaternion.AngleAxis(sgn * k * 10f, Vector3.up) * v);
+                    if (!ArmThroughBody(q)) return q;
+                }
+            return h;
+        }
+
         /// <summary>Рука сквозь тело?</summary>
         bool ArmThroughBody(Vector3 H) => armKeepOut > 0f && ArmToBody(Body, Shoulder, H) < armKeepOut;
 
@@ -890,6 +907,7 @@ namespace Fortress.Hero.Proto
                     Vector3 want = HandAtLedge(Reach(p));
                     hand = Vector3.Lerp(hand, want, 1f - Mathf.Exp(-handFollow * dt));
                 }
+                hand = FreeHandAroundBody(hand);                         // свободная кисть, догоняя курсор, не проходит сквозь тело
                 // ВВОД РАБОТАЕТ ВСЕГДА (даже вплотную к уступу): кисть встаёт у кромки, хват есть.
                 // Отсекается уже исполнение: тело не въедет в уступ выше порога (Blocked), а отъехать / развернуться — можно.
                 if (!orbit && inp.down && !ManualTick) GrabWhy(px);       // журнал хватов (диагностика, только живая игра)
