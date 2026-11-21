@@ -107,6 +107,8 @@ namespace Fortress.Hero.Proto
         bool LetGoPush(float alongPx)
         {
             if (mode != Mode.Grip) { letGoPx = 0f; return false; }
+            // только что схватился (автор: «при зацепе падаю мгновенно» — мышь вверх, которой целился, считалась «от себя») — не копить
+            if (gripAge < letGoGrace) { letGoPx = 0f; return false; }
             if (climbLift > 0.001f) { if (alongPx < 0f) LetGoWhy("нет: висит на кромке/камне (подъём " + climbLift.ToString("F2") + ") — «от себя» сперва опускает"); letGoPx = 0f; return false; }
             // журнал автора (2026-11-21): счёт сбрасывали дрожь руки «на себя» в 1–8 px и паузы — до 60 px подряд человек не доводит.
             // Теперь: обратный ход меньше letGoBackPx — не сброс; пауза дольше letGoPause — сброс (не отпускать «из прошлого»).

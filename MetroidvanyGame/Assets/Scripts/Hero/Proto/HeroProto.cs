@@ -851,7 +851,13 @@ namespace Fortress.Hero.Proto
         InputFrame mouseAcc; bool mouseHave;
         public static int LiveHeroes;
         void OnEnable() { LiveHeroes++; }
-        void OnDisable() { LiveHeroes = Mathf.Max(0, LiveHeroes - 1); }
+        void OnDisable() { LiveHeroes = Mathf.Max(0, LiveHeroes - 1); if (cursorConfined) { Cursor.lockState = CursorLockMode.None; cursorConfined = false; } }
+        [Tooltip("Пока держишь ЛКМ в хвате, курсор не выходит за окно игры — тяга мышью не обрывается у края.")]
+        public bool holdConfinesCursor = true;
+        bool cursorConfined;
+        [Tooltip("Первые столько секунд после хвата «отпустить» и срыв спиной не копятся: движение мыши, которым целился, не разжимает кисть.")]
+        public float letGoGrace = 0.4f;
+        float gripAge;
 
         void Update()
         {
@@ -868,6 +874,10 @@ namespace Fortress.Hero.Proto
                     mouseAcc.orbit = ProtoOrbitCamera.Orbiting;
                     mouseHave = true;
                 }
+                // КУРСОР НЕ УХОДИТ ЗА ОКНО, ПОКА ДЕРЖИШЬ (автор 2026-11-21: «мышка уже за экраном» — тяга «на себя» обрывалась у края
+                // окна). В хвате курсор не читается, только сдвиг мыши; отпустил ЛКМ — курсор свободен.
+                bool confine = holdConfinesCursor && mouseAcc.pressed && mode == Mode.Grip;
+                if (confine != cursorConfined) { Cursor.lockState = confine ? CursorLockMode.Confined : CursorLockMode.None; cursorConfined = confine; }
             }
             float rest = Mathf.Min(Time.deltaTime, maxCatchUp);
             while (rest > 1e-6f)
@@ -882,6 +892,7 @@ namespace Fortress.Hero.Proto
         public void Tick(float dt)
         {
             dtNow = dt;
+            gripAge = mode == Mode.Grip ? gripAge + dt : 0f;                // сколько держишься (окно после хвата — letGoGrace)
             Carry();
             PushStep();                                               // подвижная стена толкает тело / зажим (блок Push)
             if (!cam) return;

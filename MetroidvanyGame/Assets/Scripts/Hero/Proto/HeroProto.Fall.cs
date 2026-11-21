@@ -67,7 +67,7 @@ namespace Fortress.Hero.Proto
         /// true — жест ушёл в дожим (тело не едет).</summary>
         bool BackFallPush(float alongPx)
         {
-            if (!allowFall || mode != Mode.Grip || Hanging || alongPx >= 0f) { if (alongPx > 0f) fallPx = 0f; return false; }
+            if (!allowFall || mode != Mode.Grip || Hanging || alongPx >= 0f || gripAge < letGoGrace) { if (alongPx > 0f || gripAge < letGoGrace) fallPx = 0f; return false; }
             Vector3 away = Flat(farEnd - nearEnd);                          // «от себя» — от кисти
             if (away.sqrMagnitude < 1e-6f) return false;
             away.Normalize();
