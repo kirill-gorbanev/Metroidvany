@@ -1124,6 +1124,10 @@ namespace Fortress.Hero.Proto
             // Высота кисти догоняет плавно (без скачка на перила и со ступени).
             float hl = HandTargetY();
             if (!float.IsInfinity(hl)) handY = Mathf.MoveTowards(handY, Mathf.Lerp(handY, hl, 1f - Mathf.Exp(-handFollow * dtNow)), 5f * dtNow);   // не быстрее 5 м/с
+            // КУЛАК НЕ В ПОВЕРХНОСТЬ (автор 2026-11-21): высота догоняет плавно — и при быстром ходе вверх по склону кисть отставала
+            // и уходила под склон. Плавно — только над поверхностью (на перила, со ступени); ниже поверхности под собой — никогда.
+            float handSurf = HandLevel(hand);
+            if (!float.IsInfinity(handSurf) && handY < handSurf) handY = handSurf;
             float sy = groundY + climbLift + shoulderLift, hy = handY + handLift;
             shoulderCube.position = new Vector3(S.x, sy, S.z);
             // ЛОКОТЬ — два звена в 3D, ДЛИНЫ ЗВЕНЬЕВ СОХРАНЯЮТСЯ (автор 2026-11-21: «рука научилась растягиваться» — при быстром
@@ -1134,7 +1138,12 @@ namespace Fortress.Hero.Proto
             Vector3 v = H3 - S3;
             Vector3 dn = v.sqrMagnitude > 1e-8f ? v.normalized : Face;
             // кисть по высоте ещё догоняет (не быстрее 5 м/с), а рука уже прямая — рисунок кисти на длине руки, звенья не тянутся
-            if (v.magnitude > L * 0.999f) { H3 = S3 + dn * (L * 0.999f); }
+            if (v.magnitude > L * 0.999f)
+            {
+                H3 = S3 + dn * (L * 0.999f);
+                float hs2 = HandLevel(Flat(H3));                              // и подтянутая к прямой руке — не в поверхность
+                if (!float.IsInfinity(hs2) && H3.y < hs2 + handLift) H3.y = hs2 + handLift;
+            }
             handCube.position = H3;
             float d = Mathf.Clamp((H3 - S3).magnitude, 1e-4f, L * 0.999f);
             float a = upperArm, b = foreArm;
