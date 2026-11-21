@@ -789,7 +789,7 @@ namespace Fortress.EditorTools
             // 1–3: склоны на настил
             var ramps = new (string label, float ang, bool nubs)[]
             {
-                ("1 · 60° с камнями\nзалезть", 60f, true), ("2 · 60° без камней\nнельзя", 60f, false), ("3 · 45° с камнями\nзалезть", 45f, true),
+                ("1 · 45° с камнями\nзалезть", 45f, true), ("2 · 60° без камней\nнельзя", 60f, false), ("3 · 45° с камнями\nзалезть", 45f, true),
             };
             for (int k = 0; k < ramps.Length; k++)
             {
@@ -797,14 +797,6 @@ namespace Fortress.EditorTools
                 Ramp5("Склон " + ramps[k].label.Split('\n')[0], x0, x1, StandZ1, Deck, ramps[k].ang, false, false);
                 if (ramps[k].nubs) NubsOnRamp("Склон " + (k + 1), x0, x1, StandZ1, Deck, ramps[k].ang, ramps[k].ang > 50f ? 0.17f : 0.25f);
                 Sign(ramps[k].label, new Vector3((x0 + x1) * 0.5f, MAIN, 2.0f));
-            }
-
-            // 8: 60° — камни только для руки (встать нельзя, как было до ступенек): между хватами склон тянет вниз
-            {
-                float x0 = X(6), x1 = x0 + Lane;
-                Ramp5("Склон 8 · 60° камни только для руки", x0, x1, StandZ1, Deck, 60f, false, false);
-                NubsOnRamp("Склон 8", x0, x1, StandZ1, Deck, 60f, 0.17f);
-                Sign("8 · 60° камни\nтолько рука", new Vector3((x0 + x1) * 0.5f, MAIN, 2.0f));
             }
 
             // 4: стена 1.2 (выше кромки) с камнями на южной грани: 0.5 — вис, 0.8 — только с перехватом
@@ -923,17 +915,17 @@ namespace Fortress.EditorTools
             Sign("ПОЛОСА: ВЫСТУПЫ\nстарт", new Vector3(1.2f, MAIN, 3.2f), 1f, E);
 
             // ===== РЯД A (на восток) =====
-            // 1 · 60° с камнями-ступеньками вверх на настил 1.8 (склон только посередине z 1–3, по бокам — стена настила)
-            Sign("1 · 60° камни\nтолько рука", new Vector3(2.0f, MAIN, 0.5f), 1f, E);
-            float x1 = 3f, x1t = x1 + run60;
-            WedgeX("Склон 1 · 60° камни", x1, x1t, 1f, 3f, MAIN, UP - MAIN, TunC, surf);
-            NubsOnRampX("Склон 1", x1, x1t, ZA, UP, 0.17f);
+            // 1 · 45° с камнями вверх на настил 1.8 (склон только посередине z 1–3, по бокам — стена настила); 60° — слишком тяжело (автор)
+            Sign("1 · 45° камни\nтолько рука", new Vector3(2.0f, MAIN, 0.5f), 1f, E);
+            float x1 = 3f, x1t = x1 + run45;
+            WedgeX("Склон 1 · 45° камни", x1, x1t, 1f, 3f, MAIN, UP - MAIN, TunC, surf);
+            NubsOnRampX("Склон 1", x1, x1t, ZA, UP, 0.25f);
             Box("Настил 1", x1t, 7f, 0f, UP, 0f, AZ1, DeckC, surf);
-            // 2 · спуск 60° по камням (встать на камень, взять нижний у ног, «на себя»; или съехать)
+            // 2 · спуск 45° по камням: съезжай, лови камни рукой
             Sign("2 · спуск по камням\nсъезжай, лови камни рукой", new Vector3(5.6f, UP, 0.5f), 1f, E);
-            float x2 = 7f + run60;
-            WedgeX("Спуск 2 · 60° камни", x2, 7f, 1f, 3f, MAIN, UP - MAIN, TunC, surf);
-            NubsOnRampX("Спуск 2", x2, 7f, ZA, UP, 0.17f);
+            float x2 = 7f + run45;
+            WedgeX("Спуск 2 · 45° камни", x2, 7f, 1f, 3f, MAIN, UP - MAIN, TunC, surf);
+            NubsOnRampX("Спуск 2", x2, 7f, ZA, UP, 0.25f);
             // 3 · 45° камни только для руки (встать нельзя) на настил 2
             Sign("3 · 45° камни\nтолько рука", new Vector3(8.8f, MAIN, 0.5f), 1f, E);
             float x3 = 9.6f, x3t = x3 + run45;

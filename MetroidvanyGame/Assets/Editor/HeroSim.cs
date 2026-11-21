@@ -78,7 +78,7 @@ namespace Fortress.EditorTools
             feelLog.Length = 0;
             try
             {
-                foreach (var lane in new[] { "Склон 1", "Склон 3", "Склон 8" })
+                foreach (var lane in new[] { "Склон 1", "Склон 3" })
                 foreach (int gap in new[] { 0, 15 })
                 {
                     ProtoHold first = null; foreach (var x in H.Holds) if (x.name == lane + ": камень 1п") first = x;
@@ -625,7 +625,7 @@ namespace Fortress.EditorTools
             var sb = new StringBuilder("ПОЛОСА: ВЫСТУПЫ (арена 8), бот\n");
             (string n, Vector3[] pts, Vector3 st, float yaw)[] legs =
             {
-                ("1 60° камни вверх", new[] { new Vector3(5.0f, 1.8f, 2f) }, new Vector3(0.8f, 0.6f, 2f), 90f),
+                ("1 45° камни вверх", new[] { new Vector3(5.0f, 1.8f, 2f) }, new Vector3(0.8f, 0.6f, 2f), 90f),
                 ("2 спуск по камням", new[] { new Vector3(8.6f, 0.6f, 2f) }, new Vector3(6.0f, 1.8f, 2f), 90f),
                 ("3 45° камни только рука", new[] { new Vector3(12.0f, 1.8f, 2f) }, new Vector3(8.6f, 0.6f, 2f), 90f),
                 ("лестница вниз", new[] { new Vector3(18.0f, 0.6f, 2f) }, new Vector3(12.0f, 1.8f, 2f), 90f),
@@ -724,9 +724,8 @@ namespace Fortress.EditorTools
             // A. стенды ботом: склоны с камнями / без, стена 1.2
             (string n, float x, Vector3 goal, bool expect)[] st =
             {
-                ("1 60° с камнями", 1.3f, new Vector3(1.3f, 1.8f, 7f), true), ("2 60° без камней", 3.3f, new Vector3(3.3f, 1.8f, 7f), false),
+                ("1 45° с камнями", 1.3f, new Vector3(1.3f, 1.8f, 7f), true), ("2 60° без камней", 3.3f, new Vector3(3.3f, 1.8f, 7f), false),
                 ("3 45° с камнями", 5.3f, new Vector3(5.3f, 1.8f, 7f), true), ("4 стена 1.2 с камнями", 7.3f, new Vector3(7.3f, 1.8f, 3.8f), false),
-                ("8 60° камни только для руки", 13.3f, new Vector3(13.3f, 1.8f, 7f), true),
             };
             int good = 0;
             foreach (var s in st)
