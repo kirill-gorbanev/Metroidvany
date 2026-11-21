@@ -41,6 +41,44 @@ namespace Fortress.Hero.Proto
 
         // (камни сбоку твёрдые — убрано 2026-11-21: автор — «МЫ УДАЛИЛИ твёрдые камни»; камни телу не мешают никак)
 
+        [Tooltip("Кисть не встаёт в тело: перед телом — не ближе этого зазора (м) к его передней стороне.")]
+        public float handBodyGap = 0.03f;
+
+        /// <summary>Точка в «зоне тела» для кисти: кубик тела, расширенный вбок до линии плеча (плечо 0.2 стоит снаружи кубика 0.3 —
+        /// щель между боком и плечом тоже тело), спереди и сзади — с зазором handBodyGap. У самой линии плеча — допуск 2 см
+        /// (кисть прямо перед плечом, вдоль бока — можно).</summary>
+        bool InBodyZone(Vector3 h)
+        {
+            Vector3 u = bodyCube.right, v = bodyCube.forward; u.y = 0f; v.y = 0f; u.Normalize(); v.Normalize();
+            Vector3 d = Flat(h) - Body;
+            float x = Vector3.Dot(d, u), z = Vector3.Dot(d, v);
+            Vector2 half = BodyHalf;
+            half.x = Mathf.Max(half.x, Mathf.Abs(shoulderSide));
+            return Mathf.Abs(x) < half.x - 0.02f && Mathf.Abs(z) < half.y + handBodyGap;
+        }
+
+        /// <summary>КИСТЬ НЕ В ТЕЛЕ (автор 2026-11-22: «руку к углу поставил — и он не смог рассчитать»: кисть в щели между боком
+        /// и плечом смотрела в центр тела, ход заперт с обеих сторон). Кисть в зоне тела ПОВОРАЧИВАЕТСЯ ВОКРУГ ПЛЕЧА К ЛИЦУ
+        /// до края зоны, длина руки та же — непрерывно. (Первая версия выталкивала к ближайшей стороне кубика — когда курсор
+        /// шёл над телом, ближайшая сторона менялась, и кисть перескакивала: автор — «первые расстояния он тп, а дальше норм».)</summary>
+        Vector3 HandOutOfBody(Vector3 h)
+        {
+            if (!boxBody || !bodyCube || !InBodyZone(h)) return h;
+            Vector3 S = Shoulder, d = Flat(h - S);
+            float len = d.magnitude;
+            if (len < 1e-4f) return h;
+            Vector3 fc = Face;
+            if (InBodyZone(S + fc * len)) return h;                            // и прямо перед плечом в теле — не трогать (не бывает)
+            float phi = Vector3.SignedAngle(fc, d, Vector3.up), lo = 0f, hi = phi;   // lo — снаружи (к лицу), hi — в теле
+            for (int i = 0; i < 14; i++)
+            {
+                float mid = (lo + hi) * 0.5f;
+                if (InBodyZone(S + Quaternion.AngleAxis(mid, Vector3.up) * fc * len)) hi = mid; else lo = mid;
+            }
+            Vector3 q = Flat(S + Quaternion.AngleAxis(lo, Vector3.up) * fc * len);
+            return InObstacle(q, HandGap) ? h : q;
+        }
+
         /// <summary>Пробы кубика тела для уступов и обрывов: 4 угла и 4 середины сторон (на boxProbe от центра).</summary>
         Vector3[] BodyProbes(Vector3 p)
         {

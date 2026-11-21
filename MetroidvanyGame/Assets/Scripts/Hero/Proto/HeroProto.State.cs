@@ -73,6 +73,7 @@ namespace Fortress.Hero.Proto
             string s = "";
             if (rideMover) s += " · едешь с опорой";
             if (mode == Mode.Grip && handMover && handMover != rideMover) s += " · опора кисти тянет тело";
+            if (MirrorGrip) s += " · хват из-за спины (кисть зеркально у тела)";
             if (LetGoProgress > 0f) s += $" · «отпустить» {LetGoProgress * 100f:F0}%";
             if (gestureOwner.Length > 0) s += " · жест → " + gestureOwner;
             if (!float.IsInfinity(gripStamina) && mode == Mode.Grip) s += $" · выносливость {Mathf.Max(0f, gripStamina - holdTime):F1} с";
@@ -106,7 +107,7 @@ namespace Fortress.Hero.Proto
         /// (где-то оставался старый зацеп, опора кисти или флаг съезда). Причина пишется в журнал переходов.</summary>
         void ReleaseGrip(string why, bool flash = false)
         {
-            reverseGear = false;                                          // новый хват — с «переднего»
+            reverseGear = false; mirrorGrip = false;                      // новый хват — с «переднего», без зеркала
             mode = Mode.Free; pendingTurn = 0f; gripHold = null; gripSlip = false; spinSlip = false; handMover = null;
             if (flash) slipFlash = 0.5f;
             lastRelease = why;

@@ -198,9 +198,10 @@ namespace Fortress.Hero.Proto
             if (armKeepOut <= 0f) return Mathf.Max(gripL, Mathf.Min(curLen, L));
             return Mathf.Max(Mathf.Min(ArmLenMax0(dir), gripL), Mathf.Min(curLen, L));   // уже на границе — не хуже, чем сейчас (без рывка тела на линию)
         }
-        float ArmLenMax0(Vector3 dir)
+        float ArmLenMax0(Vector3 dir) => ArmLenMaxAt(SideOff, dir);
+        float ArmLenMaxAt(Vector3 sideOff, Vector3 dir)
         {
-            Vector3 v = -SideOff;                                   // тело относительно плеча
+            Vector3 v = -sideOff;                                   // тело относительно плеча
             float p = Vector3.Dot(v, dir), perp = (v - dir * p).magnitude;
             if (perp >= armKeepOut || p <= 0f) return L;
             return Mathf.Clamp(p - Mathf.Sqrt(armKeepOut * armKeepOut - perp * perp), Mathf.Min(dMin + 0.02f, L), L);
@@ -264,7 +265,7 @@ namespace Fortress.Hero.Proto
                 ok = sc;
                 if (sc >= len) break;
             }
-            return S + dir * Mathf.Max(ok, 0.05f);    // не ближе 5 см к плечу — чтобы у хвата было направление
+            return HandOutOfBody(S + dir * Mathf.Max(ok, 0.05f));    // не ближе 5 см к плечу — чтобы у хвата было направление; не внутри кубика тела (Body)
         }
 
         /// <summary>Точка внутри препятствия (прямоугольник, расширенный на gap)?</summary>
@@ -940,16 +941,20 @@ namespace Fortress.Hero.Proto
                     hand = Vector3.Lerp(hand, Flat(hoverHold.At(hoverS)), 1f - Mathf.Exp(-handFollow * dt));
                 else if (!orbit && FloorPoint(px, out var p))
                 {
-                    Vector3 want = HandAtLedge(Reach(p));
+                    Vector3 want = HandAtLedge(Reach(MirrorBehind(p, out _)));   // курсор за спиной — зеркально перед собой, у тела
                     hand = Vector3.Lerp(hand, want, 1f - Mathf.Exp(-handFollow * dt));
                 }
-                hand = FreeHandAroundBody(hand);                         // свободная кисть, догоняя курсор, не проходит сквозь тело
+                hand = HandOutOfBody(FreeHandAroundBody(hand));          // свободная кисть, догоняя курсор, не проходит сквозь тело и не внутри кубика
                 // ВВОД РАБОТАЕТ ВСЕГДА (даже вплотную к уступу): кисть встаёт у кромки, хват есть.
                 // Отсекается уже исполнение: тело не въедет в уступ выше порога (Blocked), а отъехать / развернуться — можно.
                 if (!orbit && inp.down && !ManualTick) GrabWhy(px);       // журнал хватов (диагностика, только живая игра)
                 if (!orbit && inp.down && hoverHold) BeginGripHold(hoverHold, hoverS);
                 else if (!orbit && inp.down && FloorPoint(px, out var c))
-                    BeginGrip(HandAtLedge(Reach(c)));
+                {
+                    Vector3 cm = MirrorBehind(c, out bool behind);
+                    BeginGrip(HandAtLedge(Reach(cm)));
+                    mirrorGrip = behind;                                  // только для строки состояния: жест прежний
+                }
             }
             else
             {
@@ -967,6 +972,7 @@ namespace Fortress.Hero.Proto
                     Quaternion was = bodyCube.rotation;
                     bool wasBlocked = boxBody && Blocked(Body, bodyRadius);
                     float armBefore = ArmToBody(Body, Shoulder, gripHand);
+                    float dhWas = Flat(gripHand - Shoulder).magnitude;           // кисть ближе dMin (у плеча) — поворот её не отталкивает
                     bodyCube.rotation = Quaternion.AngleAxis(step, Vector3.up) * was;
                     pendingTurn -= step;
                     // рука вошла бы в тело (и глубже, чем была) — поворот стоп
@@ -983,7 +989,10 @@ namespace Fortress.Hero.Proto
                         Vector3 bodyWas = bodyCube.position;
                         float gl = ComputeGripL();                                    // досягаемость — с учётом высоты зацепа
                         Vector3 v = Flat(gripHand - Shoulder); float dh = v.magnitude;
-                        float keep = Mathf.Clamp(dh, dMin, gl);
+                        // РЫВОК (автор 2026-11-22: «поставить в центр и повести — первые расстояния он тп»): кисть ближе dMin
+                        // (у плеча), и любой поворот сразу отталкивал тело до dMin — до 12 см за шаг. Нижний предел — как было до поворота.
+                        float dLo = Mathf.Min(dMin, dhWas);
+                        float keep = Mathf.Clamp(dh, dLo, gl);
                         if (Mathf.Abs(dh - keep) > 1e-4f && dh > 1e-4f)
                         {
                             Vector3 np = Slide(Body, v / dh * (dh - keep));            // + к кисти (рука длинна), − от кисти (согнута до упора)
@@ -992,7 +1001,7 @@ namespace Fortress.Hero.Proto
                         }
                         bool armIn = armKeepOut > 0f && ArmToBody(Body, Shoulder, gripHand) < armKeepOut && ArmToBody(Body, Shoulder, gripHand) < armBefore;
                         bool boxIn = boxBody && !wasBlocked && Blocked(Body, bodyRadius);   // угол кубика вошёл бы в стену / уступ (блок Body)
-                        if (dh > gl + 0.005f || dh < dMin - 0.005f || ShoulderBlocked(Body) || armIn || boxIn)
+                        if (dh > gl + 0.005f || dh < dLo - 0.005f || ShoulderBlocked(Body) || armIn || boxIn)
                         { bodyCube.rotation = was; bodyCube.position = bodyWas; pendingTurn = 0f; }
                         else { float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0); }
                     }
@@ -1056,7 +1065,7 @@ namespace Fortress.Hero.Proto
 
         public void BeginGrip(Vector3 c)
         {
-            mode = Mode.Grip; gripHand = c; hand = c; gripHold = null;          // кисть — сразу в точке хвата (иначе кадр «рука длиннее»)
+            mode = Mode.Grip; gripHand = c; hand = c; gripHold = null; mirrorGrip = false;          // кисть — сразу в точке хвата (иначе кадр «рука длиннее»)
             gripTop = HandHit(c, out handMover, out var gn);               // кисть на платформе — поедет с ней
             if (float.IsInfinity(gripTop)) gripTop = groundY;
             // кисть на крутом склоне не держит — съедет и отпустит (видно)
@@ -1092,11 +1101,69 @@ namespace Fortress.Hero.Proto
         /// <summary>Сейчас задний ход и руль перевёрнут.</summary>
         public bool ReverseSteering => reverseSteer && reverseGear && mode == Mode.Grip;
 
+        [Tooltip("Рука через грудь и «от себя» в упор: на столько градусов на пиксель мыши тело доворачивается, выводя руку из груди (ход назад продолжается).")]
+        public float backOutDegPerPx = 0.3f;
+
+        /// <summary>РУКА ВЫВОДИТ ТЕЛО (автор 2026-11-22: «поставил руку поближе — не могу сдвинуться ни вперёд, ни назад, стрелочка
+        /// совсем маленькая»). Кисть у плеча через грудь: ближе — рука согнута до упора (dMin), дальше — вытянутая рука прошла бы
+        /// сквозь тело (ArmLenMax обрезает дальний конец), и линия хода — 2 см. Теперь «от себя» в дальний конец, обрезанный своим
+        /// телом, доворачивает тело в ту сторону, где руке свободнее (как поворот на месте: рука ведёт тело, стены и уступы — те же
+        /// проверки). Довернулся — линия перестраивается длиннее, и тело едет назад дальше.</summary>
+        void BackOutTurn(float along)
+        {
+            if (along >= 0f || !allowTurn || Hanging || backOutDegPerPx <= 0f || armKeepOut <= 0f) return;
+            if (tTarget > 0.02f) return;                                         // ещё не в дальнем конце
+            Vector3 v = Flat(gripHand - Shoulder); if (v.sqrMagnitude < 1e-6f) return;
+            float now = ArmLenMax0(v.normalized);
+            if (now >= gripL - 0.01f) return;                                    // дальний конец — длина руки, не своё тело
+            // в какую сторону довернуть: где рука из груди выходит (дальний конец длиннее)
+            float best = now, sgn = 0f;
+            foreach (float s in new[] { 1f, -1f })
+            {
+                Quaternion q = Quaternion.AngleAxis(s * 8f, Vector3.up);
+                Vector3 so = q * SideOff, d2 = Flat(gripHand - (Body + so));
+                if (d2.sqrMagnitude < 1e-6f) continue;
+                float m = ArmLenMaxAt(so, d2.normalized);
+                if (m > best + 1e-4f) { best = m; sgn = s; }
+            }
+            if (sgn == 0f) return;
+            pendingTurn += sgn * (-along) * backOutDegPerPx;
+            gestureOwner = "рука выводит тело";
+        }
+
+        [Tooltip("ВВОД ИЗ-ЗА СПИНЫ — ЗЕРКАЛЬНО: курсор за спиной — кисть встаёт перед собой по зеркальному направлению, близко к телу (behindHandDist); мышь снизу вверх («от себя») — тело едет назад на весь ход.")]
+        public bool mirrorBehind = true;
+        [Tooltip("Курсор за спиной: кисть встаёт перед собой на таком расстоянии от плеча (м) — близко к телу, чтобы ход назад был на всю длину руки.")]
+        public float behindHandDist = 0.22f;
+        bool mirrorGrip;
+        /// <summary>Хват сделан курсором из-за спины (кисть зеркально перед собой, у тела).</summary>
+        public bool MirrorGrip => mirrorGrip && mode == Mode.Grip;
+
+        /// <summary>ВВОД ИЗ-ЗА СПИНЫ — ЗЕРКАЛЬНО (автор 2026-11-22: «тяну за персонажем — хочу движение назад»; «рука как раз ставится
+        /// ближе к телу, затем жест снизу вверх — значит персонаж двигается вниз»). Курсор позади центра тела (по лицу): направление
+        /// плечо → курсор отражается вперёд (через поперечную линию), кисть встаёт перед собой на behindHandDist от плеча — у тела.
+        /// Жест прежний: мышь снизу вверх («от себя») — тело уезжает от кисти назад на весь ход руки.
+        /// (Две прежние пробы отвергнуты: кисть зеркально далеко + перевёрнутый жест; кисть за спину.)</summary>
+        Vector3 MirrorBehind(Vector3 p, out bool behind)
+        {
+            behind = false;
+            if (!mirrorBehind) return p;
+            Vector3 f = Face;
+            if (Vector3.Dot(Flat(p) - Body, f) >= 0f) return p;
+            behind = true;
+            Vector3 v = Flat(p) - Shoulder;
+            v -= f * (2f * Vector3.Dot(v, f));                                   // зеркально вперёд
+            if (v.sqrMagnitude < 1e-6f) v = f;
+            return Shoulder + v.normalized * behindHandDist;
+        }
+
         public void Gesture(Vector2 md)
         {
             // Ledge: «от себя» до упора — отпустить; камень ниже плеча — «на себя» спускает к нему. До проверки линии: она бывает короткой на экране.
-            if (LetGoPush(-md.y)) { gestureOwner = "отпустить"; return; }
-            if (BackFallPush(-md.y)) { gestureOwner = "срыв спиной"; return; }
+            float push = -md.y;                                       // на себя (+) — к кисти
+            if (LetGoPush(push)) { gestureOwner = "отпустить"; return; }
+            if (BackFallPush(push)) { gestureOwner = "срыв спиной"; return; }
+            BackOutTurn(push);                                       // рука через грудь, «от себя» в упор — тело доворачивается
             Vector2 s0 = cam.WorldToScreenPoint(farEnd), s1 = cam.WorldToScreenPoint(nearEnd);
             Vector2 axis = s1 - s0;                         // экранное направление «к кисти» (тело едет так)
             float axisLen = axis.magnitude;
@@ -1104,7 +1171,7 @@ namespace Fortress.Hero.Proto
             Vector2 a = axis / axisLen;
             // ЛОКАЛЬНАЯ раскладка жеста (экран = камера за спиной = тело): Y — езда, X — поворот.
             // Не зависит от того, где кисть на экране (раньше раскладка крутилась вместе с линией хода — поворот «съезжал»).
-            float along = -md.y;                            // мышь вниз (на себя) → тело к кисти (+), вверх — от кисти
+            float along = push;                             // мышь вниз (на себя) → тело к кисти (+), вверх — от кисти; зеркало — наоборот
             Vector2 side = new Vector2(md.x, 0f);            // мышь вправо/влево → поворот на месте
             // ВПЕРЁД / НАЗАД: тело едет лицом вперёд — быстрее, спиной — медленнее (плавно по углу хода к «лицу»)
             Vector3 travel = (nearEnd - farEnd).normalized * Mathf.Sign(along);   // куда поедет тело
@@ -1122,9 +1189,10 @@ namespace Fortress.Hero.Proto
             // слой ДВИЖЕНИЯ: кисть внутри разброса — едет полностью; в слое поворота — езда гаснет к краю (только поворот)
             Vector3 Bn = Vector3.Lerp(farEnd, nearEnd, t);
             float phi = Vector3.SignedAngle(face, gripHand - Bn, Vector3.up);       // угол кисти от лица (+ вправо)
-            float moveK = phi >= 0f
-                ? 1f - Mathf.Clamp01((phi - sectorRight) / Mathf.Max(1f, moveFadeRight - sectorRight))
-                : 1f - Mathf.Clamp01((-phi - sectorLeft) / Mathf.Max(1f, moveFadeLeft - sectorLeft));
+            float phiMove = phi;
+            float moveK = phiMove >= 0f
+                ? 1f - Mathf.Clamp01((phiMove - sectorRight) / Mathf.Max(1f, moveFadeRight - sectorRight))
+                : 1f - Mathf.Clamp01((-phiMove - sectorLeft) / Mathf.Max(1f, moveFadeLeft - sectorLeft));
             if (!moveAllAround) k *= moveK;                                      // зона — без исключений (блок Zone), лестница тоже                       // лестница вниз: камень у ног / за спиной — езда без затухания (Ledge)
             lastSpeedK = k;
             // ВСКАРАБКИВАНИЕ: у кромки, за которую держишься, жест «на себя» поднимает тело (а не двигает)
