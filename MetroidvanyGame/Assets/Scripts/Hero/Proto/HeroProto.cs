@@ -1211,6 +1211,9 @@ namespace Fortress.Hero.Proto
             return !float.IsInfinity(h) && SegCutsSurface(Shoulder3, new Vector3(q.x, h + handLift, q.z), true, armCutDepth);   // край ступени — не барьер: только глубоко сквозь
         }
 
+        [Tooltip("Лимит руки по поверхности: кисть ниже плеча не берётся, только если прямая плечо → кисть уходит под поверхность глубже этого (м). Край ступени (несколько см) — не барьер (автор 2026-11-21: «лестница сломалась»).")]
+        public float armCutDepth = 0.15f;
+
         /// <summary>Отрезок a → b проходит под поверхностью (между их высотами; крыша над ними не в счёт)?
         /// onlyDown — только если b ниже a (тянешься вниз); depth — насколько глубоко под поверхностью считается «сквозь».</summary>
         bool SegCutsSurface(Vector3 a, Vector3 b, bool onlyDown, float depth = 0.02f)
