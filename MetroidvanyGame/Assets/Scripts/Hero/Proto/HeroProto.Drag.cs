@@ -57,7 +57,7 @@ namespace Fortress.Hero.Proto
                 if (onIt) q = ClampToFoot(b, Flat(r.GetPoint(hitD)), 0.01f);       // кисть — куда указал курсор
                 // рука достаёт до точки? нет — ближайшая к плечу точка следа
                 if (!HandReaches(q)) { q = ClampToFoot(b, S, 0.01f); if (!HandReaches(q)) continue; }
-                float score = gap + (onIt ? 0f : 1f);
+                float score = onIt ? hitD * 1e-3f : 1f + gap;                     // курсор на предмете — ближний по лучу (верх стопки) первым
                 if (score < bestScore) { bestScore = score; best = it; hand = q; }
             }
             return best;
@@ -89,12 +89,47 @@ namespace Fortress.Hero.Proto
             dragItemY = b.min.y;
             hoverItem = null;
             gestureOwner = "взял предмет";
+            CollectRiders(it);
+        }
+
+        // ---- СТОПКА: что лежит на взятом предмете, едет вместе с ним ----
+        // Автор 2026-11-21: «положить один объект на второй и т. д.». Взял нижний — стопка едет целиком (раньше верхний
+        // проваливался сквозь взятый: опора «в руке» не считалась опорой). Разобрать — снимая сверху (курсор берёт верхний).
+        readonly System.Collections.Generic.List<ProtoItem> riders = new System.Collections.Generic.List<ProtoItem>();
+        Vector2 stackMin, stackMax;          // след всей стопки относительно центра взятого (XZ)
+
+        /// <summary>Всё, что лежит на предмете (и на том, что на нём, и т. д.): низ на верхе опоры (±2 см), следы пересекаются.</summary>
+        void CollectRiders(ProtoItem baseIt)
+        {
+            riders.Clear();
+            var queue = new System.Collections.Generic.List<ProtoItem> { baseIt };
+            for (int q = 0; q < queue.Count; q++)
+            {
+                Bounds sb = queue[q].WorldBounds; Rect sr = FootRect(sb);
+                foreach (var o in ProtoItem.Live)
+                {
+                    if (!o || o.held || queue.Contains(o)) continue;
+                    Bounds ob = o.WorldBounds;
+                    if (Mathf.Abs(ob.min.y - sb.max.y) <= 0.02f && sr.Overlaps(FootRect(ob))) { queue.Add(o); riders.Add(o); o.held = true; }
+                }
+            }
+            Bounds b = baseIt.WorldBounds, u = b;
+            foreach (var r in riders) u.Encapsulate(r.WorldBounds);
+            stackMin = new Vector2(u.min.x - b.center.x, u.min.z - b.center.z);
+            stackMax = new Vector2(u.max.x - b.center.x, u.max.z - b.center.z);
+        }
+
+        void ReleaseRiders()
+        {
+            foreach (var r in riders) if (r) { r.held = false; r.SetLook(false, false); }
+            riders.Clear();
         }
 
         void EndDrag(string why)
         {
             if (!dragItem) return;
             dragItem.held = false; dragItem.SetLook(false, false);
+            ReleaseRiders();
             lastRelease = why;
             dragItem = null;
         }
@@ -155,6 +190,7 @@ namespace Fortress.Hero.Proto
             dragItemY = g >= dragItemY ? g : Mathf.MoveTowards(dragItemY, g, 3f * dt);
             Vector3 d = new Vector3(next.x - b.center.x, dragItemY - b.min.y, next.z - b.center.z);
             it.transform.position += d;
+            foreach (var r in riders) if (r) r.transform.position += d;    // стопка едет с ним
             it.SetLook(false, true);
             hand = next - dragOff;                                          // кисть — всегда на предмете (предмет мог отстать от курсора)
         }
@@ -174,10 +210,25 @@ namespace Fortress.Hero.Proto
             ground = float.NegativeInfinity;
             Vector3 e = b.extents;
             Rect r = FootRect(c, e);
-            foreach (var o in obstacles) if (r.Overlaps(o)) return false;
-            if (BoxHitsRect(Body, r, -itemBodyGap)) return false;                 // в кубик тела (с зазором)
+            // стены и тело — по следу всей стопки (верхний, свесившийся за край, тоже не входит)
+            Rect rs = self == dragItem && riders.Count > 0 ? Rect.MinMaxRect(c.x + stackMin.x, c.z + stackMin.y, c.x + stackMax.x, c.z + stackMax.y) : r;
+            foreach (var o in obstacles) if (rs.Overlaps(o)) return false;
+            if (BoxHitsRect(Body, rs, -itemBodyGap)) return false;                // в кубик тела (с зазором)
+            // ДРУГОЙ ПРЕДМЕТ под следом (укладка, автор 2026-11-21: «положить один объект на второй и т. д.»): его верх — опора,
+            // если рука поднимет туда (не выше низа + itemLift и не выше своего уровня + handUp); выше — стена, как раньше
+            float stackTop = float.NegativeInfinity;
             foreach (var other in ProtoItem.Live)
-                if (other && other != self && r.Overlaps(FootRect(other.WorldBounds))) return false;
+            {
+                if (!other || other == self || other.held) continue;
+                Bounds ob = other.WorldBounds;
+                if (!r.Overlaps(FootRect(ob)))
+                {
+                    if (rs.Overlaps(FootRect(ob)) && ob.max.y > bottom + 0.005f) return false;   // свесившийся верх стопки — не в соседний предмет
+                    continue;
+                }
+                if (ob.max.y > bottom + itemLift || ob.max.y > BodyLevel + handUp) return false;
+                stackTop = Mathf.Max(stackTop, ob.max.y);
+            }
             // под следом — сетка проб через ≤ 6 см (край ступени между пробами не проскочит); низ — по самой высокой
             int nx = Mathf.Clamp(Mathf.CeilToInt(2f * e.x / 0.06f), 1, 16), nz = Mathf.Clamp(Mathf.CeilToInt(2f * e.z / 0.06f), 1, 16);
             for (int i = 0; i <= nx; i++)
@@ -187,7 +238,48 @@ namespace Fortress.Hero.Proto
                     if (float.IsInfinity(h)) return false;                           // сплошное под следом
                     ground = Mathf.Max(ground, h);
                 }
-            return ground <= bottom + itemLift;                                   // выше, чем поднимет рука, — бок уступа
+            if (ground > bottom + itemLift) return false;                         // выше, чем поднимет рука, — бок уступа
+            ground = Mathf.Max(ground, stackTop);                                 // на другой предмет — на его верх
+            return true;
+        }
+
+        [Tooltip("Предмет без опоры (выдернули нижний из стопки, столкнули с края) опускается с такой скоростью (м/с).")]
+        public float itemFallSpeed = 4f;
+
+        /// <summary>Опора под следом r на высоте fromY и ниже: поверхность (сетка проб) и верхи других лежащих предметов.</summary>
+        float ItemSupport(ProtoItem self, Rect r, float fromY)
+        {
+            float g = 0f;
+            int nx = Mathf.Clamp(Mathf.CeilToInt(r.width / 0.06f), 1, 16), nz = Mathf.Clamp(Mathf.CeilToInt(r.height / 0.06f), 1, 16);
+            for (int i = 0; i <= nx; i++)
+                for (int j = 0; j <= nz; j++)
+                {
+                    float h = LevelHeight(new Vector3(r.xMin + r.width * (0.01f + 0.98f * i / nx), 0f, r.yMin + r.height * (0.01f + 0.98f * j / nz)), fromY, 0.02f);
+                    if (!float.IsInfinity(h)) g = Mathf.Max(g, h);
+                }
+            foreach (var other in ProtoItem.Live)
+            {
+                if (!other || other == self || other.held) continue;
+                Bounds ob = other.WorldBounds;
+                if (ob.max.y <= fromY + 0.02f && r.Overlaps(FootRect(ob))) g = Mathf.Max(g, ob.max.y);
+            }
+            return g;
+        }
+
+        /// <summary>ОСЕДАНИЕ: лежащий предмет, под которым ушла опора (вытащили нижний из стопки), опускается на то, что под ним.
+        /// Только вниз и только по вертикали; снизу вверх (оседание по порядку) — верхний ждёт, пока сядет нижний.</summary>
+        void SettleItems(float dt)
+        {
+            if (ProtoItem.Live.Count == 0) return;
+            for (int pass = 0; pass < 2; pass++)
+                foreach (var it in ProtoItem.Live)
+                {
+                    if (!it || it.held) continue;
+                    Bounds b = it.WorldBounds;
+                    float sup = ItemSupport(it, FootRect(b), b.min.y);
+                    if (sup < b.min.y - 0.001f)
+                        it.transform.position += Vector3.down * Mathf.Min(b.min.y - sup, itemFallSpeed * dt * 0.5f);
+                }
         }
 
         /// <summary>Лежащие предметы (не тот, что в руке) — стена для тела: кубик тела (или круг r) в точке p задевает след предмета?</summary>
@@ -236,6 +328,7 @@ namespace Fortress.Hero.Proto
         void DragReset()
         {
             if (dragItem) { dragItem.held = false; dragItem.SetLook(false, false); }
+            ReleaseRiders();
             if (hoverItem) hoverItem.SetLook(false, false);
             dragItem = hoverItem = null;
         }

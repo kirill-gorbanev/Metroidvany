@@ -1022,6 +1022,7 @@ namespace Fortress.Hero.Proto
                 if (Blocked(b, bodyRadius)) b = Slide(Body, b - Body); // никогда не ставить тело в стену
                 bodyCube.position = new Vector3(b.x, bodyCube.position.y, b.z);
             }
+            SettleItems(dt);                                          // предмет без опоры оседает (блок Drag, стопки)
             SlopeStep(dt);                                            // крутой склон без опоры — сползание
             SpinStep(dt);                                             // карусель: центробежная зона, слёт
             ClimbDecay(dt);                                           // отпустил кромку до перевала — назад вниз
