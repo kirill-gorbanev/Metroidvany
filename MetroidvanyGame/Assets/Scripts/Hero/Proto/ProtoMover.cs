@@ -37,7 +37,10 @@ namespace Fortress.Hero.Proto
 
         void Awake() { start = transform.position; startRot = transform.rotation; time = phase; }
 
-        void Update() { if (autoRun && !HeroProto.ManualTick) Step(Time.deltaTime); }
+        // шагает герой (HeroProto.Update): тем же шагом и раньше героя. Героя на сцене нет — шагает сама.
+        void OnEnable() { if (!HeroProto.LiveMovers.Contains(this)) HeroProto.LiveMovers.Add(this); }
+        void OnDisable() { HeroProto.LiveMovers.Remove(this); }
+        void Update() { if (autoRun && !HeroProto.ManualTick && HeroProto.LiveHeroes == 0) Step(Time.deltaTime); }
 
         public void Step(float dt)
         {

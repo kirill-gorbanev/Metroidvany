@@ -47,7 +47,7 @@ namespace Fortress.Hero.Proto
             if (m != null)
             {
                 if (Orbiting)
-                    pitch = Mathf.Clamp(pitch - m.delta.ReadValue().y * pitchSpeed, minPitch, maxPitch);
+                    pitch = Mathf.Clamp(pitch - m.delta.ReadValue().y * (1080f / Mathf.Max(1f, Screen.height)) * pitchSpeed, minPitch, maxPitch);   // градусы на px при высоте экрана 1080 (доля экрана)
                 float s = m.scroll.ReadValue().y;
                 if (Mathf.Abs(s) > 0.01f) distance = Mathf.Clamp(distance * (1f - Mathf.Sign(s) * 0.1f), minDistance, maxDistance);
             }

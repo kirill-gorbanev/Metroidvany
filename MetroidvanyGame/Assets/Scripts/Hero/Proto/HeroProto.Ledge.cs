@@ -99,10 +99,62 @@ namespace Fortress.Hero.Proto
         public bool DiagHoldOk(Vector3 p, ProtoHold hd = null) => HoldOk(p, hd);
 
         // ---------------- спуск ----------------
-        [Tooltip("«От себя» до упора: рука уже прямая, а жест «от себя» продолжается столько пикселей — кисть отпускает (спуск).")]
+        /// <summary>ЕДИНИЦЫ ЖЕСТА: сырые пиксели мыши → пиксели экрана высотой 1080. Все пороги жестов заданы «как на 1080»,
+        /// то есть в доле высоты экрана: в маленьком окне Game и на 4K жест той же доли экрана делает то же самое
+        /// (езда и поворот и так считаются в доле экрана — через длину линии хода на экране).</summary>
+        float Px1080 => 1080f / Mathf.Max(1f, Screen.height);
+
+        [Tooltip("«От себя» до упора: рука уже прямая, а жест «от себя» продолжается столько пикселей (при высоте экрана 1080; иначе — та же доля экрана) — кисть отпускает (спуск).")]
         public float letGoPushPx = 60f;
-        float letGoPx; Vector3 letGoFrom;
+        [Tooltip("«Отпустить»: обратный ход («на себя») меньше этого (px при 1080) не сбрасывает счёт — дрожь руки.")]
+        public float letGoBackPx = 15f;
+        [Tooltip("«Отпустить»: пауза в жесте дольше этого (с) сбрасывает счёт.")]
+        public float letGoPause = 0.5f;
+        float letGoPx, letGoBack, letGoIdle; Vector3 letGoFrom;
         [System.NonSerialized] public int letGoCount;
+        /// <summary>Сколько накоплено до «отпустить» (0…1): кисть бледнеет — видно, что сейчас разожмётся.</summary>
+        public float LetGoProgress => mode == Mode.Grip ? Mathf.Clamp01(letGoPx / Mathf.Max(1f, letGoPushPx)) : 0f;
+
+        // ДИАГНОСТИКА «отпустить» (шаг 3 долга): журнал причин — только смены причины, последние 30, со временем.
+        // Читать: HeroProto.DiagLetGoLog (автор воспроизводит в Play, Claude читает).
+        readonly System.Collections.Generic.List<string> letGoLog = new System.Collections.Generic.List<string>();
+        string letGoLast;
+        void LetGoWhy(string why)
+        {
+            string key = why.Split(' ')[0];
+            if (key == letGoLast && !why.StartsWith("ОТПУСТИЛ")) { letGoLog[letGoLog.Count - 1] = Time.time.ToString("F2") + "  " + why; return; }
+            letGoLast = key;
+            letGoLog.Add(Time.time.ToString("F2") + "  " + why + "   [крутое " + onSteep + ", кромка " + ClimbGrip + ", зацеп " + (gripHold ? gripHold.name : "пол") + ", t " + t.ToString("F2") + "]");
+            if (letGoLog.Count > 30) letGoLog.RemoveAt(0);
+        }
+        public string DiagLetGoLog => string.Join("\n", letGoLog);
+
+        // ДИАГНОСТИКА ХВАТА (автор: «на кругу не смог зацепиться вообще»): на каждое нажатие ЛКМ — что взяла кисть
+        // и почему не взяла ближайшие зацепы (как в FindHold). Читать: DiagGrabLog.
+        readonly System.Collections.Generic.List<string> grabLog = new System.Collections.Generic.List<string>();
+        public string DiagGrabLog => string.Join("\n", grabLog);
+        void GrabWhy(Vector2 px)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.Append(Time.time.ToString("F2")).Append("  курсор ").Append(px.ToString("F0")).Append(" → ")
+              .Append(hoverHold ? "ЗАЦЕП " + hoverHold.name : "пол").Append(onSpin ? " (тело на диске)" : "");
+            Vector3 S3 = Shoulder3;
+            bool haveFloor = FloorPoint(px, out var fp), floorGood = false;
+            if (haveFloor && HandOk(fp)) { HandHit(fp, out var fm, out var fn); floorGood = Vector3.Angle(fn, Vector3.up) <= steepAngle && !FloorSpins(fm, fp); }
+            sb.Append(", пол под курсором ").Append(haveFloor ? (floorGood ? "хороший (радиус узкий)" : "не хороший (радиус широкий)") : "нет");
+            foreach (var hd in holds)
+            {
+                if (!hd) continue;
+                float dAny = float.MaxValue; int ok = 0;
+                for (int i = 0; i <= 20; i++) { Vector3 P = hd.At(i / 20f); Vector3 sp = cam.WorldToScreenPoint(P); if (sp.z > 0f) dAny = Mathf.Min(dAny, ((Vector2)sp - px).magnitude); if (HoldOk(P, hd)) ok++; }
+                if (dAny > 0.3f * Screen.height) continue;
+                float far = (hd.At(hd.ClosestTo(S3)) - S3).magnitude;
+                sb.Append("\n      ").Append(hd.name).Append(": до курсора ").Append(dAny.ToString("F0")).Append(" px (радиус ").Append(SnapPx(hd, floorGood).ToString("F0"))
+                  .Append("), до плеча ").Append(far.ToString("F2")).Append(" м (рука ").Append(L.ToString("F2")).Append("), достижимых точек ").Append(ok).Append("/21");
+            }
+            grabLog.Add(sb.ToString());
+            if (grabLog.Count > 15) grabLog.RemoveAt(0);
+        }
 
         /// <summary>ОТ СЕБЯ ДО УПОРА — ОТПУСТИТЬ (автор: «движение назад не работает, я как бы зафиксирован»).
         /// Держишься за то, что выше тебя (кромка, камень, поручень выше плеча) или стоишь на крутом, рука уже прямая (тело
@@ -110,18 +162,33 @@ namespace Fortress.Hero.Proto
         /// или сползает. На ровном полу правило не действует (там «от себя» до упора — просто стоп, как было).</summary>
         bool LetGoPush(float alongPx)
         {
-            if (mode != Mode.Grip || climbLift > 0.001f) { letGoPx = 0f; return false; }
-            if (alongPx >= 0f) { if (alongPx > 0f) letGoPx = 0f; return false; }
+            if (mode != Mode.Grip) { letGoPx = 0f; return false; }
+            if (climbLift > 0.001f) { if (alongPx < 0f) LetGoWhy("нет: висит на кромке/камне (подъём " + climbLift.ToString("F2") + ") — «от себя» сперва опускает"); letGoPx = 0f; return false; }
+            // журнал автора (2026-11-21): счёт сбрасывали дрожь руки «на себя» в 1–8 px и паузы — до 60 px подряд человек не доводит.
+            // Теперь: обратный ход меньше letGoBackPx — не сброс; пауза дольше letGoPause — сброс (не отпускать «из прошлого»).
+            if (alongPx > 0f)
+            {
+                if (letGoPx > 0f) { letGoBack += alongPx * Px1080; if (letGoBack > letGoBackPx) { LetGoWhy("сброс: жест «на себя» (" + letGoBack.ToString("F0") + " px)"); letGoPx = 0f; } }
+                return false;
+            }
+            if (alongPx == 0f)
+            {
+                if (letGoPx > 0f) { letGoIdle += dtNow; if (letGoIdle > letGoPause) { LetGoWhy("сброс: пауза"); letGoPx = 0f; } }
+                return false;
+            }
+            letGoIdle = 0f; letGoBack = 0f;
             bool atFar = t <= 0.03f && tTarget <= 0.01f;
-            bool pinned = onSteep || ClimbGrip || (gripHold && gripHold.At(gripHoldS).y > ShoulderY + 0.05f) || ComputeGripL() < L - 0.02f;
-            if (!pinned) { letGoPx = 0f; return false; }
+            bool aboveSh = gripHold && gripHold.At(gripHoldS).y > ShoulderY + 0.05f, bent = ComputeGripL() < L - 0.02f;
+            bool pinned = onSteep || ClimbGrip || aboveSh || bent;
+            if (!pinned) { LetGoWhy("нет: не прижат (не крутое, не кромка, зацеп не выше плеча, рука не согнута) — на ровном «от себя» до упора просто стоп"); letGoPx = 0f; return false; }
             if (letGoPx <= 0f) letGoFrom = Body;
-            letGoPx += -alongPx;
-            if (letGoPx < letGoPushPx) return false;
+            letGoPx += -alongPx * Px1080;
+            if (letGoPx < letGoPushPx) { LetGoWhy("копится " + letGoPx.ToString("F0") + "/" + letGoPushPx.ToString("F0")); return false; }
             // рука прямая (дальний конец хода) — или тело за весь жест не сдвинулось: на 60° рука по 3D подтягивает его обратно
             // каждый кадр, до дальнего конца оно не доходит, и раньше кисть не отпускала (автор: «на 3 работает, на 1 — нет»)
             bool stuck = (Body - letGoFrom).magnitude < 0.02f;
-            if (!atFar && !stuck) { letGoPx = 0f; return false; }       // тело отходит — пусть отходит, окно заново
+            if (!atFar && !stuck) { LetGoWhy("сброс: тело отходит (сдвиг " + ((Body - letGoFrom).magnitude * 100f).ToString("F0") + " см, t " + t.ToString("F2") + ")"); letGoPx = 0f; return false; }       // тело отходит — пусть отходит, окно заново
+            LetGoWhy("ОТПУСТИЛ (" + (atFar ? "рука прямая" : "тело стоит") + ")");
             letGoPx = 0f; letGoCount++;
             mode = Mode.Free; pendingTurn = 0f; gripHold = null; gripSlip = false; spinSlip = false; handMover = null;
             lastGestureAlong = lastGestureSide = Vector2.zero;
@@ -154,7 +221,7 @@ namespace Fortress.Hero.Proto
         [Tooltip("Спуск по камням: глубже этого (м) под центром тела за шаг — обрыв, дальше не спускает.")]
         public float ladderDrop = 0.8f;
 
-        [Tooltip("Спуск по камням: на сколько метров опускается тело к нижнему камню на пиксель жеста «на себя».")]
+        [Tooltip("Спуск по камням: на сколько метров опускается тело к нижнему камню на пиксель жеста «на себя» (при высоте экрана 1080; иначе — та же доля экрана).")]
         public float ladderPerPx = 0.002f;
 
         /// <summary>СПУСК: держишься за камень ниже плеча — «на себя» ведёт тело к этому камню (вниз по склону), пока тело не встанет на него
@@ -169,7 +236,7 @@ namespace Fortress.Hero.Proto
             if (dist < 0.02f) return true;
             // шаг — только против стен и обрывов: Slide ещё запрещает «рука глубже в тело», а кисть тут за спиной и по пути
             // проходит у самого тела; в конце она сбоку на 0.15 м
-            Vector3 np = Body + d / dist * Mathf.Min(alongPx * ladderPerPx, dist);
+            Vector3 np = Body + d / dist * Mathf.Min(alongPx * Px1080 * ladderPerPx, dist);
             if (LadderBlocked(np)) return true;
             bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
             float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0);
@@ -187,8 +254,19 @@ namespace Fortress.Hero.Proto
 
         float SnapBias(ProtoHold hd) => hd is ProtoNub ? nubYield * Screen.height : 0f;
 
-        /// <summary>Вис на выступе: камень выше порога шага от пола.</summary>
-        bool NubHang => OnNub && gripTop > groundY + maxStep + 0.005f;
+        /// <summary>Вис на выступе: камень выше порога шага от пола. Камень, на который встать НЕЛЬЗЯ (foothold = false, только рука),
+        /// — выше уровня тела хоть на nubHangMin: «ступенькой» он не станет, ждать порога шага незачем.
+        /// (Автор 2026-11-21, стенд 8: камень выше тела на 0.38 и почти над плечом — езде некуда (рука согнута до упора),
+        ///  а подъём не включался: камень ниже порога шага считался ступенькой. «На себя» не делало ничего, пока тело
+        ///  не сползало ниже, — «двойное утягивание, как будто камень 2 преграда».)</summary>
+        bool NubHang => OnNub && gripTop > groundY + (NubStandable ? maxStep + 0.005f : nubHangMin);
+        bool NubStandable => gripHold is ProtoNub n && n.foothold;
+        [Tooltip("Камень только для руки: вис включается, когда камень выше уровня тела хоть на столько (м).")]
+        public float nubHangMin = 0.05f;
+        [Tooltip("Камень только для руки: «на себя» поднимает тело, пока камень не окажется на столько (м) выше уровня тела (кисть у пояса).")]
+        public float nubHangKeep = 0.1f;
+        [Tooltip("Подъём тела на камне на пиксель жеста «на себя» (м/px при 1080). Кромка — climbPerPx 0.0012 (каждый сантиметр куплен рукой); на камне вдвое быстрее — примерно как езда (автор: «тянуть в 2 раза больше»).")]
+        public float nubClimbPerPx = 0.0024f;
 
         /// <summary>Тело дальше к камню не идёт: упёрлось в уступ / стену или рука согнута до упора.</summary>
         bool NubAtWall()

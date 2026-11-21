@@ -788,7 +788,48 @@ namespace Fortress.Hero.Proto
         public static bool ManualTick;
         float dtNow = 0.02f;
 
-        void Update() { if (!ManualTick) Tick(Time.deltaTime); }
+        // ШАГ НЕ ДЛИННЕЕ maxStepDt, КАЖДЫЙ КАДР (шаг 2 долга). Кадр делится на шаги ≤ 0.02 с (как у бота HeroSim.Dt):
+        // подвис кадр на 0.3 с — 15 ровных шагов, а не один длинный: тело не прыгает, стена не проскакивает сквозь тело.
+        // Быстрый монитор — один короткий шаг на кадр: картинка гладкая без сглаживания.
+        // (Проба FixedUpdate 50/с: на мониторе 247 кадров/с карусель и тело шли ступеньками — автор: «дёргается на вращении»;
+        //  сглаживать пришлось бы каждый кубик и каждую линию подсказок.)
+        // Платформы — тем же шагом и раньше героя. Подвис дольше maxCatchUp — игра на миг замедлится, но не прыгнет.
+        [Tooltip("Самый длинный шаг модели (с). Длинный кадр делится на такие шаги.")]
+        public float maxStepDt = 0.02f;
+        [Tooltip("Больше этого времени (с) за кадр не догоняем — подвис дольше просто замедляет игру.")]
+        public float maxCatchUp = 0.25f;
+        /// <summary>Платформы, которые шагает герой (каждый шаг — раньше героя).</summary>
+        public static readonly System.Collections.Generic.List<ProtoMover> LiveMovers = new System.Collections.Generic.List<ProtoMover>();
+        InputFrame mouseAcc; bool mouseHave;
+        public static int LiveHeroes;
+        void OnEnable() { LiveHeroes++; }
+        void OnDisable() { LiveHeroes = Mathf.Max(0, LiveHeroes - 1); }
+
+        void Update()
+        {
+            if (ManualTick) return;
+            if (driver == null)
+            {
+                var m = Mouse.current;
+                if (m != null)
+                {
+                    mouseAcc.pos = m.position.ReadValue();
+                    mouseAcc.delta += m.delta.ReadValue();
+                    mouseAcc.pressed = m.leftButton.isPressed;
+                    mouseAcc.down |= m.leftButton.wasPressedThisFrame;
+                    mouseAcc.orbit = ProtoOrbitCamera.Orbiting;
+                    mouseHave = true;
+                }
+            }
+            float rest = Mathf.Min(Time.deltaTime, maxCatchUp);
+            while (rest > 1e-6f)
+            {
+                float dt = Mathf.Min(rest, Mathf.Max(0.002f, maxStepDt));
+                for (int i = 0; i < LiveMovers.Count; i++) if (LiveMovers[i] && LiveMovers[i].autoRun) LiveMovers[i].Step(dt);
+                Tick(dt);
+                rest -= dt;
+            }
+        }
 
         public void Tick(float dt)
         {
@@ -799,9 +840,9 @@ namespace Fortress.Hero.Proto
             if (driver != null) inp = driver();
             else
             {
-                var m = Mouse.current; if (m == null) return;
-                inp = new InputFrame { pos = m.position.ReadValue(), delta = m.delta.ReadValue(), pressed = m.leftButton.isPressed,
-                                       down = m.leftButton.wasPressedThisFrame, orbit = ProtoOrbitCamera.Orbiting };
+                if (!mouseHave) return;
+                inp = mouseAcc;
+                mouseAcc.delta = Vector2.zero; mouseAcc.down = false;   // потрачено этим шагом; кнопка и курсор — как были
             }
             // зона ввода сдвинута вниз: точка руки = курсор + сдвиг вверх (жесты — по смещению мыши, их сдвиг не меняет)
             Vector2 px = inp.pos + new Vector2(0f, inputShift * Screen.height);
@@ -821,6 +862,7 @@ namespace Fortress.Hero.Proto
                 }
                 // ВВОД РАБОТАЕТ ВСЕГДА (даже вплотную к уступу): кисть встаёт у кромки, хват есть.
                 // Отсекается уже исполнение: тело не въедет в уступ выше порога (Blocked), а отъехать / развернуться — можно.
+                if (!orbit && inp.down && !ManualTick) GrabWhy(px);       // журнал хватов (диагностика, только живая игра)
                 if (!orbit && inp.down && hoverHold) BeginGripHold(hoverHold, hoverS);
                 else if (!orbit && inp.down && FloorPoint(px, out var c))
                     BeginGrip(HandAtLedge(Reach(c)));

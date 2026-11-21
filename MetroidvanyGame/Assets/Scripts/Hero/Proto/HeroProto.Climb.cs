@@ -41,7 +41,7 @@ namespace Fortress.Hero.Proto
         public float holdSnapWorld = 0.3f;
         [Tooltip("Кисть берёт кромку уступа не выше своего уровня + столько (м). Досягаемость всё равно по 3D.")]
         public float climbUp = 0.8f;
-        [Tooltip("Подъём тела у кромки на пиксель жеста «на себя» (м/px). 0.0012: уступ 0.5 — ~110 px, 0.7 — ~280 px.")]
+        [Tooltip("Подъём тела у кромки на пиксель жеста «на себя» (м/px при высоте экрана 1080; на другой высоте — в той же доле экрана). 0.0012: уступ 0.5 — ~110 px, 0.7 — ~280 px.")]
         public float climbPerPx = 0.0012f;
         [Tooltip("Перевал: поднялся достаточно — тело само заходит на уступ к кисти (м/с), пока держишься.")]
         public float mantleSpeed = 0.8f;
@@ -72,7 +72,9 @@ namespace Fortress.Hero.Proto
         public float SteepAngleUnderBody => Vector3.Angle(bodyNormal, Vector3.up);
         public bool DiagFindHold(Vector2 px) => FindHold(px, out _, out _);
         public bool DiagHandOk(Vector3 p) => HandOk(Flat(p));
-        public float ClimbNeed => gripTop - groundY - maxStep + 0.03f;
+        /// <summary>До какой высоты поднимает «на себя» у кромки / на камне: уступ — пока не станет ступенькой;
+        /// камень только для руки (Ledge) — пока кисть не у пояса (nubHangKeep).</summary>
+        public float ClimbNeed => OnNub && !NubStandable ? gripTop - groundY - nubHangKeep : gripTop - groundY - maxStep + 0.03f;
 
         /// <summary>Уровень, от которого тело меряет «шаг вверх»: пол + подъём на кромке.</summary>
         float BodyLevel => groundY + Mathf.Max(climbLift, 0f);
@@ -251,9 +253,9 @@ namespace Fortress.Hero.Proto
         /// <summary>Жест у кромки (в пикселях вдоль): «на себя» — поднять тело, «от себя» — опустить. true — жест ушёл в подъём.</summary>
         bool ClimbConvert(float px)
         {
-            float meters = px * climbPerPx;
+            float meters = px * Px1080 * (OnNub ? nubClimbPerPx : climbPerPx);   // камень — быстрее кромки, как езда (Ledge)
             if (!ClimbGrip) return false;
-            float need = gripTop - groundY - maxStep + 0.03f;            // поднять настолько, чтобы уступ стал ступенькой
+            float need = ClimbNeed;                                       // уступ — пока не станет ступенькой; камень только для руки — кисть у пояса (Ledge)
             if (meters > 0f)
             {
                 if (climbLift >= need) return false;                      // уже поднялся — дальше обычный ход на уступ
@@ -329,6 +331,7 @@ namespace Fortress.Hero.Proto
             Color h = cHand;
             if (GripSlipping || slipFlash > 0f) h = new Color(1f, 0.1f, 0.1f);
             else if (OnHold || (mode == Mode.Free && hoverHold)) h = new Color(1f, 0.9f, 0.15f);
+            if (LetGoProgress > 0f) h = Color.Lerp(h, Color.white, 0.25f + 0.75f * LetGoProgress);   // «от себя» копится — кисть бледнеет, разжимается
             if (rBody && rBody.material.color != b) rBody.material.color = b;
             if (rHand && rHand.material.color != h) rHand.material.color = h;
             if (lnArm)
