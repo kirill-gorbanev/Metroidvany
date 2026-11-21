@@ -279,12 +279,27 @@ namespace Fortress.Hero.Proto
         /// склон под ним): всё время лежит на склоне, только выше. Отпустил — сползает по правилу склона (окно slideDelay, потом разгон),
         /// успеваешь перехватиться. Стоп: камень у пояса (nubHangKeep), рука согнута до dMin (по 3D), стена / уступ, край зоны руки.
         /// Отвесная стена (не склон) — по-прежнему вис вертикально.</summary>
+        /// <summary>К камню можно двигаться по поверхности (склон, подножие склона): впереди, к кисти, — поверхность не выше порога шага.
+        /// Нет (отвесная стена, уступ) — вис вертикально, как раньше. (Автор: «фиолетовый — значит не прилип»: у подножия под телом
+        /// ровный пол, и раньше включался вис в воздухе вместо тяги по склону.)</summary>
+        bool NubPathAlongSurface()
+        {
+            Vector3 to = Flat(GripPoint3) - Body; float dist = to.magnitude;
+            if (dist < 0.02f) return false;
+            Vector3 q = Body + to / dist * Mathf.Min(BodyReach + 0.05f, dist);
+            float h = LevelHeight(q, BodyLevel, maxStep);
+            return !float.IsInfinity(h) && h > groundY - maxDrop;
+        }
+
         void NubClimbAlongSlope(float meters)
         {
             Vector3 P = GripPoint3, to = Flat(P) - Body;
             float dist = to.magnitude;
             if (dist < 0.02f) return;
-            float ang = Vector3.Angle(bodyNormal, Vector3.up);
+            // крутизна — поверхности ВПЕРЕДИ, к камню (у подножия под телом ещё ровный пол)
+            Vector3 probe = Body + to / dist * Mathf.Min(0.1f, dist);
+            LevelHit(probe, BodyLevel, maxStep, out _, out var nAhead);
+            float ang = Mathf.Max(Vector3.Angle(nAhead, Vector3.up), Vector3.Angle(bodyNormal, Vector3.up));
             float run = meters / Mathf.Max(0.3f, Mathf.Tan(ang * Mathf.Deg2Rad));   // подъём на meters по склону = столько по полу
             Vector3 np = Body + to / dist * Mathf.Min(run, dist);
             float h = LevelHeight(np, BodyLevel, maxStep);
@@ -307,7 +322,7 @@ namespace Fortress.Hero.Proto
             {
                 if (climbLift >= need) return false;                      // уже поднялся — дальше обычный ход на уступ
                 if (!(OnNub ? NubAtWall() : AtLedge()) && climbLift <= 0.001f) return false;      // ещё не у кромки — едет к ней
-                if (OnNub && onSteep && climbLift <= 0.001f) { NubClimbAlongSlope(meters); return true; }   // склон: вверх ПО склону, не над ним
+                if (OnNub && climbLift <= 0.001f && NubPathAlongSurface()) { NubClimbAlongSlope(meters); return true; }   // склон: вверх ПО склону, не над ним
                 climbLift = ZoneLiftLimit(Mathf.Min(climbLift + meters, need));   // не выше края зоны руки (блок Zone): кисть не уходит за спину
                 return true;
             }
