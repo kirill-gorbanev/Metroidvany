@@ -1110,7 +1110,47 @@ namespace Fortress.Hero.Proto
             // локоть: опирается только на поверхность своего уровня (до порога); над уступом выше порога — висит между плечом и кистью
             float el = LevelHeight(E, BodyLevel, maxStep), mid = Mathf.Lerp(sy, hy, 0.5f) - 0.05f;
             float ey = float.IsInfinity(el) ? mid : Mathf.Max(el + elbowLift, mid);
+            ey = ElbowAboveSurface(S, sy, E, ey, hand, hy);                  // рука не сквозь склон (шаг 5, часть 3)
             elbowCube.position = new Vector3(E.x, ey, E.z);
+        }
+
+        [Tooltip("Рука (плечо → локоть → кисть) не проходит сквозь поверхность: локоть поднимается так, чтобы оба звена шли над ней с таким зазором (м).")]
+        public float armClearance = 0.03f;
+        /// <summary>Замер: наименьший зазор (м) между звеньями руки (плечо → локоть → кисть, по кубикам) и поверхностью под ними.
+        /// Меньше нуля — рука прошла сквозь.</summary>
+        public float DiagArmClearance()
+        {
+            Vector3 S = shoulderCube.position, E = elbowCube.position, H = handCube.position; float min = float.MaxValue;
+            float lo = Mathf.Min(S.y, E.y, H.y) - 0.3f, up = Mathf.Max(S.y, E.y, H.y) - lo + 0.05f;
+            for (int k = 1; k <= 9; k++) foreach (var seg in new[] { (S, E), (E, H) })
+            {
+                Vector3 p = Vector3.Lerp(seg.Item1, seg.Item2, k / 10f); float h = LevelHeight(new Vector3(p.x, 0f, p.z), lo, up);
+                if (!float.IsInfinity(h)) min = Mathf.Min(min, p.y - h);
+            }
+            return min;
+        }
+
+        /// <summary>РУКА НЕ СКВОЗЬ СКЛОН (автор: «руки пролезли»). Плечо внизу склона, кисть наверху — прямые звенья резали склон.
+        /// Локоть поднимается ровно настолько, чтобы оба звена шли над поверхностью между высотами плеча и кисти (крыша тоннеля
+        /// над рукой не в счёт — только то, что между ними). Только рисунок: досягаемость и хват по-прежнему считаются по точкам.</summary>
+        float ElbowAboveSurface(Vector3 S, float sy, Vector3 E, float ey, Vector3 H, float hy)
+        {
+            if (!HasSurface) return ey;
+            float lo = Mathf.Min(sy, hy, ey) - 0.3f, up = Mathf.Max(sy, hy, ey) - lo + 0.05f;
+            float need = ey;
+            for (int k = 1; k <= 8; k++)
+            {
+                float f = k / 9f;
+                // плечо → локоть: y = sy + (ey − sy)·f ≥ h + зазор
+                Vector3 p1 = Vector3.Lerp(S, E, f); p1.y = 0f;
+                float h1 = LevelHeight(p1, lo, up);
+                if (!float.IsInfinity(h1)) need = Mathf.Max(need, sy + (h1 + armClearance - sy) / f);
+                // локоть → кисть: y = ey + (hy − ey)·f ≥ h + зазор
+                Vector3 p2 = Vector3.Lerp(E, H, f); p2.y = 0f;
+                float h2 = LevelHeight(p2, lo, up);
+                if (!float.IsInfinity(h2) && f < 0.95f) need = Mathf.Max(need, (h2 + armClearance - hy * f) / (1f - f));
+            }
+            return Mathf.Min(need, Mathf.Max(sy, hy) + L * 0.5f);         // не выше разумного (рука длиной L)
         }
 
         // ---------------- рисование ----------------
