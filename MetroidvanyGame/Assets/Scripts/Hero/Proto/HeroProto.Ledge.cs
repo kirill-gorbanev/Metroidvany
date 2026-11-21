@@ -19,12 +19,12 @@ namespace Fortress.Hero.Proto
     public partial class HeroProto
     {
         [Header("Выступы")]
-        [Tooltip("Прилипание к выступу над склоном / стеной / пустотой: курсор ближе этой доли высоты экрана. 0.14 ≈ 150 px на 1080 (было 0.10; автор 2026-11-21: «не успеваю ухватиться за 4» — шире). Поручень (0.15) сильнее.")]
-        [Range(0.01f, 0.4f)] public float nubSnapScreenWide = 0.14f;
+        [Tooltip("Захват камня над склоном / стеной / пустотой: курсор ближе этой доли высоты экрана. 0.20 ≈ 215 px на 1080 (было 0.10 → 0.14; автор 2026-11-21: «не хватает радиуса для захвата» — шире). Поручень рядом всё равно сильнее (nubYield).")]
+        [Range(0.01f, 0.4f)] public float nubGrabScreen = 0.20f;
         [Tooltip("То же над хорошим полом: только курсор прямо на камне. 0.04 ≈ 43 px на 1080 (у поручня 0.06).")]
         [Range(0.01f, 0.4f)] public float nubSnapScreenFloor = 0.04f;
-        [Tooltip("Прилипание по полу (прежний автозацеп r): точка руки ближе этого (м) к достижимой точке камня — захват. Не над хорошим полом.")]
-        public float nubSnapWorld = 0.15f;
+        [Tooltip("Захват камня по полу: точка руки ближе этого (м) к достижимой точке камня — захват. Не над хорошим полом. 0.25 (было 0.15; автор: «не хватает радиуса для захвата»).")]
+        public float nubGrabWorld = 0.25f;
         [Tooltip("Поручень сильнее камня: к счёту камня добавляется эта доля высоты экрана.")]
         public float nubYield = 0.02f;
 
@@ -144,11 +144,11 @@ namespace Fortress.Hero.Proto
         /// <summary>Радиус прилипания на экране (px) для зацепа: камень — меньше поручня.</summary>
         float SnapPx(ProtoHold hd, bool floorGood)
         {
-            if (hd is ProtoNub) return (floorGood ? nubSnapScreenFloor : nubSnapScreenWide) * Screen.height;
+            if (hd is ProtoNub) return (floorGood ? nubSnapScreenFloor : nubGrabScreen) * Screen.height;
             return (floorGood ? holdSnapScreenFloor : holdSnapScreen) * Screen.height;
         }
 
-        float SnapWorld(ProtoHold hd) => hd is ProtoNub ? nubSnapWorld : holdSnapWorld;
+        float SnapWorld(ProtoHold hd) => hd is ProtoNub ? nubGrabWorld : holdSnapWorld;
 
         float SnapBias(ProtoHold hd) => hd is ProtoNub ? nubYield * Screen.height : 0f;
 
