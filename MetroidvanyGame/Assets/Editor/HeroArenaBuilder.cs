@@ -1015,10 +1015,10 @@ namespace Fortress.EditorTools
         /// <summary>Ровная площадка с предметами разного размера (ProtoItem в декоре: не стена и не опора), стена и ступень 0.15 —
         /// проверить: навёлся на предмет, ЛКМ — тащишь предмет (тело стоит), упирается в стену — скользит, на ступень — поднимается.</summary>
         static readonly Color ItemC = new Color(0.72f, 0.52f, 0.30f), ItemC2 = new Color(0.45f, 0.60f, 0.40f), ItemC3 = new Color(0.60f, 0.40f, 0.55f);
-        static void Item(string n, float x, float z, Vector3 size, Color c, float y0 = 0f)
+        static void Item(string n, float x, float z, Vector3 size, Color c, float mass = 1f, float y0 = 0f)
         {
             var t = Cube(n, new Vector3(x, y0 + size.y * 0.5f, z), size, c, decor);
-            t.gameObject.AddComponent<ProtoItem>();
+            t.gameObject.AddComponent<ProtoItem>().mass = mass;
         }
 
         static void Fill10()
@@ -1030,11 +1030,11 @@ namespace Fortress.EditorTools
             Box("Стена восток", 4.6f, 4.9f, 0f, 1.2f, 0.5f, 6f, WallC, walls);
             Box("Стена север", 0.5f, 4.9f, 0f, 1.2f, 6f, 6.3f, WallC, walls);
             Box("Ступень 0.15", 1.2f, 3.2f, 0f, 0.15f, 4.2f, 5.6f, StepA, surf);
-            Item("Ящик", 3.1f, 2.45f, new Vector3(0.3f, 0.3f, 0.3f), ItemC);
-            Item("Свёрток", 2.75f, 2.35f, new Vector3(0.18f, 0.12f, 0.24f), ItemC2);
-            Item("Бочонок", 3.55f, 2.55f, new Vector3(0.32f, 0.42f, 0.32f), ItemC);
-            Item("Доска", 3.0f, 3.2f, new Vector3(0.7f, 0.05f, 0.18f), ItemC3);
-            Item("Камень", 4.2f, 2.2f, new Vector3(0.16f, 0.14f, 0.16f), ItemC2);
+            Item("Ящик", 3.1f, 2.45f, new Vector3(0.3f, 0.3f, 0.3f), ItemC, 3f);
+            Item("Свёрток", 2.75f, 2.35f, new Vector3(0.18f, 0.12f, 0.24f), ItemC2, 0.5f);
+            Item("Бочонок", 3.55f, 2.55f, new Vector3(0.32f, 0.42f, 0.32f), ItemC, 12f);   // тяжёлый — тело не расталкивает
+            Item("Доска", 3.0f, 3.2f, new Vector3(0.7f, 0.05f, 0.18f), ItemC3, 2f);
+            Item("Камень", 4.2f, 2.2f, new Vector3(0.16f, 0.14f, 0.16f), ItemC2, 1.5f);
             Sign("предметы: навёлся — ЛКМ — тащишь\nстена, ступень 0.15", new Vector3(3f, 0f, 1.0f));
             var sun = new GameObject("Свет").AddComponent<Light>();
             sun.type = LightType.Directional; sun.intensity = 1.1f; sun.shadows = LightShadows.Soft;

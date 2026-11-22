@@ -48,7 +48,29 @@ namespace Fortress.Hero.Proto
             }
             var floor = new GameObject("Пол (физика падающих предметов)").AddComponent<BoxCollider>();
             floor.center = new Vector3(0f, -0.5f, 0f); floor.size = new Vector3(4000f, 1f, 4000f);
-            if (bodyCube && !bodyCube.GetComponent<Collider>()) bodyCube.gameObject.AddComponent<BoxCollider>();
+            // ТЕЛО ДЛЯ ФИЗИКИ — отдельный высокий кинематический «толкатель» по следу тела (а не коллайдер на кубике): тонкую доску
+            // физика выталкивала по короткой оси — вниз, под кубик (автор 2026-11-22: доска залезла под тело). От пола до метра
+            // вверх — ни подлезть, ни перескочить: выталкивает только вбок; MovePosition — физика знает скорость тела, толчок честный.
+            var go = new GameObject("Тело (толкатель для физики предметов)");
+            pusher = go.AddComponent<Rigidbody>(); pusher.isKinematic = true; pusher.interpolation = RigidbodyInterpolation.Interpolate;
+            pusherBox = go.AddComponent<BoxCollider>();
+            SyncPusher(true);
+        }
+
+        Rigidbody pusher; BoxCollider pusherBox;
+        [Tooltip("Высота физического «толкателя» тела над полом (м): предметы не подлезают под тело и не перескакивают через него.")]
+        public float pusherHeight = 1f;
+
+        /// <summary>Толкатель — на месте тела: след кубика тела, от уровня тела до pusherHeight, поворот как у тела.</summary>
+        void SyncPusher(bool teleport = false)
+        {
+            if (!pusher || !bodyCube) return;
+            Vector2 half = BodyHalf;
+            pusherBox.size = new Vector3(half.x * 2f, pusherHeight, half.y * 2f);
+            Vector3 p = new Vector3(Body.x, groundY + climbLift + pusherHeight * 0.5f - 0.02f, Body.z);
+            Quaternion r = Quaternion.Euler(0f, bodyCube.eulerAngles.y, 0f);
+            if (teleport) { pusher.transform.SetPositionAndRotation(p, r); pusher.position = p; pusher.rotation = r; }
+            else { pusher.MovePosition(p); pusher.MoveRotation(r); }
         }
     }
 }

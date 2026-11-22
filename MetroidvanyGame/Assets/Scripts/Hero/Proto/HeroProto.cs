@@ -1050,6 +1050,7 @@ namespace Fortress.Hero.Proto
             SpinStep(dt);                                             // карусель: центробежная зона, слёт
             ClimbDecay(dt);                                           // отпустил кромку до перевала — назад вниз
             Place();
+            PushLightItems();                                         // тело вошло в лёгкий предмет — он физический, его выталкивает (блок Drag)
             BackSlotStep();                                           // предмет на спине — на место слота (блок Back, LOCK)
             if (mode == Mode.Free && !dragItem) gestureOwner = "";
             StateStep(dt);                                            // состояния: выбрать, записать переход (блок State)
@@ -1227,12 +1228,25 @@ namespace Fortress.Hero.Proto
             pendingTurn = Mathf.Clamp(pendingTurn, phi - half, phi + half);
         }
 
+        [Tooltip("Площадка под краем тела ровнее этого угла (°) — ступенька: тело встаёт на неё, как только задело краем. Круче — склон, высота по центру.")]
+        public float flatStepAngle = 10f;
+
         void Place()
         {
             Vector3 S = Shoulder;
             // ВЫСОТА: тело — на поверхности под своим центром (плавно), плечо — с телом, кисть — на поверхности под собой
             // уровень тела — поверхность под центром СО СВОЕГО уровня (мост/перекрытие сверху не поднимают; вниз — падает)
             float gWant = LevelHit(Body, BodyLevel, maxStep, out var rm, out var bn);
+            // ТЕЛО НА СТУПЕНЬКУ СРАЗУ (автор 2026-11-22: «залез полтелом внутрь ступеньки, а должен был сразу оказаться сверху»):
+            // высота бралась только под центром — центр над нижним полом, а половина кубика уже в ступеньке. Теперь — самая высокая
+            // РОВНАЯ площадка под кубиком тела (центр, углы, середины сторон), не выше порога шага. Склоны (наклонная грань) не в счёт —
+            // там как раньше; вскарабкивание на уступ (climbLift) не трогается.
+            if (boxBody && bodyCube && climbLift <= 0.01f && !float.IsInfinity(gWant))
+                foreach (var q in BodyProbes(Body))
+                {
+                    float hq = LevelHit(q, BodyLevel, maxStep, out var qm, out var qn);
+                    if (!float.IsInfinity(hq) && hq > gWant + 0.02f && Vector3.Angle(qn, Vector3.up) < flatStepAngle) { gWant = hq; rm = qm; bn = qn; }
+                }
             if (rm != rideMover) { rideMover = rm; rideStep = rm ? rm.StepId : 0; }   // встал на платформу / сошёл
             // ОПОРА УШЛА (блок Fall): под центром перепад глубже maxDrop, а рука тело не держит — падение
             if (allowFall && !falling && !float.IsInfinity(gWant) && gWant < groundY + climbLift - maxDrop - 0.02f

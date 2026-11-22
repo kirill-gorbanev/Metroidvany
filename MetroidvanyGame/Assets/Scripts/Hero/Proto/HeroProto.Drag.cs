@@ -368,7 +368,7 @@ namespace Fortress.Hero.Proto
         {
             foreach (var it in ProtoItem.Live)
             {
-                if (!it || it.held) continue;
+                if (!it || it.held || Pushable(it)) continue;                  // лёгкий — не стена: тело его расталкивает
                 Rect o = FootRect(it.WorldBounds);
                 if (r < 0f) { if (BoxHitsRect(p, o, 0.001f)) return true; }
                 else
@@ -387,7 +387,7 @@ namespace Fortress.Hero.Proto
             Vector3 n = Vector3.zero;
             foreach (var it in ProtoItem.Live)
             {
-                if (!it || it.held) continue;
+                if (!it || it.held || Pushable(it)) continue;
                 Rect o = FootRect(it.WorldBounds);
                 float cx = Mathf.Clamp(p.x, o.xMin, o.xMax), cz = Mathf.Clamp(p.z, o.yMin, o.yMax);
                 Vector3 d = new Vector3(p.x - cx, 0f, p.z - cz);
@@ -407,12 +407,38 @@ namespace Fortress.Hero.Proto
             return it.WorldBounds.max.y;                                  // кисть лежит на верхе предмета
         }
 
+        [Header("Расталкивание")]
+        [Tooltip("Предмет не тяжелее этого (кг) — лёгкий: тело его расталкивает (физика), тяжелее — стена.")]
+        public float pushMaxMass = 5f;
+
+        bool Pushable(ProtoItem it) => itemTopple && it.mass <= pushMaxMass;
+
+        /// <summary>РАСТАЛКИВАНИЕ (автор 2026-11-22: «зажатый между лёгкими объектами я не смог развернуться на месте»; «нужна масса
+        /// и, возможно, расталкивать»). Лёгкий предмет телу не стена: тело (поворот, езда) входит в его след — предмет становится
+        /// физическим (ProtoItem.StartTopple), коллайдер тела его выталкивает; успокоился — снова зафиксирован.
+        /// Тяжёлый (mass > pushMaxMass) — стена, как раньше. Автообход от предметов остаётся — уводит в сторону, но не запирает.</summary>
+        void PushLightItems()
+        {
+            SyncPusher();                                              // физический толкатель тела — за телом (блок Topple)
+            if (!itemTopple || ProtoItem.Live.Count == 0 || !bodyCube) return;
+            float top = bodyCube.position.y + Mathf.Abs(bodyCube.lossyScale.y) * 0.5f;
+            foreach (var it in ProtoItem.Live)
+            {
+                if (!it || it.held || !Pushable(it)) continue;
+                Bounds b = it.WorldBounds;
+                if (b.min.y > top || !BoxHitsRect(Body, FootRect(b), 0.001f)) continue;
+                EnsureFallWorld();
+                it.StartTopple();
+            }
+        }
+
         void DragReset()
         {
             if (dragItem) { dragItem.EndCarry(false); dragItem.SetLook(false, false); }
             ProtoItem.Carried = null;
             ReleaseRiders();
             BackReset();
+            SyncPusher(true);                                          // перенос героя (зона, сброс) — толкатель прыгает, а не сметает всё по пути
             if (hoverItem) hoverItem.SetLook(false, false);
             dragItem = hoverItem = null;
         }

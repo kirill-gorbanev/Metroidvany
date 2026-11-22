@@ -13,6 +13,9 @@ namespace Fortress.Hero.Proto
         /// <summary>Тащит рука сейчас.</summary>
         [System.NonSerialized] public bool held;
 
+        [Tooltip("Масса (кг): физика падения и трения; лёгкий (не тяжелее HeroProto.pushMaxMass) тело расталкивает, тяжёлый — стена.")]
+        public float mass = 1f;
+
         Renderer rend; MaterialPropertyBlock mpb; Color baseColor = Color.white; bool haveColor;
 
         void OnEnable() { if (!Live.Contains(this)) Live.Add(this); }
@@ -41,6 +44,7 @@ namespace Fortress.Hero.Proto
         {
             if (!rb) rb = gameObject.AddComponent<Rigidbody>();
             rb.isKinematic = true;
+            rb.mass = Mathf.Max(0.05f, mass);
             rb.interpolation = RigidbodyInterpolation.Interpolate;
             rb.position = transform.position; rb.rotation = transform.rotation;
             carryPos = transform.position;
@@ -73,6 +77,7 @@ namespace Fortress.Hero.Proto
             if (!GetComponent<Collider>()) gameObject.AddComponent<BoxCollider>();
             if (!rb) rb = gameObject.AddComponent<Rigidbody>();
             rb.isKinematic = false;
+            rb.mass = Mathf.Max(0.05f, mass);
             rb.interpolation = RigidbodyInterpolation.Interpolate;
             rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
             held = true; restT = 0f; fallT = 0f;
