@@ -84,14 +84,37 @@ namespace Fortress.Hero.Proto
         void BeginDrag(ProtoItem it, Vector3 h)
         {
             if (it == backItem) UnlockFromBack(h);                     // со спины — в руку перед собой (блок Back)
+            if (it.Toppling) it.EndTopple();
+            WakeAbove(it);                                             // что лежит на нём — физика: вытащишь — упадёт
+            Upright(it);
             dragItem = it; it.held = true;
+            ProtoItem.Carried = it;
+            it.BeginCarry();                                           // кинематическое тело: трение везёт лежащее сверху
             hand = h;
             Bounds b = it.WorldBounds;
             dragOff = Flat(b.center) - h;
             dragItemY = b.min.y;
             hoverItem = null;
             gestureOwner = "взял предмет";
-            CollectRiders(it);
+        }
+
+        /// <summary>ВЗЯЛ — ВЫПРЯМИЛСЯ (автор 2026-11-22: «бросил на объект, потом вытащил — объект сверху не упал, продолжил висеть»):
+        /// после падения по физике предмет мог лечь наклонно, а укладка и опоры считаются по прямоугольному габариту — у наклонного
+        /// верх габарита выше настоящей грани, на него «вставал» соседний. Теперь взятый предмет выпрямляется (остаётся только поворот
+        /// вокруг вертикали) и встаёт низом на опору под собой; стопка на нём сдвигается на столько же по высоте.</summary>
+        void Upright(ProtoItem it)
+        {
+            var t = it.transform;
+            Quaternion up = Quaternion.Euler(0f, t.eulerAngles.y, 0f);
+            if (Quaternion.Angle(t.rotation, up) < 0.5f) return;
+            Bounds was = it.WorldBounds;
+            t.rotation = up;
+            Bounds b = it.WorldBounds;
+            float g = ItemSupport(it, FootRect(b), was.center.y);                // опора под новым следом (не выше прежнего центра)
+            Vector3 d = new Vector3(was.center.x - b.center.x, g - b.min.y, was.center.z - b.center.z);
+            t.position += d;
+            float lift = it.WorldBounds.max.y - was.max.y;
+            foreach (var r in riders) if (r) r.transform.position += new Vector3(d.x, lift, d.z);
         }
 
         // ---- СТОПКА: что лежит на взятом предмете, едет вместе с ним ----
@@ -100,40 +123,63 @@ namespace Fortress.Hero.Proto
         readonly System.Collections.Generic.List<ProtoItem> riders = new System.Collections.Generic.List<ProtoItem>();
         Vector2 stackMin, stackMax;          // след всей стопки относительно центра взятого (XZ)
 
-        /// <summary>Всё, что лежит на предмете (и на том, что на нём, и т. д.): низ на верхе опоры (±2 см), следы пересекаются.</summary>
-        void CollectRiders(ProtoItem baseIt)
-        {
-            riders.Clear();
-            var queue = new System.Collections.Generic.List<ProtoItem> { baseIt };
-            for (int q = 0; q < queue.Count; q++)
-            {
-                Bounds sb = queue[q].WorldBounds; Rect sr = FootRect(sb);
-                foreach (var o in ProtoItem.Live)
-                {
-                    if (!o || o.held || queue.Contains(o)) continue;
-                    Bounds ob = o.WorldBounds;
-                    if (Mathf.Abs(ob.min.y - sb.max.y) <= 0.02f && sr.Overlaps(FootRect(ob))) { queue.Add(o); riders.Add(o); o.held = true; }
-                }
-            }
-            Bounds b = baseIt.WorldBounds, u = b;
-            foreach (var r in riders) u.Encapsulate(r.WorldBounds);
-            stackMin = new Vector2(u.min.x - b.center.x, u.min.z - b.center.z);
-            stackMax = new Vector2(u.max.x - b.center.x, u.max.z - b.center.z);
-        }
-
         void ReleaseRiders()
         {
             foreach (var r in riders) if (r) { r.held = false; r.SetLook(false, false); }
             riders.Clear();
         }
 
+        /// <summary>ВЫТАЩИТЬ ИЗ-ПОД СТОПКИ (автор 2026-11-22: «ты сделал, что я не могу тащить объект, — надо наоборот: чтобы я мог его
+        /// вытащить и всё упало; используй физику Unity»). Стопка больше не едет со взятым: всё, что лежит на нём (и выше), сразу
+        /// становится физическим (ProtoItem.StartTopple) и, пока предмет в руке, не засыпает. Взятый выезжает из-под них
+        /// (его коллайдер двигается) — верхние теряют опору и падают; отпустил — всё доходит до покоя и фиксируется.</summary>
+        void WakeAbove(ProtoItem it)
+        {
+            if (!itemTopple) return;
+            // КТО ЛЕЖИТ СВЕРХУ — ПО НАСТОЯЩИМ КОЛЛАЙДЕРАМ (автор 2026-11-22: «почему всё же не перетаскивается этот квадрат?» —
+            // ящик лежал наклонно на краю доски и на полу: по прямоугольному габариту его низ ниже середины доски, «сверху» не считался,
+            // оставался неподвижным, доска выезжала из-под него). Теперь: всё, что касается (Physics.OverlapBox, запас 1 см) и стоит
+            // центром выше центра опоры, — физическое; дальше по цепочке вверх.
+            Physics.SyncTransforms();
+            var queue = new System.Collections.Generic.List<ProtoItem> { it };
+            var above = new System.Collections.Generic.List<ProtoItem>();
+            for (int q = 0; q < queue.Count; q++)
+            {
+                var sup = queue[q];
+                var bc = sup.GetComponent<BoxCollider>();
+                if (!bc) continue;
+                var t = bc.transform;
+                Vector3 c = t.TransformPoint(bc.center);
+                Vector3 he = Vector3.Scale(bc.size * 0.5f, t.lossyScale);
+                he = new Vector3(Mathf.Abs(he.x) + 0.01f, Mathf.Abs(he.y) + 0.01f, Mathf.Abs(he.z) + 0.01f);
+                float supY = sup.WorldBounds.center.y;
+                foreach (var col in Physics.OverlapBox(c, he, t.rotation))
+                {
+                    var o = col.GetComponentInParent<ProtoItem>();
+                    if (!o || o == it || queue.Contains(o) || (o.held && !o.Toppling)) continue;
+                    if (o.WorldBounds.center.y <= supY + 0.01f) continue;          // рядом или ниже — не «сверху»
+                    queue.Add(o); above.Add(o);
+                }
+            }
+            if (above.Count == 0) return;
+            EnsureFallWorld();
+            foreach (var r in above) r.StartTopple();
+        }
+
         void EndDrag(string why)
         {
             if (!dragItem) return;
-            dragItem.held = false; dragItem.SetLook(false, false);
+            ProtoItem.Carried = null;
+            var it = dragItem;
+            it.SetLook(false, false);
             ReleaseRiders();
-            lastRelease = why;
             dragItem = null;
+            // вне равновесия (под центром нет опоры) — дальше падает по физике, пока не встанет (блок Topple); иначе лежит
+            it.transform.position = it.CarryPos;
+            bool fall = itemTopple && !ItemBalanced(it);
+            if (fall) EnsureFallWorld();
+            it.EndCarry(fall);
+            lastRelease = fall ? why + " — вне равновесия, падает" : why;
         }
 
         /// <summary>Шаг свободной руки: наведение на предмет и хват (до зацепов и пола). true — шаг руки забран блоком.</summary>
@@ -172,6 +218,7 @@ namespace Fortress.Hero.Proto
         {
             var it = dragItem;
             Bounds b = it.WorldBounds;
+            b.center += it.CarryPos - it.transform.position;                // по логике руки (тело догоняет на шаге физики)
             Vector3 cur = Flat(b.center), want = hand + dragOff;
             // ПЛАВНО (автор 2026-11-21: «рывками»): раньше ход за шаг пробовался целиком — не влез, предмет стоял весь шаг,
             // потом прыгал. Теперь ход идёт кусками по 1 см до упора; упёрся — остаток вдоль стены (по осям).
@@ -181,23 +228,35 @@ namespace Fortress.Hero.Proto
             Vector3 move = want - cur;
             int n = Mathf.Clamp(Mathf.CeilToInt(move.magnitude / 0.015f), 1, 20);
             Vector3 stepV = move / n;
+            // ПОДЪЁМ ПЛАВНО (автор 2026-11-22: «резко поднимается вверх — ступеньки или другие объекты»): раньше предмет заезжал
+            // на ступень / другой предмет и за один шаг подскакивал на новую высоту. Теперь на краю ход стоит, предмет поднимается
+            // (itemRiseSpeed), и, когда низ дошёл до верха, заезжает. Мелкие перепады (≤ itemRiseSnap) — сразу, как раньше.
+            float liftNeed = float.NegativeInfinity;
+            bool Step(Vector3 c, out float gc)
+            {
+                if (!ItemFits(c, b, it, dragItemY, out gc)) return false;
+                if (gc > dragItemY + itemRiseSnap) { liftNeed = Mathf.Max(liftNeed, gc); return false; }   // выше — сначала поднять
+                return true;
+            }
             for (int k = 0; k < n; k++)
             {
                 itemFrom = next;
                 Vector3 c = next + stepV;
-                if (ItemFits(c, b, it, dragItemY, out float gc)) { next = c; g = gc; continue; }
+                if (Step(c, out float gc)) { next = c; g = gc; continue; }
+                if (liftNeed > dragItemY) break;                             // упёрся в то, на что надо поднять, — не скользить вдоль
                 Vector3 cx = next + new Vector3(stepV.x, 0f, 0f), cz = next + new Vector3(0f, 0f, stepV.z);
-                bool okx = Mathf.Abs(stepV.x) > 1e-6f && ItemFits(cx, b, it, dragItemY, out float gx);
-                bool okz = Mathf.Abs(stepV.z) > 1e-6f && ItemFits(cz, b, it, dragItemY, out float gz);
-                if (okx && (!okz || Mathf.Abs(stepV.x) >= Mathf.Abs(stepV.z))) { next = cx; ItemFits(cx, b, it, dragItemY, out g); }
-                else if (okz) { next = cz; ItemFits(cz, b, it, dragItemY, out g); }
+                float gx = 0f, gz = 0f;
+                bool okx = Mathf.Abs(stepV.x) > 1e-6f && Step(cx, out gx);
+                bool okz = Mathf.Abs(stepV.z) > 1e-6f && Step(cz, out gz);
+                if (okx && (!okz || Mathf.Abs(stepV.x) >= Mathf.Abs(stepV.z))) { next = cx; g = gx; }
+                else if (okz) { next = cz; g = gz; }
                 else break;                                                  // упёрся со всех сторон — стоит
             }
-            // низ: вверх (на ступень) — сразу, вниз — плавно, но не в поверхность
-            dragItemY = g >= dragItemY ? g : Mathf.MoveTowards(dragItemY, g, 3f * dt);
+            // низ: надо поднять — плавно вверх; иначе мелкий перепад вверх — сразу, вниз — плавно, но не в поверхность
+            if (liftNeed > dragItemY) dragItemY = Mathf.MoveTowards(dragItemY, liftNeed, itemRiseSpeed * dt);
+            else dragItemY = g >= dragItemY ? g : Mathf.MoveTowards(dragItemY, g, 3f * dt);
             Vector3 d = new Vector3(next.x - b.center.x, dragItemY - b.min.y, next.z - b.center.z);
-            it.transform.position += d;
-            foreach (var r in riders) if (r) r.transform.position += d;    // стопка едет с ним
+            it.CarryTo(it.CarryPos + d);                                    // MovePosition: физика знает скорость — трение везёт верхних
             it.SetLook(false, true);
             hand = next - dragOff;                                          // кисть — всегда на предмете (предмет мог отстать от курсора)
         }
@@ -211,6 +270,10 @@ namespace Fortress.Hero.Proto
         [Tooltip("НА СТУПЕНЬ: предмет в руке заезжает на поверхность выше его низа не больше чем на столько (м) — подсаживаешь рукой. " +
                  "Выше — бок уступа, стена для предмета.")]
         public float itemLift = 0.45f;
+        [Tooltip("Предмет в руке поднимается на ступень / другой предмет с такой скоростью (м/с): у края ход стоит, пока низ не дойдёт до верха.")]
+        public float itemRiseSpeed = 1.2f;
+        [Tooltip("Перепад вверх не больше этого (м) — предмет заезжает сразу, без остановки на подъём.")]
+        public float itemRiseSnap = 0.02f;
 
         /// <summary>След предмета (габарит по XZ) с центром в c: не в стене, не в кубике тела, не в другом предмете;
         /// под следом (сетка проб) — поверхность своего уровня без сплошного, не выше низа предмета + itemLift (подсадить рукой).
@@ -346,7 +409,8 @@ namespace Fortress.Hero.Proto
 
         void DragReset()
         {
-            if (dragItem) { dragItem.held = false; dragItem.SetLook(false, false); }
+            if (dragItem) { dragItem.EndCarry(false); dragItem.SetLook(false, false); }
+            ProtoItem.Carried = null;
             ReleaseRiders();
             BackReset();
             if (hoverItem) hoverItem.SetLook(false, false);

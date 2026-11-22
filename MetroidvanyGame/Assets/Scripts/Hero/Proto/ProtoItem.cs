@@ -16,10 +16,88 @@ namespace Fortress.Hero.Proto
         Renderer rend; MaterialPropertyBlock mpb; Color baseColor = Color.white; bool haveColor;
 
         void OnEnable() { if (!Live.Contains(this)) Live.Add(this); }
-        void OnDisable() { Live.Remove(this); held = false; }
+        void OnDisable() { Live.Remove(this); held = false; if (rb) { Destroy(rb); rb = null; } if (Carried == this) Carried = null; }
+
+        // ---- ПАДЕНИЕ ВНЕ РАВНОВЕСИЯ (блок HeroProto.Topple) ----
+        // Автор 2026-11-22: «я выбрал конкретно объект А, перетаскал и установил вне равновесия — тогда объект А падает до тех пор,
+        // пока не встанет, и тогда объект фиксируется». Физика — только у этого предмета и только на время падения: свой Rigidbody,
+        // всё остальное (стены, ступени, тело, другие предметы) — неподвижные коллайдеры: он о них бьётся, но никого не толкает.
+        Rigidbody rb; float restT, fallT;
+        /// <summary>Что сейчас тащит рука (из-под него можно вытащить стопку). Пока он есть — падающие не засыпают и не фиксируются:
+        /// опора под ними двигается (автор 2026-11-22: «чтобы я мог его вытащить — и всё упало; используй физику Unity»).</summary>
+        public static ProtoItem Carried;
+        /// <summary>Падает (физика включена) — пока не встанет.</summary>
+        public bool Toppling => rb != null && !rb.isKinematic;
+
+        // ---- В РУКЕ: кинематическое тело (автор 2026-11-22: «объект сверху лежит и ждёт, когда из-под него уберут, — а трение-то
+        // должно быть»). Раньше взятый двигался телепортом — физика не знала его скорости, лежащее сверху не ехало. Теперь
+        // взятый — кинематический Rigidbody, двигается MovePosition: трение везёт стопку, рывок или стена — верхние соскальзывают.
+        Vector3 carryPos;
+        /// <summary>Где взятый предмет по логике руки (тело догонит на шаге физики).</summary>
+        public Vector3 CarryPos => carryPos;
+        public bool Carrying => rb != null && rb.isKinematic;
+
+        public void BeginCarry()
+        {
+            if (!rb) rb = gameObject.AddComponent<Rigidbody>();
+            rb.isKinematic = true;
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
+            rb.position = transform.position; rb.rotation = transform.rotation;
+            carryPos = transform.position;
+            held = true;
+        }
+
+        public void CarryTo(Vector3 p) { carryPos = p; if (rb) rb.MovePosition(p); }
+
+        /// <summary>Отпустили: встать точно на место руки; topple — дальше падать по физике, иначе — тело снято, лежит.</summary>
+        public void EndCarry(bool topple)
+        {
+            transform.position = carryPos;
+            if (!rb) { held = false; return; }
+            rb.position = carryPos;
+            if (topple)
+            {
+                rb.isKinematic = false;
+                rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+                restT = 0f; fallT = 0f; held = true;
+            }
+            else { DestroyImmediate(rb); rb = null; held = false; }   // сразу: в том же кадре может понадобиться новое тело
+        }
+        [Tooltip("Падающий предмет считается вставшим, когда почти не движется столько секунд.")]
+        public float restTime = 0.3f;
+
+        /// <summary>Отпустили вне равновесия: включить физику этому предмету (held — ни препятствие, ни опора, ни берётся рукой).</summary>
+        public void StartTopple()
+        {
+            if (rb && !rb.isKinematic) return;
+            if (!GetComponent<Collider>()) gameObject.AddComponent<BoxCollider>();
+            if (!rb) rb = gameObject.AddComponent<Rigidbody>();
+            rb.isKinematic = false;
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
+            rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+            held = true; restT = 0f; fallT = 0f;
+        }
+
+        void FixedUpdate()
+        {
+            if (!rb || rb.isKinematic) return;
+            if (Carried && Carried != this) { rb.WakeUp(); restT = 0f; fallT = 0f; return; }   // опору тащат — не засыпать
+            float dt = Time.fixedDeltaTime;
+            fallT += dt;
+            restT = rb.linearVelocity.magnitude < 0.05f && rb.angularVelocity.magnitude < 0.2f ? restT + dt : 0f;
+            if (restT >= restTime || rb.IsSleeping() || fallT > 6f) EndTopple();
+        }
+
+        /// <summary>Встал — физика снята, предмет снова зафиксирован (лежит, как все).</summary>
+        public void EndTopple()
+        {
+            if (!rb) return;
+            DestroyImmediate(rb); rb = null; held = false;
+        }
 
         void Awake()
         {
+            if (!GetComponent<Collider>()) gameObject.AddComponent<BoxCollider>();   // для падающих соседей — неподвижная преграда
             rend = GetComponentInChildren<Renderer>();
             if (rend && rend.sharedMaterial)
             {

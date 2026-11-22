@@ -38,8 +38,9 @@ namespace Fortress.Hero.Proto
         {
             if (!backArmed || !dragItem) return false;
             var it = dragItem;
-            ReleaseRiders();                                           // стопка остаётся — оседает (SettleItems)
-            dragItem = null; backArmed = false;
+            ReleaseRiders();
+            it.EndCarry(false);                                        // кинематическое тело снято
+            dragItem = null; backArmed = false; ProtoItem.Carried = null;
             backItem = it; it.held = true;                             // held: не препятствие, не опора, не ловится как лежащий
             it.SetLook(false, false);
             lastRelease = "положил на спину";
