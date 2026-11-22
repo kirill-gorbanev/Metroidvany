@@ -42,6 +42,7 @@ namespace Fortress.Hero.Proto
             best = null; hand = default;
             if (ProtoItem.Live.Count == 0) return false;
             Ray r = cam.ScreenPointToRay(px);
+            if (FindBackItem(r, out var bh)) { best = backItem; hand = bh; return true; }   // предмет на спине — снять (блок Back)
             bool haveFh = FloorPoint(px, out var fp);
             Vector3 fh = haveFh ? FreeHandAroundBody(HandAtLedge(Reach(fp))) : hand;   // куда пошла бы свободная кисть
             Vector3 S = Shoulder;
@@ -82,6 +83,7 @@ namespace Fortress.Hero.Proto
 
         void BeginDrag(ProtoItem it, Vector3 h)
         {
+            if (it == backItem) UnlockFromBack(h);                     // со спины — в руку перед собой (блок Back)
             dragItem = it; it.held = true;
             hand = h;
             Bounds b = it.WorldBounds;
@@ -140,6 +142,7 @@ namespace Fortress.Hero.Proto
             var prevHover = hoverItem;
             if (dragItem)
             {
+                if (!inp.pressed && !falling && TryLockToBack()) return true;   // курсор был за спиной — на спину (блок Back)
                 if (!inp.pressed || falling) { EndDrag(falling ? "падение — предмет выпал" : "положил предмет"); return true; }
                 if (!orbit && FloorPoint(px, out var p))
                 {
@@ -148,6 +151,8 @@ namespace Fortress.Hero.Proto
                 }
                 MoveItemToHand(dt);
                 gestureOwner = "тащит предмет";
+                BackArmStep(px);                                       // курсор за спиной — «на спину» (блок Back)
+                if (backArmed) dragItem.SetLook(false, true, true);
                 return true;
             }
             hoverItem = null;
@@ -335,6 +340,7 @@ namespace Fortress.Hero.Proto
         {
             var it = dragItem ? dragItem : hoverItem;
             if (!it) return float.PositiveInfinity;
+            if (it == backItem) return HandLevel(hand);                     // снимаешь со спины — кисть перед собой, на полу
             return it.WorldBounds.max.y;                                  // кисть лежит на верхе предмета
         }
 
@@ -342,6 +348,7 @@ namespace Fortress.Hero.Proto
         {
             if (dragItem) { dragItem.held = false; dragItem.SetLook(false, false); }
             ReleaseRiders();
+            BackReset();
             if (hoverItem) hoverItem.SetLook(false, false);
             dragItem = hoverItem = null;
         }

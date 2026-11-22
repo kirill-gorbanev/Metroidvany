@@ -926,7 +926,7 @@ namespace Fortress.Hero.Proto
             // зона ввода сдвинута вниз: точка руки = курсор + сдвиг вверх (жесты — по смещению мыши, их сдвиг не меняет)
             Vector2 px = inp.pos + new Vector2(0f, inputShift * Screen.height);
             bool orbit = inp.orbit;                                 // ПКМ — облёт камеры: рука и жест замирают
-            if (FallStep(dt, ref inp, px)) { EndDrag("падение — предмет выпал"); ClimbVisuals(dt); StateStep(dt); Draw(); return; }   // полёт / оглушение (блок Fall)
+            if (FallStep(dt, ref inp, px)) { EndDrag("падение — предмет выпал"); BackSlotStep(); ClimbVisuals(dt); StateStep(dt); Draw(); return; }   // полёт / оглушение (блок Fall)
 
             if (mode == Mode.Free && DragFreeStep(dt, inp, px, orbit))
             {
@@ -1050,7 +1050,8 @@ namespace Fortress.Hero.Proto
             SpinStep(dt);                                             // карусель: центробежная зона, слёт
             ClimbDecay(dt);                                           // отпустил кромку до перевала — назад вниз
             Place();
-            if (mode == Mode.Free) gestureOwner = "";
+            BackSlotStep();                                           // предмет на спине — на место слота (блок Back, LOCK)
+            if (mode == Mode.Free && !dragItem) gestureOwner = "";
             StateStep(dt);                                            // состояния: выбрать, записать переход (блок State)
             ClimbVisuals(dt);
             Draw();
@@ -1099,7 +1100,10 @@ namespace Fortress.Hero.Proto
         public bool reverseSteer = true;
         bool reverseGear;
         /// <summary>Сейчас задний ход и руль перевёрнут.</summary>
-        public bool ReverseSteering => reverseSteer && reverseGear && mode == Mode.Grip;
+        // Хват из-за спины (MirrorGrip) — руль прямой ВСЕГДА, при любом жесте (автор 2026-11-22, по экрану: мышь вверх-влево —
+        // тело едет назад и уходит ВНИЗ-ВЛЕВО, лицо доворачивает вправо). Раньше ход назад включал задний ход, и на диагонали
+        // руль переворачивался через раз (вертикаль ≈ боковой).
+        public bool ReverseSteering => reverseSteer && reverseGear && !mirrorGrip && mode == Mode.Grip;
 
         [Tooltip("Рука через грудь и «от себя» в упор: на столько градусов на пиксель мыши тело доворачивается, выводя руку из груди (ход назад продолжается).")]
         public float backOutDegPerPx = 0.3f;
@@ -1151,9 +1155,11 @@ namespace Fortress.Hero.Proto
             Vector3 f = Face;
             if (Vector3.Dot(Flat(p) - Body, f) >= 0f) return p;
             behind = true;
-            Vector3 v = Flat(p) - Shoulder;
-            v -= f * (2f * Vector3.Dot(v, f));                                   // зеркально вперёд
-            if (v.sqrMagnitude < 1e-6f) v = f;
+            // ТОЧЕЧНОЕ ЗЕРКАЛО через центр тела (автор 2026-11-22: «мышь вверх-влево — должно уходить вниз-влево»): тело отъезжает
+            // от кисти, поэтому кисть — с другой стороны: курсор сзади-справа → кисть спереди-слева → тело уходит назад-вправо, к курсору.
+            // (Было отражение только вперёд-назад: кисть на той же стороне, тело уезжало в сторону, противоположную курсору.)
+            Vector3 v = (Body - (Flat(p) - Body)) - Shoulder;                    // от плеча к точке, отражённой через центр тела
+            if (Vector3.Dot(v, f) <= 0.01f) v = f;
             return Shoulder + v.normalized * behindHandDist;
         }
 

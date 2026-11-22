@@ -39,11 +39,12 @@ namespace Fortress.Hero.Proto
         public Vector3 Bottom { get { var b = WorldBounds; return new Vector3(b.center.x, b.min.y, b.center.z); } }
 
         /// <summary>Подсветка: наведена кисть — светлее, тащим — ещё светлее. Только вид.</summary>
-        public void SetLook(bool hover, bool drag)
+        public void SetLook(bool hover, bool drag, bool toBack = false)
         {
             if (!rend || !haveColor) return;
             mpb ??= new MaterialPropertyBlock();
-            Color c = drag ? Color.Lerp(baseColor, Color.white, 0.45f) : hover ? Color.Lerp(baseColor, Color.white, 0.25f) : baseColor;
+            Color c = toBack ? Color.Lerp(baseColor, new Color(0.45f, 1f, 0.55f), 0.6f)      // отпустишь — на спину
+                : drag ? Color.Lerp(baseColor, Color.white, 0.45f) : hover ? Color.Lerp(baseColor, Color.white, 0.25f) : baseColor;
             rend.GetPropertyBlock(mpb);
             mpb.SetColor("_BaseColor", c); mpb.SetColor("_Color", c);
             rend.SetPropertyBlock(mpb);

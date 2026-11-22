@@ -73,6 +73,7 @@ namespace Fortress.Hero.Proto
             string s = "";
             if (rideMover) s += " · едешь с опорой";
             if (mode == Mode.Grip && handMover && handMover != rideMover) s += " · опора кисти тянет тело";
+            if (backItem) s += $" · на спине: «{backItem.name}»";
             if (MirrorGrip) s += " · хват из-за спины (кисть зеркально у тела)";
             if (LetGoProgress > 0f) s += $" · «отпустить» {LetGoProgress * 100f:F0}%";
             if (gestureOwner.Length > 0) s += " · жест → " + gestureOwner;
