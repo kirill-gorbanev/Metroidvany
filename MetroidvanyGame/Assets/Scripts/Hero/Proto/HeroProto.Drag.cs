@@ -2,73 +2,66 @@ using UnityEngine;
 
 namespace Fortress.Hero.Proto
 {
-    /// <summary>ПЕРЕТАСКИВАНИЕ ПРЕДМЕТА — отдельный блок (частичный класс поверх общего состояния). Шаг 1 механики «предметы / LOCK».
+    /// <summary>ПЕРЕТАСКИВАНИЕ ПРЕДМЕТА — блок поверх общего состояния (переделка 2026-11-22: предметы целиком на физике Unity).
     ///
-    /// Курсор на предмете (ProtoItem) в досягаемости — кисть наводится на него, как на камень. ЛКМ — кисть БЕРЁТ ПРЕДМЕТ,
-    /// а не ставится на пол: тело не едет, жесты езды и поворота не работают. Пока ЛКМ зажата — кисть свободна и идёт за курсором
-    /// теми же правилами, что свободная рука (досягаемость L, сектор перед лицом, не сквозь стену и не сквозь тело), а предмет —
-    /// под кистью, на поверхности своего уровня. Отпустил ЛКМ — предмет лёг там, где был.
-    ///
-    /// КТО В КОГО НЕ ПРОНИКАЕТ (автор 2026-11-21):
-    ///   · лежащий предмет — стена для тела: тело не наезжает (Blocked, скольжение вдоль — ContactNormal);
-    ///   · предмет в руке — не в стену, не в кубик тела, не в другой предмет (скольжение по осям), не боком в ступень:
-    ///     под следом предмета пробуются углы и стороны, низ — по самой высокой точке, ступень под следом — не встаёт.
-    /// Не дотащить — стоит, кисть остаётся на нём. Дальше (не сделано): «на себя» у тела — на спину (LOCK, слот), на голову.</summary>
+    /// · НАВЕДЕНИЕ / ЛОВЛЯ (автор 2026-11-22: «хотел двигаться, а зацепился за объект»): только КУРСОР на самом предмете (луч в его
+    ///   коллайдер) и рука до него достаёт — кисть наводится на предмет. Кисть, идущая рядом с предметом, его не ловит.
+    ///   ЛКМ — кисть берёт его в точке, куда указала (тело не едет, жесты езды и поворота не работают).
+    /// · ПЕРЕНОС: пока ЛКМ зажата, цель кисти идёт за курсором теми же правилами, что свободная рука (досягаемость, сектор, не сквозь
+    ///   стену и тело). Предмет ведёт к цели физика (ProtoItem.CarryStep): сила с пределом carryForce — тяжёлый медленнее и не
+    ///   поднимается; высота цели — по опоре под следом (луч физики: пол, ступень, другой предмет) — предмет заезжает на ступень
+    ///   и на другой предмет сам; в стены и ступени упирается сам; стопку на нём везёт трение, рывок её роняет.
+    ///   Цель не входит в тело (itemBodyGap). Точка хвата ушла дальше руки (carryBreak) — не удержал, отпустил.
+    /// · ОТПУСТИЛ — дальше просто физика: встанет, съедет, упадёт, сядет под углом.
+    /// · Лежащий предмет для тела — физика (тело — Rigidbody, блок ItemPhysics): кто кого — массы; автообход огибает предметы.
+    /// (Удалено при переделке: габариты для опор и стопок, «влезает ли» предмет, оседание, плавный подъём, выпрямление, «разбудить
+    ///  тех, кто сверху», кинематический перенос, проверка равновесия, толкатель тела.)</summary>
     public partial class HeroProto
     {
         [Header("Предметы (перетаскивание)")]
-        [Tooltip("Предмет в руке не ближе этого зазора (м) к телу.")]
+        [Tooltip("Цель предмета в руке — не ближе этого зазора (м) к кубику тела.")]
         public float itemBodyGap = 0.03f;
+        [Tooltip("Перенос: желаемая скорость предмета = расстояние до цели × столько (1/с).")]
+        public float carryGain = 12f;
+        [Tooltip("Перенос: предмет в руке не быстрее этого (м/с).")]
+        public float carryMaxSpeed = 2.5f;
+        [Tooltip("Перенос: сила руки (Н). Тяжелее силы / g — рука не поднимает, только тащит; тяжёлый разгоняется медленнее.")]
+        public float carryForce = 60f;
+        [Tooltip("Точка хвата ушла от плеча дальше руки на столько (м) — не удержал, предмет отпущен.")]
+        public float carryBreak = 0.25f;
 
         ProtoItem hoverItem, dragItem;
         Vector3 hoverItemHand;               // куда встанет кисть на наведённом предмете (XZ)
-        Vector3 dragOff;                     // центр предмета − кисть (XZ), взято при хвате
-        float dragItemY;                     // низ предмета (плавно по поверхности)
+        Vector3 grabLocal;                   // точка хвата в координатах предмета
+        Vector3 dragTarget;                  // цель кисти (XZ) — за курсором
 
         public ProtoItem DraggedItem => dragItem;
         public bool Dragging => dragItem != null;
 
-        [Tooltip("ЛОВЛЯ ПРЕДМЕТА (м): кисть (там, куда она идёт за курсором) ближе этого к следу предмета — предмет пойман сразу. " +
-                 "Кисть не проходит сквозь предмет: оказалась на нём — он и пойман.")]
-        public float itemCatchR = 0.03f;
-
-        /// <summary>ЛОВЛЯ (автор 2026-11-21: «плохо цепляется — навёлся на объект, должен сразу цеплять»; потом — «радиус поменьше,
-        /// оставить при наведении на сам коллайдер объекта»): предмет пойман, если курсор на самом предмете (луч в его габарит)
-        /// или кисть, идущая за курсором, ближе itemCatchR (3 см) к его следу — чтобы не проходила сквозь предмет на пол.
-        /// Захвата по расстоянию на экране нет. Кисть встаёт туда, куда указывает курсор на предмете (или в ближайшую к кисти
-        /// точку следа); не достаёт рука — в ближайшую к плечу.</summary>
+        /// <summary>Предмет под курсором (луч в его коллайдер), до которого кисть достаёт. hand — точка кисти на нём (XZ).</summary>
         bool FindItem(Vector2 px, out ProtoItem best, out Vector3 hand)
         {
             best = null; hand = default;
             if (ProtoItem.Live.Count == 0) return false;
             Ray r = cam.ScreenPointToRay(px);
             if (FindBackItem(r, out var bh)) { best = backItem; hand = bh; return true; }   // предмет на спине — снять (блок Back)
-            bool haveFh = FloorPoint(px, out var fp);
-            Vector3 fh = haveFh ? FreeHandAroundBody(HandAtLedge(Reach(fp))) : hand;   // куда пошла бы свободная кисть
             Vector3 S = Shoulder;
-            float bestScore = float.MaxValue;
+            float bestD = float.MaxValue;
             foreach (var it in ProtoItem.Live)
             {
                 if (!it || it.held) continue;
                 Bounds b = it.WorldBounds;
-                bool onIt = b.IntersectRay(r, out float hitD);                     // курсор на самом предмете
-                Vector3 q = ClampToFoot(b, fh, 0.01f);                             // точка следа, ближайшая к кисти
-                float gap = Flat(q - fh).magnitude;
-                if (!onIt && gap > itemCatchR) continue;
-                if (onIt) q = ClampToFoot(b, Flat(r.GetPoint(hitD)), 0.01f);       // кисть — куда указал курсор
-                // рука достаёт до точки? нет — ближайшая к плечу точка следа
-                if (!HandReaches(q)) { q = ClampToFoot(b, S, 0.01f); if (!HandReaches(q)) continue; }
-                float score = onIt ? hitD * 1e-3f : 1f + gap;                     // курсор на предмете — ближний по лучу (верх стопки) первым
-                if (score < bestScore) { bestScore = score; best = it; hand = q; }
+                var col = it.GetComponent<Collider>();
+                float hitD;
+                if (col) { if (!col.Raycast(r, out var hit, 1000f)) continue; hitD = hit.distance; }
+                else if (!b.IntersectRay(r, out hitD)) continue;                 // курсор не на предмете — не ловим
+                if (hitD >= bestD) continue;                                       // ближний по лучу (верх стопки) первым
+                var f = it.FootPrint;
+                Vector3 q = f.Closest(Flat(r.GetPoint(hitD)), 0.01f);            // кисть — куда указал курсор
+                if (!HandReaches(q)) { q = f.Closest(S, 0.01f); if (!HandReaches(q)) continue; }   // дальний край — ближний к плечу
+                bestD = hitD; best = it; hand = q;
             }
             return best;
-        }
-
-        /// <summary>Точка следа предмета, ближайшая к p (отступ inset внутрь от края).</summary>
-        static Vector3 ClampToFoot(Bounds b, Vector3 p, float inset)
-        {
-            float ix = Mathf.Min(inset, b.extents.x), iz = Mathf.Min(inset, b.extents.z);
-            return new Vector3(Mathf.Clamp(p.x, b.min.x + ix, b.max.x - ix), 0f, Mathf.Clamp(p.z, b.min.z + iz, b.max.z - iz));
         }
 
         /// <summary>Рука достаёт до точки на предмете: не дальше руки (с допуском), не сквозь тело, без стены между.</summary>
@@ -84,102 +77,21 @@ namespace Fortress.Hero.Proto
         void BeginDrag(ProtoItem it, Vector3 h)
         {
             if (it == backItem) UnlockFromBack(h);                     // со спины — в руку перед собой (блок Back)
-            if (it.Toppling) it.EndTopple();
-            WakeAbove(it);                                             // что лежит на нём — физика: вытащишь — упадёт
-            Upright(it);
-            dragItem = it; it.held = true;
-            ProtoItem.Carried = it;
-            it.BeginCarry();                                           // кинематическое тело: трение везёт лежащее сверху
-            hand = h;
             Bounds b = it.WorldBounds;
-            dragOff = Flat(b.center) - h;
-            dragItemY = b.min.y;
+            grabLocal = it.transform.InverseTransformPoint(new Vector3(h.x, b.max.y, h.z));   // держит за верх в точке хвата
+            dragItem = it;
+            it.BeginCarry();
+            hand = h; dragTarget = h;
             hoverItem = null;
             gestureOwner = "взял предмет";
-        }
-
-        /// <summary>ВЗЯЛ — ВЫПРЯМИЛСЯ (автор 2026-11-22: «бросил на объект, потом вытащил — объект сверху не упал, продолжил висеть»):
-        /// после падения по физике предмет мог лечь наклонно, а укладка и опоры считаются по прямоугольному габариту — у наклонного
-        /// верх габарита выше настоящей грани, на него «вставал» соседний. Теперь взятый предмет выпрямляется (остаётся только поворот
-        /// вокруг вертикали) и встаёт низом на опору под собой; стопка на нём сдвигается на столько же по высоте.</summary>
-        void Upright(ProtoItem it)
-        {
-            var t = it.transform;
-            Quaternion up = Quaternion.Euler(0f, t.eulerAngles.y, 0f);
-            if (Quaternion.Angle(t.rotation, up) < 0.5f) return;
-            Bounds was = it.WorldBounds;
-            t.rotation = up;
-            Bounds b = it.WorldBounds;
-            float g = ItemSupport(it, FootRect(b), was.center.y);                // опора под новым следом (не выше прежнего центра)
-            Vector3 d = new Vector3(was.center.x - b.center.x, g - b.min.y, was.center.z - b.center.z);
-            t.position += d;
-            float lift = it.WorldBounds.max.y - was.max.y;
-            foreach (var r in riders) if (r) r.transform.position += new Vector3(d.x, lift, d.z);
-        }
-
-        // ---- СТОПКА: что лежит на взятом предмете, едет вместе с ним ----
-        // Автор 2026-11-21: «положить один объект на второй и т. д.». Взял нижний — стопка едет целиком (раньше верхний
-        // проваливался сквозь взятый: опора «в руке» не считалась опорой). Разобрать — снимая сверху (курсор берёт верхний).
-        readonly System.Collections.Generic.List<ProtoItem> riders = new System.Collections.Generic.List<ProtoItem>();
-        Vector2 stackMin, stackMax;          // след всей стопки относительно центра взятого (XZ)
-
-        void ReleaseRiders()
-        {
-            foreach (var r in riders) if (r) { r.held = false; r.SetLook(false, false); }
-            riders.Clear();
-        }
-
-        /// <summary>ВЫТАЩИТЬ ИЗ-ПОД СТОПКИ (автор 2026-11-22: «ты сделал, что я не могу тащить объект, — надо наоборот: чтобы я мог его
-        /// вытащить и всё упало; используй физику Unity»). Стопка больше не едет со взятым: всё, что лежит на нём (и выше), сразу
-        /// становится физическим (ProtoItem.StartTopple) и, пока предмет в руке, не засыпает. Взятый выезжает из-под них
-        /// (его коллайдер двигается) — верхние теряют опору и падают; отпустил — всё доходит до покоя и фиксируется.</summary>
-        void WakeAbove(ProtoItem it)
-        {
-            if (!itemTopple) return;
-            // КТО ЛЕЖИТ СВЕРХУ — ПО НАСТОЯЩИМ КОЛЛАЙДЕРАМ (автор 2026-11-22: «почему всё же не перетаскивается этот квадрат?» —
-            // ящик лежал наклонно на краю доски и на полу: по прямоугольному габариту его низ ниже середины доски, «сверху» не считался,
-            // оставался неподвижным, доска выезжала из-под него). Теперь: всё, что касается (Physics.OverlapBox, запас 1 см) и стоит
-            // центром выше центра опоры, — физическое; дальше по цепочке вверх.
-            Physics.SyncTransforms();
-            var queue = new System.Collections.Generic.List<ProtoItem> { it };
-            var above = new System.Collections.Generic.List<ProtoItem>();
-            for (int q = 0; q < queue.Count; q++)
-            {
-                var sup = queue[q];
-                var bc = sup.GetComponent<BoxCollider>();
-                if (!bc) continue;
-                var t = bc.transform;
-                Vector3 c = t.TransformPoint(bc.center);
-                Vector3 he = Vector3.Scale(bc.size * 0.5f, t.lossyScale);
-                he = new Vector3(Mathf.Abs(he.x) + 0.01f, Mathf.Abs(he.y) + 0.01f, Mathf.Abs(he.z) + 0.01f);
-                float supY = sup.WorldBounds.center.y;
-                foreach (var col in Physics.OverlapBox(c, he, t.rotation))
-                {
-                    var o = col.GetComponentInParent<ProtoItem>();
-                    if (!o || o == it || queue.Contains(o) || (o.held && !o.Toppling)) continue;
-                    if (o.WorldBounds.center.y <= supY + 0.01f) continue;          // рядом или ниже — не «сверху»
-                    queue.Add(o); above.Add(o);
-                }
-            }
-            if (above.Count == 0) return;
-            EnsureFallWorld();
-            foreach (var r in above) r.StartTopple();
         }
 
         void EndDrag(string why)
         {
             if (!dragItem) return;
-            ProtoItem.Carried = null;
-            var it = dragItem;
-            it.SetLook(false, false);
-            ReleaseRiders();
+            dragItem.EndCarry(); dragItem.SetLook(false, false);       // дальше — просто физика
             dragItem = null;
-            // вне равновесия (под центром нет опоры) — дальше падает по физике, пока не встанет (блок Topple); иначе лежит
-            it.transform.position = it.CarryPos;
-            bool fall = itemTopple && !ItemBalanced(it);
-            if (fall) EnsureFallWorld();
-            it.EndCarry(fall);
-            lastRelease = fall ? why + " — вне равновесия, падает" : why;
+            lastRelease = why;
         }
 
         /// <summary>Шаг свободной руки: наведение на предмет и хват (до зацепов и пола). true — шаг руки забран блоком.</summary>
@@ -193,12 +105,12 @@ namespace Fortress.Hero.Proto
                 if (!orbit && FloorPoint(px, out var p))
                 {
                     Vector3 want = FreeHandAroundBody(HandAtLedge(Reach(p)));
-                    hand = Vector3.Lerp(hand, want, 1f - Mathf.Exp(-handFollow * dt));
+                    dragTarget = Vector3.Lerp(dragTarget, want, 1f - Mathf.Exp(-handFollow * dt));
                 }
-                MoveItemToHand(dt);
+                if (!CarryItem(dt)) return true;
                 gestureOwner = "тащит предмет";
                 BackArmStep(px);                                       // курсор за спиной — «на спину» (блок Back)
-                if (backArmed) dragItem.SetLook(false, true, true);
+                dragItem.SetLook(false, true, backArmed);
                 return true;
             }
             hoverItem = null;
@@ -212,233 +124,67 @@ namespace Fortress.Hero.Proto
             return true;
         }
 
-        /// <summary>Предмет — под кистью (со сдвигом хвата). Не в стену (скольжение по осям), не в тело (наружу),
-        /// не на уступ выше досягаемости / в сплошное (стоит). Кисть всегда остаётся на предмете.</summary>
-        void MoveItemToHand(float dt)
+        /// <summary>Перенос: точка хвата — к цели кисти; высота цели — по опоре под следом (пол, ступень, другой предмет);
+        /// цель не в теле. Кисть рисуется в точке хвата. Ушла дальше руки — не удержал. false — отпустил.</summary>
+        bool CarryItem(float dt)
         {
             var it = dragItem;
+            Vector3 grabW = it.transform.TransformPoint(grabLocal);
+            Vector3 com = it.Body.worldCenterOfMass;
             Bounds b = it.WorldBounds;
-            b.center += it.CarryPos - it.transform.position;                // по логике руки (тело догоняет на шаге физики)
-            Vector3 cur = Flat(b.center), want = hand + dragOff;
-            // ПЛАВНО (автор 2026-11-21: «рывками»): раньше ход за шаг пробовался целиком — не влез, предмет стоял весь шаг,
-            // потом прыгал. Теперь ход идёт кусками по 1 см до упора; упёрся — остаток вдоль стены (по осям).
-            Vector3 next = cur; float g = dragItemY;
-            itemFrom = cur;
-            if (!ItemFits(cur, b, it, dragItemY, out g)) g = dragItemY;      // уже стоит плохо (не должно) — высоту не трогать
-            Vector3 move = want - cur;
-            int n = Mathf.Clamp(Mathf.CeilToInt(move.magnitude / 0.015f), 1, 20);
-            Vector3 stepV = move / n;
-            // ПОДЪЁМ ПЛАВНО (автор 2026-11-22: «резко поднимается вверх — ступеньки или другие объекты»): раньше предмет заезжал
-            // на ступень / другой предмет и за один шаг подскакивал на новую высоту. Теперь на краю ход стоит, предмет поднимается
-            // (itemRiseSpeed), и, когда низ дошёл до верха, заезжает. Мелкие перепады (≤ itemRiseSnap) — сразу, как раньше.
-            float liftNeed = float.NegativeInfinity;
-            bool Step(Vector3 c, out float gc)
-            {
-                if (!ItemFits(c, b, it, dragItemY, out gc)) return false;
-                if (gc > dragItemY + itemRiseSnap) { liftNeed = Mathf.Max(liftNeed, gc); return false; }   // выше — сначала поднять
-                return true;
-            }
-            for (int k = 0; k < n; k++)
-            {
-                itemFrom = next;
-                Vector3 c = next + stepV;
-                if (Step(c, out float gc)) { next = c; g = gc; continue; }
-                if (liftNeed > dragItemY) break;                             // упёрся в то, на что надо поднять, — не скользить вдоль
-                Vector3 cx = next + new Vector3(stepV.x, 0f, 0f), cz = next + new Vector3(0f, 0f, stepV.z);
-                float gx = 0f, gz = 0f;
-                bool okx = Mathf.Abs(stepV.x) > 1e-6f && Step(cx, out gx);
-                bool okz = Mathf.Abs(stepV.z) > 1e-6f && Step(cz, out gz);
-                if (okx && (!okz || Mathf.Abs(stepV.x) >= Mathf.Abs(stepV.z))) { next = cx; g = gx; }
-                else if (okz) { next = cz; g = gz; }
-                else break;                                                  // упёрся со всех сторон — стоит
-            }
-            // низ: надо поднять — плавно вверх; иначе мелкий перепад вверх — сразу, вниз — плавно, но не в поверхность
-            if (liftNeed > dragItemY) dragItemY = Mathf.MoveTowards(dragItemY, liftNeed, itemRiseSpeed * dt);
-            else dragItemY = g >= dragItemY ? g : Mathf.MoveTowards(dragItemY, g, 3f * dt);
-            Vector3 d = new Vector3(next.x - b.center.x, dragItemY - b.min.y, next.z - b.center.z);
-            it.CarryTo(it.CarryPos + d);                                    // MovePosition: физика знает скорость — трение везёт верхних
-            it.SetLook(false, true);
-            hand = next - dragOff;                                          // кисть — всегда на предмете (предмет мог отстать от курсора)
-        }
-
-        Vector3 itemFrom;                    // откуда пробуется ход (ItemFits: в зазоре у тела — только не ближе к телу)
-        static float RectDist(Vector3 p, Rect r) { float dx = p.x - Mathf.Clamp(p.x, r.xMin, r.xMax), dz = p.z - Mathf.Clamp(p.z, r.yMin, r.yMax); return Mathf.Sqrt(dx * dx + dz * dz); }
-
-        static Rect FootRect(Vector3 c, Vector3 e) => Rect.MinMaxRect(c.x - e.x, c.z - e.z, c.x + e.x, c.z + e.z);
-        static Rect FootRect(Bounds b) => Rect.MinMaxRect(b.min.x, b.min.z, b.max.x, b.max.z);
-
-        [Tooltip("НА СТУПЕНЬ: предмет в руке заезжает на поверхность выше его низа не больше чем на столько (м) — подсаживаешь рукой. " +
-                 "Выше — бок уступа, стена для предмета.")]
-        public float itemLift = 0.45f;
-        [Tooltip("Предмет в руке поднимается на ступень / другой предмет с такой скоростью (м/с): у края ход стоит, пока низ не дойдёт до верха.")]
-        public float itemRiseSpeed = 1.2f;
-        [Tooltip("Перепад вверх не больше этого (м) — предмет заезжает сразу, без остановки на подъём.")]
-        public float itemRiseSnap = 0.02f;
-
-        /// <summary>След предмета (габарит по XZ) с центром в c: не в стене, не в кубике тела, не в другом предмете;
-        /// под следом (сетка проб) — поверхность своего уровня без сплошного, не выше низа предмета + itemLift (подсадить рукой).
-        /// ground — низ предмета (самая высокая точка под следом).</summary>
-        bool ItemFits(Vector3 c, Bounds b, ProtoItem self, float bottom, out float ground)
-        {
-            ground = float.NegativeInfinity;
-            Vector3 e = b.extents;
-            Rect r = FootRect(c, e);
-            // стены и тело — по следу всей стопки (верхний, свесившийся за край, тоже не входит)
-            Rect rs = self == dragItem && riders.Count > 0 ? Rect.MinMaxRect(c.x + stackMin.x, c.z + stackMin.y, c.x + stackMax.x, c.z + stackMax.y) : r;
-            foreach (var o in obstacles) if (rs.Overlaps(o)) return false;
-            // ТЕЛО: наложение — никогда; в зазоре itemBodyGap — только не ближе, чем было (автор 2026-11-22: «стою плотно — не могу
-            // перетаскивать, приходится отдаляться»: тело встаёт к предмету вплотную, а зазор запрещал любой ход, даже от тела)
-            if (BoxHitsRect(Body, rs, 0.001f)) return false;
-            if (BoxHitsRect(Body, rs, -itemBodyGap))
-            {
-                Vector3 f = itemFrom - c;
-                Rect from = Rect.MinMaxRect(rs.xMin + f.x, rs.yMin + f.z, rs.xMax + f.x, rs.yMax + f.z);
-                if (RectDist(Body, rs) < RectDist(Body, from) - 1e-4f) return false;
-            }
-            // ДРУГОЙ ПРЕДМЕТ под следом (укладка, автор 2026-11-21: «положить один объект на второй и т. д.»): его верх — опора,
-            // если рука поднимет туда (не выше низа + itemLift и не выше своего уровня + handUp); выше — стена, как раньше
-            float stackTop = float.NegativeInfinity;
-            foreach (var other in ProtoItem.Live)
-            {
-                if (!other || other == self || other.held) continue;
-                Bounds ob = other.WorldBounds;
-                if (!r.Overlaps(FootRect(ob)))
-                {
-                    if (rs.Overlaps(FootRect(ob)) && ob.max.y > bottom + 0.005f) return false;   // свесившийся верх стопки — не в соседний предмет
-                    continue;
-                }
-                if (ob.max.y > bottom + itemLift || ob.max.y > BodyLevel + handUp) return false;
-                stackTop = Mathf.Max(stackTop, ob.max.y);
-            }
-            // под следом — сетка проб через ≤ 6 см (край ступени между пробами не проскочит); низ — по самой высокой
-            int nx = Mathf.Clamp(Mathf.CeilToInt(2f * e.x / 0.06f), 1, 16), nz = Mathf.Clamp(Mathf.CeilToInt(2f * e.z / 0.06f), 1, 16);
-            for (int i = 0; i <= nx; i++)
-                for (int j = 0; j <= nz; j++)
-                {
-                    float h = HandLevel(new Vector3(c.x - e.x * 0.98f + 1.96f * e.x * i / nx, 0f, c.z - e.z * 0.98f + 1.96f * e.z * j / nz));
-                    if (float.IsInfinity(h)) return false;                           // сплошное под следом
-                    ground = Mathf.Max(ground, h);
-                }
-            if (ground > bottom + itemLift) return false;                         // выше, чем поднимет рука, — бок уступа
-            ground = Mathf.Max(ground, stackTop);                                 // на другой предмет — на его верх
+            Vector3 tc = dragTarget + Flat(com - grabW);                          // цель центра (XZ): точка хвата — в цель кисти
+            tc = KeepOffBody(tc, it.FootPrint);
+            float sup = SupportUnder(tc, b, it);                                   // опора под следом в цели
+            tc.y = sup + (com.y - b.min.y) + 0.01f;
+            it.CarryStep(tc, dt, carryGain, carryMaxSpeed, carryForce);
+            hand = Flat(grabW);                                                    // кисть — на предмете
+            if (Flat(grabW - Shoulder).magnitude > L + carryBreak) { EndDrag("не удержал — предмет ушёл дальше руки"); return false; }
             return true;
         }
 
-        [Tooltip("Предмет без опоры (выдернули нижний из стопки, столкнули с края) опускается с такой скоростью (м/с).")]
-        public float itemFallSpeed = 4f;
-
-        /// <summary>Опора под следом r на высоте fromY и ниже: поверхность (сетка проб) и верхи других лежащих предметов.</summary>
-        float ItemSupport(ProtoItem self, Rect r, float fromY)
+        /// <summary>Самая высокая опора под следом (центр и углы габарита, перенесённого в c) не выше, чем рука поднимет:
+        /// луч физики вниз — пол, ступень, другой предмет (кроме самого себя).</summary>
+        float SupportUnder(Vector3 c, Bounds b, ProtoItem self)
         {
-            float g = 0f;
-            int nx = Mathf.Clamp(Mathf.CeilToInt(r.width / 0.06f), 1, 16), nz = Mathf.Clamp(Mathf.CeilToInt(r.height / 0.06f), 1, 16);
-            for (int i = 0; i <= nx; i++)
-                for (int j = 0; j <= nz; j++)
+            float cap = BodyLevel + handUp, top = cap + b.size.y + 0.5f, best = 0f;
+            var k = self.FootPrint.At(c).Corners(0.95f);                         // углы повёрнутого следа
+            Vector3[] pts = { c, k[0], k[1], k[2], k[3] };
+            foreach (var p in pts)
+                foreach (var h in Physics.RaycastAll(new Vector3(p.x, top, p.z), Vector3.down, top + 1f, ~0, QueryTriggerInteraction.Ignore))
                 {
-                    float h = LevelHeight(new Vector3(r.xMin + r.width * (0.01f + 0.98f * i / nx), 0f, r.yMin + r.height * (0.01f + 0.98f * j / nz)), fromY, 0.02f);
-                    if (!float.IsInfinity(h)) g = Mathf.Max(g, h);
+                    if (h.collider.attachedRigidbody && h.collider.attachedRigidbody == self.Body) continue;
+                    if (h.collider == BodyCollider) continue;                     // кубик тела — не опора для предмета
+                    if (h.point.y > cap) continue;                                // выше, чем рука поднимет, — бок уступа, не опора
+                    if (h.point.y > best) best = h.point.y;
                 }
-            foreach (var other in ProtoItem.Live)
-            {
-                if (!other || other == self || other.held) continue;
-                Bounds ob = other.WorldBounds;
-                if (ob.max.y <= fromY + 0.02f && r.Overlaps(FootRect(ob))) g = Mathf.Max(g, ob.max.y);
-            }
-            return g;
+            return best;
         }
 
-        /// <summary>ОСЕДАНИЕ: лежащий предмет, под которым ушла опора (вытащили нижний из стопки), опускается на то, что под ним.
-        /// Только вниз и только по вертикали; снизу вверх (оседание по порядку) — верхний ждёт, пока сядет нижний.</summary>
-        void SettleItems(float dt)
+        /// <summary>Цель центра предмета не в кубике тела: след (повёрнутый, перенесённый в c) ближе itemBodyGap — отодвинуть от тела.</summary>
+        Vector3 KeepOffBody(Vector3 c, ProtoItem.Foot f)
         {
-            if (ProtoItem.Live.Count == 0) return;
-            for (int pass = 0; pass < 2; pass++)
-                foreach (var it in ProtoItem.Live)
-                {
-                    if (!it || it.held) continue;
-                    Bounds b = it.WorldBounds;
-                    float sup = ItemSupport(it, FootRect(b), b.min.y);
-                    if (sup < b.min.y - 0.001f)
-                        it.transform.position += Vector3.down * Mathf.Min(b.min.y - sup, itemFallSpeed * dt * 0.5f);
-                }
-        }
-
-        /// <summary>Лежащие предметы (не тот, что в руке) — стена для тела: кубик тела (или круг r) в точке p задевает след предмета?</summary>
-        bool ItemBlocksBody(Vector3 p, float r = -1f)
-        {
-            foreach (var it in ProtoItem.Live)
+            for (int k = 0; k < 30; k++)
             {
-                if (!it || it.held || Pushable(it)) continue;                  // лёгкий — не стена: тело его расталкивает
-                Rect o = FootRect(it.WorldBounds);
-                if (r < 0f) { if (BoxHitsRect(p, o, 0.001f)) return true; }
-                else
-                {
-                    float cx = Mathf.Clamp(p.x, o.xMin, o.xMax), cz = Mathf.Clamp(p.z, o.yMin, o.yMax);
-                    float dx = p.x - cx, dz = p.z - cz;
-                    if (dx * dx + dz * dz < r * r) return true;
-                }
+                if (!BoxHitsFoot(Body, f.At(c), -itemBodyGap)) break;
+                Vector3 d = Flat(c) - Body; if (d.sqrMagnitude < 1e-6f) d = Face;
+                c += d.normalized * 0.01f;
             }
-            return false;
+            return c;
         }
 
-        /// <summary>Нормаль от лежащих предметов (как от стен) — тело скользит вдоль предмета, а не встаёт.</summary>
-        Vector3 ItemContactNormal(Vector3 p, float r)
-        {
-            Vector3 n = Vector3.zero;
-            foreach (var it in ProtoItem.Live)
-            {
-                if (!it || it.held || Pushable(it)) continue;
-                Rect o = FootRect(it.WorldBounds);
-                float cx = Mathf.Clamp(p.x, o.xMin, o.xMax), cz = Mathf.Clamp(p.z, o.yMin, o.yMax);
-                Vector3 d = new Vector3(p.x - cx, 0f, p.z - cz);
-                float m = d.magnitude;
-                if (m >= r) continue;
-                n += m > 1e-5f ? d / m : new Vector3(p.x - o.center.x, 0f, p.z - o.center.y).normalized;
-            }
-            return n;
-        }
-
-        /// <summary>Высота кисти на предмете (наведена / тащит) — верх предмета; иначе +∞ (не наш случай).</summary>
+        /// <summary>Высота кисти на предмете: тащит — точка хвата; наведена — верх предмета; иначе +∞ (не наш случай).</summary>
         float ItemHandY()
         {
-            var it = dragItem ? dragItem : hoverItem;
-            if (!it) return float.PositiveInfinity;
-            if (it == backItem) return HandLevel(hand);                     // снимаешь со спины — кисть перед собой, на полу
-            return it.WorldBounds.max.y;                                  // кисть лежит на верхе предмета
-        }
-
-        [Header("Расталкивание")]
-        [Tooltip("Предмет не тяжелее этого (кг) — лёгкий: тело его расталкивает (физика), тяжелее — стена.")]
-        public float pushMaxMass = 5f;
-
-        bool Pushable(ProtoItem it) => itemTopple && it.mass <= pushMaxMass;
-
-        /// <summary>РАСТАЛКИВАНИЕ (автор 2026-11-22: «зажатый между лёгкими объектами я не смог развернуться на месте»; «нужна масса
-        /// и, возможно, расталкивать»). Лёгкий предмет телу не стена: тело (поворот, езда) входит в его след — предмет становится
-        /// физическим (ProtoItem.StartTopple), коллайдер тела его выталкивает; успокоился — снова зафиксирован.
-        /// Тяжёлый (mass > pushMaxMass) — стена, как раньше. Автообход от предметов остаётся — уводит в сторону, но не запирает.</summary>
-        void PushLightItems()
-        {
-            SyncPusher();                                              // физический толкатель тела — за телом (блок Topple)
-            if (!itemTopple || ProtoItem.Live.Count == 0 || !bodyCube) return;
-            float top = bodyCube.position.y + Mathf.Abs(bodyCube.lossyScale.y) * 0.5f;
-            foreach (var it in ProtoItem.Live)
-            {
-                if (!it || it.held || !Pushable(it)) continue;
-                Bounds b = it.WorldBounds;
-                if (b.min.y > top || !BoxHitsRect(Body, FootRect(b), 0.001f)) continue;
-                EnsureFallWorld();
-                it.StartTopple();
-            }
+            if (dragItem) return dragItem.transform.TransformPoint(grabLocal).y - handLift;
+            if (!hoverItem) return float.PositiveInfinity;
+            if (hoverItem == backItem) return HandLevel(hand);                // снимаешь со спины — кисть перед собой, на полу
+            return hoverItem.WorldBounds.max.y;
         }
 
         void DragReset()
         {
-            if (dragItem) { dragItem.EndCarry(false); dragItem.SetLook(false, false); }
-            ProtoItem.Carried = null;
-            ReleaseRiders();
+            if (dragItem) { dragItem.EndCarry(); dragItem.SetLook(false, false); }
             BackReset();
-            SyncPusher(true);                                          // перенос героя (зона, сброс) — толкатель прыгает, а не сметает всё по пути
             if (hoverItem) hoverItem.SetLook(false, false);
             dragItem = hoverItem = null;
         }

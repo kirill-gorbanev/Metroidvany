@@ -3,106 +3,43 @@ using UnityEngine;
 
 namespace Fortress.Hero.Proto
 {
-    /// <summary>ПРЕДМЕТ — маркер: то, что рука берёт и тащит (блок HeroProto.Drag). Кубик или любой объект с рендером.
-    /// Не стена и не опора: лежит в декоре зоны. Свой Transform — и есть предмет: тащим его, кладём, дальше — на спину / на голову (LOCK).
-    /// Живые (включённые) предметы — в списке Live: выключенная зона арены свои предметы не показывает.</summary>
+    /// <summary>ПРЕДМЕТ — ВСЕГДА ФИЗИЧЕСКОЕ ТЕЛО UNITY (переделка 2026-11-22, автор: «ты усложняешь схему — стоит её перевернуть,
+    /// удалить лишнее и получить работающий механизм физичных объектов»).
+    ///
+    /// · Rigidbody (масса, трение, сон в покое) + BoxCollider. Стопки, падение, наклон, «вытащить снизу», «поставить на наклонный» —
+    ///   всё делает физика, своих правил про опоры нет.
+    /// · Рука ведёт предмет к цели (CarryStep): желаемая скорость к цели, разгон не больше carryForce / масса — тяжёлый идёт медленнее
+    ///   и не поднимается, лёгкий — быстро; сам упирается в стены и ступени, заезжает на них, тащит стопку трением.
+    /// · Мир для предметов — неподвижные коллайдеры (HeroProto.EnsureItemWorld): рельеф, стены, пол. Тело героя —
+    ///   Rigidbody (HeroProto.PhysicsStep): кто кого — массы и сила тела.
+    /// · Живые (включённые) предметы — в списке Live: выключенная зона арены свои предметы не показывает.</summary>
     public class ProtoItem : MonoBehaviour
     {
         public static readonly List<ProtoItem> Live = new List<ProtoItem>();
 
-        /// <summary>Тащит рука сейчас.</summary>
+        [Tooltip("Масса (кг): физика; тело (Rigidbody, HeroProto.bodyMass) толкает предмет по массам; тяжёлый рука тащит медленнее и не поднимает.")]
+        public float mass = 1f;
+        [Tooltip("Предмет, вошедший в тело или в другой коллайдер, выталкивается не быстрее этого (м/с) — без «запуливания».")]
+        public float depenSpeed = 0.5f;
+
+        /// <summary>В руке или на спине — не ловится рукой, не стена для тела.</summary>
         [System.NonSerialized] public bool held;
 
-        [Tooltip("Масса (кг): физика падения и трения; лёгкий (не тяжелее HeroProto.pushMaxMass) тело расталкивает, тяжёлый — стена.")]
-        public float mass = 1f;
-
+        Rigidbody rb;
         Renderer rend; MaterialPropertyBlock mpb; Color baseColor = Color.white; bool haveColor;
 
-        void OnEnable() { if (!Live.Contains(this)) Live.Add(this); }
-        void OnDisable() { Live.Remove(this); held = false; if (rb) { Destroy(rb); rb = null; } if (Carried == this) Carried = null; }
-
-        // ---- ПАДЕНИЕ ВНЕ РАВНОВЕСИЯ (блок HeroProto.Topple) ----
-        // Автор 2026-11-22: «я выбрал конкретно объект А, перетаскал и установил вне равновесия — тогда объект А падает до тех пор,
-        // пока не встанет, и тогда объект фиксируется». Физика — только у этого предмета и только на время падения: свой Rigidbody,
-        // всё остальное (стены, ступени, тело, другие предметы) — неподвижные коллайдеры: он о них бьётся, но никого не толкает.
-        Rigidbody rb; float restT, fallT;
-        /// <summary>Что сейчас тащит рука (из-под него можно вытащить стопку). Пока он есть — падающие не засыпают и не фиксируются:
-        /// опора под ними двигается (автор 2026-11-22: «чтобы я мог его вытащить — и всё упало; используй физику Unity»).</summary>
-        public static ProtoItem Carried;
-        /// <summary>Падает (физика включена) — пока не встанет.</summary>
-        public bool Toppling => rb != null && !rb.isKinematic;
-
-        // ---- В РУКЕ: кинематическое тело (автор 2026-11-22: «объект сверху лежит и ждёт, когда из-под него уберут, — а трение-то
-        // должно быть»). Раньше взятый двигался телепортом — физика не знала его скорости, лежащее сверху не ехало. Теперь
-        // взятый — кинематический Rigidbody, двигается MovePosition: трение везёт стопку, рывок или стена — верхние соскальзывают.
-        Vector3 carryPos;
-        /// <summary>Где взятый предмет по логике руки (тело догонит на шаге физики).</summary>
-        public Vector3 CarryPos => carryPos;
-        public bool Carrying => rb != null && rb.isKinematic;
-
-        public void BeginCarry()
-        {
-            if (!rb) rb = gameObject.AddComponent<Rigidbody>();
-            rb.isKinematic = true;
-            rb.mass = Mathf.Max(0.05f, mass);
-            rb.interpolation = RigidbodyInterpolation.Interpolate;
-            rb.position = transform.position; rb.rotation = transform.rotation;
-            carryPos = transform.position;
-            held = true;
-        }
-
-        public void CarryTo(Vector3 p) { carryPos = p; if (rb) rb.MovePosition(p); }
-
-        /// <summary>Отпустили: встать точно на место руки; topple — дальше падать по физике, иначе — тело снято, лежит.</summary>
-        public void EndCarry(bool topple)
-        {
-            transform.position = carryPos;
-            if (!rb) { held = false; return; }
-            rb.position = carryPos;
-            if (topple)
-            {
-                rb.isKinematic = false;
-                rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-                restT = 0f; fallT = 0f; held = true;
-            }
-            else { DestroyImmediate(rb); rb = null; held = false; }   // сразу: в том же кадре может понадобиться новое тело
-        }
-        [Tooltip("Падающий предмет считается вставшим, когда почти не движется столько секунд.")]
-        public float restTime = 0.3f;
-
-        /// <summary>Отпустили вне равновесия: включить физику этому предмету (held — ни препятствие, ни опора, ни берётся рукой).</summary>
-        public void StartTopple()
-        {
-            if (rb && !rb.isKinematic) return;
-            if (!GetComponent<Collider>()) gameObject.AddComponent<BoxCollider>();
-            if (!rb) rb = gameObject.AddComponent<Rigidbody>();
-            rb.isKinematic = false;
-            rb.mass = Mathf.Max(0.05f, mass);
-            rb.interpolation = RigidbodyInterpolation.Interpolate;
-            rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-            held = true; restT = 0f; fallT = 0f;
-        }
-
-        void FixedUpdate()
-        {
-            if (!rb || rb.isKinematic) return;
-            if (Carried && Carried != this) { rb.WakeUp(); restT = 0f; fallT = 0f; return; }   // опору тащат — не засыпать
-            float dt = Time.fixedDeltaTime;
-            fallT += dt;
-            restT = rb.linearVelocity.magnitude < 0.05f && rb.angularVelocity.magnitude < 0.2f ? restT + dt : 0f;
-            if (restT >= restTime || rb.IsSleeping() || fallT > 6f) EndTopple();
-        }
-
-        /// <summary>Встал — физика снята, предмет снова зафиксирован (лежит, как все).</summary>
-        public void EndTopple()
-        {
-            if (!rb) return;
-            DestroyImmediate(rb); rb = null; held = false;
-        }
+        public Rigidbody Body => rb;
 
         void Awake()
         {
-            if (!GetComponent<Collider>()) gameObject.AddComponent<BoxCollider>();   // для падающих соседей — неподвижная преграда
+            if (!GetComponent<Collider>()) gameObject.AddComponent<BoxCollider>();
+            rb = GetComponent<Rigidbody>();
+            if (!rb) rb = gameObject.AddComponent<Rigidbody>();
+            rb.mass = Mathf.Max(0.05f, mass);
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
+            rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+            rb.maxDepenetrationVelocity = depenSpeed;
+            rb.isKinematic = true;                                       // до Start: мир (коллайдеры рельефа и пола) ещё не поставлен
             rend = GetComponentInChildren<Renderer>();
             if (rend && rend.sharedMaterial)
             {
@@ -112,14 +49,127 @@ namespace Fortress.Hero.Proto
             }
         }
 
+        void Start()
+        {
+            var hero = FindAnyObjectByType<HeroProto>();
+            if (hero) hero.EnsureItemWorld();                            // коллайдеры мира — до того, как предмет начнёт падать
+            if (!held) rb.isKinematic = false;
+        }
+
+        /// <summary>Тело героя предмет не подбрасывает: в касании с телом скорость вверх гасится.</summary>
+        void OnCollisionStay(Collision c)
+        {
+            if (rb.isKinematic || c.collider != HeroProto.BodyCollider) return;
+            Vector3 v = rb.linearVelocity;
+            if (v.y > 0f) rb.linearVelocity = new Vector3(v.x, 0f, v.z);
+        }
+
+        void OnEnable() { if (!Live.Contains(this)) Live.Add(this); }
+        void OnDisable() { Live.Remove(this); held = false; }
+
+        // ---- в руке ----
+        Quaternion holdRot;                  // как рука держит предмет: прямо, поворот вокруг вертикали — тот, что был при хвате
+
+        /// <summary>Рука взяла: держит прямо, с тем поворотом вокруг вертикали, какой был при хвате (автор 2026-11-23:
+        /// «в момент подъёма крутится, хотя я его держу — в руке болтаться не должен»).</summary>
+        public void BeginCarry()
+        {
+            held = true; rb.isKinematic = false; rb.WakeUp();
+            Vector3 f = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
+            if (f.sqrMagnitude < 1e-4f) f = Vector3.ProjectOnPlane(transform.up, Vector3.up);   // лежал «лицом» вверх/вниз
+            holdRot = f.sqrMagnitude < 1e-4f ? Quaternion.identity : Quaternion.LookRotation(f.normalized, Vector3.up);
+        }
+
+        /// <summary>Отпустили: дальше — просто физика (встанет, съедет, упадёт).</summary>
+        public void EndCarry() { held = false; rb.WakeUp(); }
+
+        /// <summary>Шаг руки: центр предмета — к цели. Желаемая скорость (target − центр) · gain, не быстрее maxSpeed; разгон за шаг —
+        /// не больше maxForce / масса, причём поддержка против тяжести тратит ту же силу: тяжёлый не поднимается, только тащится.
+        /// dt — шаг героя: несколько шагов за шаг физики складываются в правильный толчок (тяжесть добавляет сама физика).</summary>
+        public void CarryStep(Vector3 target, float dt, float gain, float maxSpeed, float maxForce)
+        {
+            Vector3 c = rb.worldCenterOfMass, v = rb.linearVelocity;
+            Vector3 want = Vector3.ClampMagnitude((target - c) * gain, maxSpeed);
+            Vector3 acc = (want - v) / Mathf.Max(dt, 1e-4f) - Physics.gravity;   // нужное ускорение сверх тяжести
+            acc = Vector3.ClampMagnitude(acc, maxForce / rb.mass);
+            rb.linearVelocity = v + acc * dt;
+            HoldRotation();
+            rb.WakeUp();
+        }
+
+        /// <summary>Рука держит ориентацию: угловая скорость — ровно к holdRot (не кувыркается от трения о пол, угла ступени, толчка);
+        /// без перескока — довод не быстрее holdTurnSpeed.</summary>
+        void HoldRotation()
+        {
+            const float gain = 25f, holdTurnSpeed = 12f;                  // 1/с, рад/с
+            Quaternion d = holdRot * Quaternion.Inverse(rb.rotation);
+            if (d.w < 0f) d = new Quaternion(-d.x, -d.y, -d.z, -d.w);     // кратчайший путь
+            d.ToAngleAxis(out float ang, out Vector3 axis);
+            if (ang < 0.01f || float.IsNaN(axis.x) || float.IsInfinity(axis.x)) { rb.angularVelocity = Vector3.zero; return; }
+            rb.angularVelocity = Vector3.ClampMagnitude(axis * (ang * Mathf.Deg2Rad * gain), holdTurnSpeed);
+        }
+
+        /// <summary>На спине (блок HeroProto.Back): закреплён, физика выключена; снят — снова физика.</summary>
+        public void Lock(bool on)
+        {
+            held = on;
+            rb.isKinematic = on;
+            if (!on) rb.WakeUp();
+        }
+
+        /// <summary>СЛЕД ПРЕДМЕТА НА ПОЛУ — повёрнутый прямоугольник (автор 2026-11-23: «форма коллайдера» — касание считалось по
+        /// габариту, выровненному по осям мира: повёрнутый предмет «касался» тела пустым углом габарита). c — центр (y = 0),
+        /// u, v — оси следа (горизонтальные, единичные), h — половины вдоль них.</summary>
+        public struct Foot
+        {
+            public Vector3 c, u, v; public Vector2 h;
+            public Foot At(Vector3 nc) { var f = this; f.c = new Vector3(nc.x, 0f, nc.z); return f; }
+            /// <summary>Точка следа, ближайшая к p (отступ inset внутрь от края); p внутри — сама p.</summary>
+            public Vector3 Closest(Vector3 p, float inset)
+            {
+                Vector3 d = new Vector3(p.x - c.x, 0f, p.z - c.z);
+                float ix = Mathf.Min(inset, h.x), iz = Mathf.Min(inset, h.y);
+                float x = Mathf.Clamp(Vector3.Dot(d, u), -h.x + ix, h.x - ix), z = Mathf.Clamp(Vector3.Dot(d, v), -h.y + iz, h.y - iz);
+                return c + u * x + v * z;
+            }
+            /// <summary>Углы следа (k — доля от центра до края).</summary>
+            public Vector3[] Corners(float k) => new[] { c + (u * h.x + v * h.y) * k, c + (u * h.x - v * h.y) * k, c + (-u * h.x + v * h.y) * k, c + (-u * h.x - v * h.y) * k };
+        }
+
+        /// <summary>След по BoxCollider предмета: самая вертикальная ось коробки — «вверх», две другие, положенные на пол, — оси следа.</summary>
+        public Foot FootPrint
+        {
+            get
+            {
+                var bc = GetComponent<BoxCollider>();
+                return FootOfBox(transform, bc ? bc.center : Vector3.zero, bc ? bc.size : Vector3.one);
+            }
+        }
+
+        /// <summary>След на полу любой коробки: transform + центр и размер в его локальных координатах (предмет, камень на склоне).</summary>
+        public static Foot FootOfBox(Transform transform, Vector3 cen, Vector3 size)
+        {
+            {
+                Vector3 ls = transform.lossyScale; size = new Vector3(Mathf.Abs(size.x * ls.x), Mathf.Abs(size.y * ls.y), Mathf.Abs(size.z * ls.z));
+                Vector3[] ax = { transform.right, transform.up, transform.forward };
+                float[] hs = { size.x * 0.5f, size.y * 0.5f, size.z * 0.5f };
+                int up = 0; for (int i = 1; i < 3; i++) if (Mathf.Abs(ax[i].y) > Mathf.Abs(ax[up].y)) up = i;
+                int a = (up + 1) % 3, b = (up + 2) % 3;
+                Vector3 fa = new Vector3(ax[a].x, 0f, ax[a].z), fb = new Vector3(ax[b].x, 0f, ax[b].z);
+                float la = fa.magnitude, lb = fb.magnitude;
+                var f = new Foot { c = transform.TransformPoint(cen) };
+                f.c.y = 0f;
+                f.u = la > 1e-4f ? fa / la : Vector3.right;
+                f.v = lb > 1e-4f ? fb / lb : Vector3.Cross(f.u, Vector3.up);
+                // наклонённый предмет: тень на полу шире — добавить вклад вертикальной оси
+                Vector3 fu = new Vector3(ax[up].x, 0f, ax[up].z);
+                f.h = new Vector2(hs[a] * la + Mathf.Abs(Vector3.Dot(fu, f.u)) * hs[up], hs[b] * lb + Mathf.Abs(Vector3.Dot(fu, f.v)) * hs[up]);
+                return f;
+            }
+        }
+
         /// <summary>Габарит в мире (по рендеру; без рендера — по масштабу единичного кубика).</summary>
         public Bounds WorldBounds => rend ? rend.bounds : new Bounds(transform.position, transform.lossyScale);
-        /// <summary>Половина высоты: от центра до низа.</summary>
-        public float HalfHeight => WorldBounds.extents.y;
-        /// <summary>Радиус следа на полу (для стен и тела): полудиагональ габарита по XZ.</summary>
-        public float Radius { get { var e = WorldBounds.extents; return Mathf.Sqrt(e.x * e.x + e.z * e.z); } }
-        /// <summary>Центр низа (на поверхности).</summary>
-        public Vector3 Bottom { get { var b = WorldBounds; return new Vector3(b.center.x, b.min.y, b.center.z); } }
 
         /// <summary>Подсветка: наведена кисть — светлее, тащим — ещё светлее. Только вид.</summary>
         public void SetLook(bool hover, bool drag, bool toBack = false)
@@ -133,10 +183,14 @@ namespace Fortress.Hero.Proto
             rend.SetPropertyBlock(mpb);
         }
 
+        void OnValidate() { if (rb) { rb.mass = Mathf.Max(0.05f, mass); rb.maxDepenetrationVelocity = depenSpeed; } }
+
         void OnDrawGizmos()
         {
-            var b = WorldBounds; Gizmos.color = held ? new Color(0.3f, 1f, 0.5f) : new Color(0.4f, 0.8f, 1f);
-            Gizmos.DrawWireCube(b.center, b.size);
+            Gizmos.color = held ? new Color(0.3f, 1f, 0.5f) : new Color(0.4f, 0.8f, 1f);
+            var k = FootPrint.Corners(1f); float y = WorldBounds.min.y + 0.01f;
+            for (int i = 0; i < 4; i++) k[i].y = y;
+            Gizmos.DrawLine(k[0], k[1]); Gizmos.DrawLine(k[1], k[3]); Gizmos.DrawLine(k[3], k[2]); Gizmos.DrawLine(k[2], k[0]);
         }
     }
 }

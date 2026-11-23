@@ -49,7 +49,7 @@ namespace Fortress.Hero.Proto
         bool SpinHeld(ProtoMover m) => mode == Mode.Grip && m && handMover == m && !spinSlip && !gripSlip;
 
         /// <summary>Внешняя сила (платформа, унос, слёт) завела руку в тело — хват срывается (тело не крутится сквозь руку).</summary>
-        bool ArmCutsBody() => armKeepOut > 0f && mode == Mode.Grip && ArmToBody(Body, Shoulder, gripHand) < armKeepOut * 0.7f;
+        bool ArmCutsBody() => armKeepOut > 0f && mode == Mode.Grip && ArmToBodyGrip(Body, Shoulder) < armKeepOut * 0.7f;
 
         void ReleaseSpin() => ReleaseGrip("сорвало с диска", true);
 
@@ -68,7 +68,7 @@ namespace Fortress.Hero.Proto
             {
                 Vector3 want = flingV * dt, np = Slide(Body, want);
                 if ((np - Body).magnitude < want.magnitude * 0.5f) flingV = Vector3.zero;     // упёрся — стоп
-                bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
+                MoveBodyXZ(np.x, np.z);
                 flingV *= Mathf.Exp(-flingDecay * dt);
                 if (flingV.magnitude < 0.05f) flingV = Vector3.zero;
                 if (mode == Mode.Grip)
@@ -112,7 +112,7 @@ namespace Fortress.Hero.Proto
                     {
                         Vector3 np = Slide(Body, outw.normalized * spinV * dt);
                         if ((np - Body).sqrMagnitude < 1e-10f) spinV = 0f;          // упёрся (столб, стена) — стоит
-                        bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
+                        MoveBodyXZ(np.x, np.z);
                         if (mode == Mode.Grip)
                         {
                             if (Flat(gripHand - Shoulder).magnitude > ComputeGripL() + 0.01f || ArmCutsBody()) ReleaseSpin();   // рука не удержит — отпустила

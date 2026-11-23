@@ -233,7 +233,7 @@ namespace Fortress.Hero.Proto
                 if (down.sqrMagnitude < 1e-6f) return;
                 Vector3 np = Slide(Body, down.normalized * slideV * dt);
                 if ((np - Body).sqrMagnitude < 1e-10f) { if (SlideOffEdge(down, slideV)) return; slideV = 0f; }   // упёрся: край обрыва — падение (Fall), стена — стоит
-                bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
+                MoveBodyXZ(np.x, np.z);
                 if (mode == Mode.Grip)
                 {
                     // кисть (съезжающая) не удержит тело дальше руки — отпускает
@@ -283,44 +283,86 @@ namespace Fortress.Hero.Proto
         {
             Vector3 P = GripPoint3, to = Flat(P) - Body;
             float dist = to.magnitude;
-            if (dist < 0.02f) return;
+            if (dist < 0.02f) { pullWhy = "тяга по склону: кисть над телом"; return; }
             // крутизна — поверхности ВПЕРЕДИ, к камню (у подножия под телом ещё ровный пол)
             Vector3 probe = Body + to / dist * Mathf.Min(0.1f, dist);
             LevelHit(probe, BodyLevel, maxStep, out _, out var nAhead);
+            // у подножия перед телом ещё ровный пол — наклон склона берём дальше, до камня (иначе «вверх по склону» не определено)
+            for (float pd = 0.2f; Vector3.Angle(nAhead, Vector3.up) < 5f && pd <= Mathf.Min(0.5f, dist + 0.2f); pd += 0.1f)
+                LevelHit(Body + to / dist * pd, BodyLevel, maxStep, out _, out nAhead);
             float ang = Mathf.Max(Vector3.Angle(nAhead, Vector3.up), Vector3.Angle(bodyNormal, Vector3.up));
             float run = meters / Mathf.Max(0.3f, Mathf.Tan(ang * Mathf.Deg2Rad));   // подъём на meters по склону = столько по полу
             // ВВЕРХ ПО СКЛОНУ (а не прямо в камень): камни сбоку твёрдые — тело идёт между колонками и скользит вдоль камней (Slide)
             Vector3 upDir = -Flat(nAhead); if (upDir.sqrMagnitude < 1e-4f) upDir = to; upDir.Normalize();
-            if (Vector3.Dot(upDir, to) < 0f) return;                      // камень ниже по склону — тянуть вверх незачем
+            if (Vector3.Dot(upDir, to) < 0f) { pullWhy = "тяга по склону: камень ниже по склону"; return; }   // тянуть вверх незачем
             // ОБХОД КАМНЯ (автор 2026-11-21: «не могу подняться наверх» — тело под колонкой, камень прямо впереди, стенка поперёк хода,
             // скольжению некуда): прямо вверх упёрлось — пробуем под 30° и 60°, сначала в сторону кисти, потом в другую;
             // берём первый ход, который поднимает тело (уходит из-за камня в щель между колонками)
-            float sideSign = Mathf.Sign(Vector3.Dot(Vector3.Cross(Vector3.up, upDir), to)); if (sideSign == 0f) sideSign = 1f;
+            // К РУКЕ (автор 2026-11-23: «на земле могу согнуть руку целиком, на склоне — нет»; «тянуть к руке»): ход — к кисти вдоль
+            // поверхности, как на земле, а не строго вверх по склону; не вышло — ±30° / ±60° от направления к кисти, сначала вверх по склону
+            Vector3 toDir = to / dist;
+            float sideSign = Mathf.Sign(Vector3.Dot(Vector3.Cross(Vector3.up, toDir), upDir)); if (sideSign == 0f) sideSign = 1f;
             float step = Mathf.Min(run, dist);
-            float[] tries = { 0f, 30f * sideSign, -30f * sideSign, 60f * sideSign, -60f * sideSign };
+            float upAng = Vector3.SignedAngle(toDir, upDir, Vector3.up);       // прямо вверх по склону — тоже попытка (мимо камня)
+            float[] tries = { 0f, upAng, 30f * sideSign, -30f * sideSign, 60f * sideSign, -60f * sideSign };
+            Vector3 S3now = Shoulder; S3now.y = groundY + shoulderLift;
+            float dNow = (P - S3now).magnitude;
+            string why0 = "";                                             // ДИАГНОСТИКА: почему не пошёл прямой ход к кисти (строка состояния)
             foreach (float tr in tries)
             {
-                Vector3 dir = Quaternion.AngleAxis(tr, Vector3.up) * upDir;    // + — вправо от хода вверх (как sideSign)
+                Vector3 dir = Quaternion.AngleAxis(tr, Vector3.up) * toDir;    // + — вправо от хода к кисти
                 Vector3 np = Slide(Body, dir * step);
-                if ((np - Body).sqrMagnitude < 1e-8f) continue;           // упёрлось (камень, стена, уступ) — другой угол
+                if ((np - Body).sqrMagnitude < 1e-8f) { if (tr == 0f) why0 = "упёрлось: " + BlockWhy(Body + dir * Mathf.Max(step, 0.01f)); continue; }   // другой угол
                 float h = LevelHeight(np, BodyLevel, maxStep);
-                if (float.IsInfinity(h)) continue;
+                if (float.IsInfinity(h)) { if (tr == 0f) why0 = "под новым местом уступ выше порога"; continue; }
                 if (tr != 0f && h < groundY - 0.002f) continue;           // обход не вниз
-                if (P.y - h < nubHangKeep) return;                        // камень уже у пояса
+                if (P.y - h < nubHangKeep) { pullWhy = "тяга по склону: камень уже у пояса"; return; }
                 Vector3 S3n = Flat(np) + SideOff; S3n.y = h + shoulderLift;
-                if ((P - S3n).magnitude < dMin) return;                   // рука согнута до упора
-                if (!ZoneAllows(np, 0f)) continue;                        // край зоны руки — другой угол
+                // РУКА СОГНУТА ДО УПОРА — только если шаг ПРИБЛИЖАЕТ плечо к камню ближе dMin (автор 2026-11-23: «надо просто дать руке
+                // согнуться — преграды нет»). Шаг, проводящий плечо мимо камня вверх (расстояние не падает), — можно; иначе — другое направление.
+                // плечо уже на высоте камня и выше — рука давит вниз (как на кромке): сгибается почти до плеча (5 см), а не до dMin
+                float dNext = (P - S3n).magnitude, dLim = S3n.y >= P.y - 0.02f ? 0.05f : dMin;
+                if (dNext < dLim && dNext < dNow - 1e-4f) { if (tr == 0f) why0 = $"рука согнута до упора (3D {dNext:F2} < {dMin:F2})"; continue; }
+                if (!ZoneAllows(np, 0f)) { if (tr == 0f) why0 = "край зоны руки"; continue; }   // другой угол
                 // тело не налезает на камень, за который держится (автор: «я налез поверх»): коснулось его — подтягивание стоп.
                 // Другие камни телу не мешают никак (твёрдые камни вырезаны)
-                if (gripHold && gripHold.GetComponent<Renderer>())
+                // касание — по ПОВЁРНУТОМУ камню (автор 2026-11-23: «на склоне что-то тормозит»): рамка рендера вдоль осей мира у камня,
+                // повёрнутого со склоном 60°, намного больше самого камня — тело вставало, не дойдя до него
+                if (gripHold && gripHold.TryGetComponent<MeshFilter>(out var hmf) && hmf.sharedMesh)
                 {
-                    var hb = gripHold.GetComponent<Renderer>().bounds;
-                    if (BoxHitsRect(np, Rect.MinMaxRect(hb.min.x, hb.min.z, hb.max.x, hb.max.z), 0.001f)) return;
+                    var lb = hmf.sharedMesh.bounds;
+                    // коснулось бы — не тупик: другое направление (вверх по склону, в обход камня); стоп — только если закрыты все
+                    var hf = ProtoItem.FootOfBox(gripHold.transform, lb.center, lb.size);
+                    if (BoxHitsFoot(np, hf, 0.001f) && !BoxHitsFoot(Body, hf, 0.001f)) { if (tr == 0f) why0 = "тело коснулось камня"; continue; }
                 }
-                bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
+                MoveBodyXZ(np.x, np.z);
                 float d1 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d1);
+                pullWhy = tr == 0f ? "" : $"тяга по склону: в обход {tr:F0}° (прямо: {why0})";
                 return;
             }
+            pullWhy = "тяга по склону: дальше не идёт — перехватись (прямо: " + why0 + ")";
+        }
+
+        /// <summary>ДИАГНОСТИКА (автор 2026-11-23: «не даёт руке согнуться, преграды нет — проверь лучи и определения препятствий»):
+        /// какая проверка Blocked не пускает тело в p.</summary>
+        string BlockWhy(Vector3 p)
+        {
+            p = Flat(p);
+            foreach (var o in obstacles) if (BoxHitsRect(p, o, 0.001f)) return "стена (препятствие)";
+            if (shoulderSide != 0f)
+            {
+                Vector3 S = p + SideOff;
+                foreach (var o in obstacles)
+                {
+                    float cx = Mathf.Clamp(S.x, o.xMin, o.xMax), cz = Mathf.Clamp(S.z, o.yMin, o.yMax);
+                    if ((S.x - cx) * (S.x - cx) + (S.z - cz) * (S.z - cz) < ShoulderR * ShoulderR) return "плечо в стене";
+                }
+                if (HasSurface && !ProbeOk(p, S)) return "плечо: уступ выше порога / обрыв";
+            }
+            if (HasSurface && !Climbable(p)) return "центр тела: уступ выше порога / обрыв";
+            if (HasSurface) { int i = 0; foreach (var q in BodyProbes(p)) { if (!ProbeOk(p, q)) return $"угол/бок кубика №{i}: уступ / обрыв"; i++; } }
+            if (mode == Mode.Grip && armKeepOut > 0f && ArmToBodyGrip(p, p + SideOff) < armKeepOut) return "рука сквозь тело";
+            return "скольжение не нашло хода";
         }
 
         /// <summary>Жест у кромки (в пикселях вдоль): «на себя» — поднять тело, «от себя» — опустить. true — жест ушёл в подъём.</summary>
@@ -353,7 +395,7 @@ namespace Fortress.Hero.Proto
             dir /= d;
             Vector3 np = Slide(Body, dir * Mathf.Min(mantleSpeed * dt, d - 0.03f));
             if (!ZoneAllows(np, climbLift)) return;                       // кисть вышла бы из зоны — перевал стоит (блок Zone)
-            bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
+            MoveBodyXZ(np.x, np.z);
             float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0);
         }
 
@@ -379,7 +421,7 @@ namespace Fortress.Hero.Proto
             float over = d - gripL;
             if (over <= 0.005f || d < 1e-4f) return;
             Vector3 np = Slide(Body, v / d * over);
-            bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
+            MoveBodyXZ(np.x, np.z);
             float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0);
             if (Flat(gripHand - Shoulder).magnitude > gripL + 0.03f) ReleaseGrip("рука не достаёт (тело ниже зацепа)", true);
         }

@@ -62,7 +62,7 @@ namespace Fortress.Hero.Proto
                 }
                 np = q;
             }
-            bodyCube.position = new Vector3(np.x, bodyCube.position.y, np.z);
+            MoveBodyXZ(np.x, np.z);
             if (mode == Mode.Grip)
             {
                 // стена утащила тело так, что кисть вышла из зоны (блок Zone) — за зону нельзя: хват срывается

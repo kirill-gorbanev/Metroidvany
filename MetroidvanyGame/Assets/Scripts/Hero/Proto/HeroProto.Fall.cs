@@ -117,10 +117,10 @@ namespace Fortress.Hero.Proto
             {
                 Vector3 b = Body;
                 foreach (var m in new[] { move, new Vector3(move.x, 0f, 0f), new Vector3(0f, 0f, move.z) })
-                    if (!FlyBlocked(b + m)) { bodyCube.position = new Vector3(b.x + m.x, bodyCube.position.y, b.z + m.z); break; }
+                    if (!FlyBlocked(b + m)) { MoveBodyXZ(b.x + m.x, b.z + m.z); break; }
             }
             // высота: пока тело отступает от кромки — держится (иначе «приземлится» на край, с которого сорвалось)
-            if (fallClearT > 0f) { bodyCube.position = new Vector3(bodyCube.position.x, fallY + bodyLift, bodyCube.position.z); return; }
+            if (fallClearT > 0f) { SetBodyY(fallY + bodyLift); return; }
             float prevY = fallY;
             fallVy = Mathf.Min(fallVy + fallG * dt, fallMaxSpeed);
             fallY -= fallVy * dt;
@@ -138,7 +138,7 @@ namespace Fortress.Hero.Proto
                 Land(ground, mover, n);
                 return;
             }
-            bodyCube.position = new Vector3(bodyCube.position.x, fallY + bodyLift, bodyCube.position.z);
+            SetBodyY(fallY + bodyLift);
         }
 
         bool FlyBlocked(Vector3 p)
@@ -157,7 +157,7 @@ namespace Fortress.Hero.Proto
             float H = (fallStartY - ground) * heroMass;
             groundY = ground; climbLift = 0f; fallVy = 0f;
             rideMover = mover; rideStep = mover ? mover.StepId : 0; bodyNormal = n;
-            bodyCube.position = new Vector3(bodyCube.position.x, ground + bodyLift, bodyCube.position.z);
+            SetBodyY(ground + bodyLift);
             string what;
             if (H <= maxDrop) what = "мягко";
             else if (H <= landSoftH) { stunT = landSoftTime; what = "присел"; }

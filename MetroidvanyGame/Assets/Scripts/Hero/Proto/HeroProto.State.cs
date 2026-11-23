@@ -77,6 +77,7 @@ namespace Fortress.Hero.Proto
             if (MirrorGrip) s += " · хват из-за спины (кисть зеркально у тела)";
             if (LetGoProgress > 0f) s += $" · «отпустить» {LetGoProgress * 100f:F0}%";
             if (gestureOwner.Length > 0) s += " · жест → " + gestureOwner;
+            if (mode == Mode.Grip && pullWhy.Length > 0) s += " · СТОП: " + pullWhy;
             if (!float.IsInfinity(gripStamina) && mode == Mode.Grip) s += $" · выносливость {Mathf.Max(0f, gripStamina - holdTime):F1} с";
             return s;
         }

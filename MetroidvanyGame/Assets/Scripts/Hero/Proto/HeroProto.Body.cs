@@ -17,6 +17,13 @@ namespace Fortress.Hero.Proto
 
         /// <summary>Половины кубика тела по его осям (x — вбок, y — вперёд), м.</summary>
         Vector2 BodyHalf => bodyCube ? new Vector2(Mathf.Abs(bodyCube.lossyScale.x) * 0.5f, Mathf.Abs(bodyCube.lossyScale.z) * 0.5f) : new Vector2(bodyRadius, bodyRadius);
+        /// <summary>ВОРОНКА ПОЗИЦИИ ТЕЛА (шаг 1 перевода тела на физику, 2026-11-23): все блоки ставят тело только через эти три
+        /// функции — больше никто не пишет bodyCube.position. Сейчас — прямая запись (поведение прежнее); на шаге 2 здесь логика
+        /// отдаст «желаемую» позицию Rigidbody тела, а стены, предметы и массы решит физика.</summary>
+        void MoveBodyXZ(float x, float z) => bodyCube.position = new Vector3(x, bodyCube.position.y, z);   // ход по горизонтали
+        void SetBodyY(float y) => bodyCube.position = new Vector3(bodyCube.position.x, y, bodyCube.position.z); // высота (ступень, падение)
+        void SetBodyPos(Vector3 p) => bodyCube.position = p;                                                   // целиком (старт, откат пробы)
+
         /// <summary>Самая дальняя точка кубика от центра (для оценок «рядом»).</summary>
         float BodyReach => boxBody ? BodyHalf.magnitude : bodyRadius;
 
@@ -35,6 +42,47 @@ namespace Fortress.Hero.Proto
                 float rc = oc.x * a.x + oc.y * a.y;
                 float rr = Mathf.Abs(a.x) * oh.x + Mathf.Abs(a.y) * oh.y;
                 if (Mathf.Abs(bc - rc) >= br + rr - tol) return false;      // есть просвет по этой оси
+            }
+            return true;
+        }
+
+        /// <summary>НОРМАЛЬ КАСАНИЯ ПО ФОРМЕ КУБИКА (автор 2026-11-23, слалом зоны 6: «тут я должен был обойти сам» — упёрся передней
+        /// гранью в столб и встал). Было: нормаль по кругу до угла кубика — от ближайшей точки столба к центру тела, косая; скольжение
+        /// убирало из хода лишь малую часть «вперёд» и тело снова упиралось. Стало: ось наименьшего перекрытия прямоугольников
+        /// (кубик тела, расширенный на tol, против препятствия) — грань в грань даёт нормаль грани, и скольжение уводит вдоль неё.
+        /// Оси — свои у тела (u, v) и у препятствия (a, b). false — не касаются.</summary>
+        bool BoxNormal(Vector3 c, Vector3 oc, Vector3 oa, Vector3 ob, Vector2 oh, float tol, out Vector3 n)
+        {
+            n = Vector3.zero;
+            Vector2 h = BodyHalf + new Vector2(tol, tol);
+            Vector3 u = bodyCube.right, v = bodyCube.forward; u.y = 0f; v.y = 0f; u.Normalize(); v.Normalize();
+            Vector3 d = new Vector3(c.x - oc.x, 0f, c.z - oc.z);
+            float best = float.MaxValue;
+            foreach (var a in new[] { u, v, oa, ob })
+            {
+                float br = Mathf.Abs(Vector3.Dot(u, a)) * h.x + Mathf.Abs(Vector3.Dot(v, a)) * h.y;
+                float orr = Mathf.Abs(Vector3.Dot(oa, a)) * oh.x + Mathf.Abs(Vector3.Dot(ob, a)) * oh.y;
+                float dist = Vector3.Dot(d, a), over = br + orr - Mathf.Abs(dist);
+                if (over <= 0f) { n = Vector3.zero; return false; }               // есть просвет — не касаются
+                if (over < best) { best = over; n = dist >= 0f ? a : -a; }        // от препятствия к телу
+            }
+            return true;
+        }
+        bool BoxRectNormal(Vector3 c, Rect o, float tol, out Vector3 n) =>
+            BoxNormal(c, new Vector3(o.center.x, 0f, o.center.y), Vector3.right, Vector3.forward, o.size * 0.5f, tol, out n);
+
+        /// <summary>Прямоугольник тела (центр c, поворот тела) пересекает повёрнутый след предмета глубже tol? (разделяющие оси)</summary>
+        bool BoxHitsFoot(Vector3 c, ProtoItem.Foot f, float tol)
+        {
+            Vector2 h = BodyHalf;
+            Vector3 u = bodyCube.right, v = bodyCube.forward; u.y = 0f; v.y = 0f; u.Normalize(); v.Normalize();
+            Vector3[] axes = { u, v, f.u, f.v, Vector3.Cross(f.u, Vector3.up), Vector3.Cross(f.v, Vector3.up) };
+            foreach (var a in axes)
+            {
+                float br = Mathf.Abs(Vector3.Dot(u, a)) * h.x + Mathf.Abs(Vector3.Dot(v, a)) * h.y;
+                float fr = Mathf.Abs(Vector3.Dot(f.u, a)) * f.h.x + Mathf.Abs(Vector3.Dot(f.v, a)) * f.h.y;
+                float d = Mathf.Abs((c.x - f.c.x) * a.x + (c.z - f.c.z) * a.z);
+                if (d >= br + fr - tol) return false;
             }
             return true;
         }
