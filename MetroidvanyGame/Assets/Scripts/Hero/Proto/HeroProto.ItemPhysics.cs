@@ -36,17 +36,22 @@ namespace Fortress.Hero.Proto
         /// · Логика героя (рука, линия хода, стены, ступени) как была — она ставит ЖЕЛАЕМОЕ место тела (воронка MoveBodyXZ).
         /// · После шага логики тело-Rigidbody едет к желаемому месту ровно за шаг (без инерции — автор: «инерция плохо»);
         ///   физика шагает вместе с героем (Physics.Simulate, тот же dt). Фактическое место — обратно в тело.
-        /// · Тело в физике сталкивается ТОЛЬКО с предметами: стены, рельеф, платформы — пока логика (шаг 4 плана).
+        /// · Тело в физике сталкивается с предметами и стенами (шаг 4: стены — физика, скольжение вдоль — без трения);
+        ///   рельеф, ступени, платформы — пока логика.
         ///   Кто кого — массы при касании (bodyMass против массы предмета).
-        /// · Только на земле без платформы: падение, вис на кромке, езда на платформе — тело ставит логика, физика за ней (шаг 6).</summary>
+        /// · Всегда: на опоре, на платформе / карусели (6.1), в падении (6.2), в висе на кромке и камне (6.3).</summary>
         [Tooltip("Масса тела в физике (кг) — сколько оно «весит» для предметов при касании.")]
         public float bodyMass = 5f;
+        [Tooltip("Тело, вошедшее в стену (угол кубика на повороте на месте), выталкивается не быстрее этого (м/с). Шаг 5: поворот у стены не отменяется — физика отодвигает тело.")]
+        public float bodyDepenSpeed = 2f;
 
         public static Collider BodyCollider { get; private set; }
         Rigidbody bodyRb; BoxCollider bodyBox; int ignoredColliders = -1;
 
-        /// <summary>Тело сейчас в физике (на земле, не падает, не висит, не едет на платформе).</summary>
-        bool PhysBodyActive => itemPhysics && bodyRb && !falling && climbLift < 0.01f && !rideMover;
+        /// <summary>Тело в физике всегда (шаг 6): на опоре (земля, платформа, карусель — ход опоры кладёт логика в желаемое место),
+        /// в падении (горизонталь — к месту, что считает блок Fall) и в висе на кромке / камне (высота — climbLift логики).
+        /// Стены и предметы решает физика; рельеф, ступени, высота — логика.</summary>
+        bool PhysBodyActive => itemPhysics && bodyRb;
 
         /// <summary>Шаг героя = шаг логики + шаг физики (тот же dt).</summary>
         public void Tick(float dt)
@@ -69,10 +74,14 @@ namespace Fortress.Hero.Proto
                 bodyRb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
                 bodyRb.maxDepenetrationVelocity = 0.5f;
                 bodyBox = go.AddComponent<BoxCollider>(); BodyCollider = bodyBox;
+                // стена — скользкая для тела (трение — правило логики wallFriction не нужно: тело скользит вдоль, как раньше)
+                bodyBox.material = new PhysicsMaterial("Тело") { dynamicFriction = 0f, staticFriction = 0f, bounciness = 0f,
+                    frictionCombine = PhysicsMaterialCombine.Minimum, bounceCombine = PhysicsMaterialCombine.Minimum };
                 bodyRb.position = go.transform.position = BodyTarget(out _);
             }
             IgnoreWorld();
             bodyRb.mass = Mathf.Max(0.1f, bodyMass);
+            bodyRb.maxDepenetrationVelocity = bodyDepenSpeed;                      // угол на повороте вошёл в стену — отодвинуть быстро
             Vector3 target = BodyTarget(out Quaternion rot);
             bodyRb.rotation = rot;                                                   // поворот ставит логика
             Vector3 cur = bodyRb.position;
@@ -85,13 +94,32 @@ namespace Fortress.Hero.Proto
             bodyRb.position = new Vector3(cur.x, target.y, cur.z);                   // высоту ставит логика
             // БЕЗ ИНЕРЦИИ И БЕЗ «ТЯЖЕСТИ» (автор 2026-11-23: «инерция плохо — убери»; «тяну себя с большим усилием, после остановки
             // инерция»): скорость тела каждый шаг — ровно до желаемого места, ничего не копится. Кто кого с предметом — массы при касании.
-            bodyRb.linearVelocity = Flat(target - cur) / dt;
+            Vector3 vel = Flat(target - cur) / dt;
+            // УПОР В СТЕНУ ПОЧТИ В ЛОБ — ХОД ВДОЛЬ СТЕНЫ К РУКЕ (то же правило, что было в Slide, теперь для стены в физике):
+            // проба хода телом (SweepTest) упёрлась в стену, «в стену» больше, чем вдоль, — скорость поворачивает вдоль стены к кисти
+            float vm = vel.magnitude;
+            if (vm * dt > 1e-5f && bodyRb.SweepTest(vel / vm, out var wh, vm * dt + 0.01f, QueryTriggerInteraction.Ignore) && IsWallCollider(wh.collider))
+            {
+                Vector3 n = Flat(wh.normal); float into = n.sqrMagnitude > 1e-6f ? Vector3.Dot(vel, n.normalized) : 0f;
+                if (into < 0f)
+                {
+                    n.Normalize();
+                    Vector3 along = vel - n * into, side = SteerSide(Flat(cur));
+                    if (along.magnitude < -into && side.sqrMagnitude > 1e-8f)
+                    {
+                        Vector3 tg = Vector3.Cross(Vector3.up, n);
+                        if (Vector3.Dot(tg, side) < 0f) tg = -tg;
+                        vel = tg * vm;
+                    }
+                }
+            }
+            bodyRb.linearVelocity = vel;
             Physics.Simulate(dt);
             Vector3 got = bodyRb.position;
             // ИНЕРЦИЯ НЕ ВОЗИТ В СТЕНУ (автор 2026-11-23: «опять сломалось скольжение»): стен в физике тела нет — по инерции тело
             // доезжало в столб. Куда логика не пускает (Blocked) — скольжение от разрешённого места, скорость — по факту хода.
             Vector3 res = Flat(got);
-            if (Blocked(res, bodyRadius))
+            if (!falling && Blocked(res, bodyRadius))                               // в полёте «обрыв» под телом — не преграда (Fall сам)
             {
                 res = Slide(Body, res - Body);
                 got = new Vector3(res.x, got.y, res.z);
@@ -109,14 +137,18 @@ namespace Fortress.Hero.Proto
         Vector3 BodyTarget(out Quaternion rot)
         {
             Vector2 half = BodyHalf;
-            float bottom = groundY + climbLift, top = bodyCube.position.y + Mathf.Abs(bodyCube.lossyScale.y) * 0.5f;
+            float bottom = falling ? fallY : groundY + climbLift;                    // в полёте опоры нет — низ тела там, где оно летит
+            float top = bodyCube.position.y + Mathf.Abs(bodyCube.lossyScale.y) * 0.5f;
             float hgt = Mathf.Max(0.05f, top - bottom);
             if (bodyBox) bodyBox.size = new Vector3(half.x * 2f, hgt, half.y * 2f);
             rot = Quaternion.Euler(0f, bodyCube.eulerAngles.y, 0f);
             return new Vector3(Body.x, bottom + hgt * 0.5f, Body.z);
         }
 
-        /// <summary>Тело в физике не сталкивается ни с чем, кроме предметов (стены, рельеф, платформы — логика).</summary>
+        /// <summary>Стена (препятствие арены): коллайдер под obstaclesRoot.</summary>
+        bool IsWallCollider(Collider c) => c && obstaclesRoot && c.transform.IsChildOf(obstaclesRoot);
+
+        /// <summary>Тело в физике сталкивается с предметами и СТЕНАМИ (шаг 4 плана, 2026-11-23); рельеф, ступени, платформы — логика.</summary>
         void IgnoreWorld()
         {
             var all = FindObjectsByType<Collider>(FindObjectsInactive.Include, FindObjectsSortMode.None);
@@ -127,7 +159,7 @@ namespace Fortress.Hero.Proto
                 if (!c || c == bodyBox) continue;
                 var rb = c.attachedRigidbody;
                 if (rb && rb.GetComponent<ProtoItem>()) continue;
-                Physics.IgnoreCollision(bodyBox, c, true);
+                Physics.IgnoreCollision(bodyBox, c, !IsWallCollider(c));
             }
         }
     }

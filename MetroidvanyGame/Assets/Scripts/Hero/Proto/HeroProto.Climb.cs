@@ -276,7 +276,11 @@ namespace Fortress.Hero.Proto
             if (dist < 0.02f) return false;
             Vector3 q = Body + to / dist * Mathf.Min(0.1f, dist);       // сразу перед телом (у самого камня склон уже выше шага)
             float h = LevelHeight(q, BodyLevel, maxStep);
-            return !float.IsInfinity(h) && h > groundY - maxDrop;
+            if (float.IsInfinity(h) || h <= groundY - maxDrop) return false;
+            // КАМЕНЬ НА СТЕНЕ — ВИС, НЕ ТЯГА (автор 2026-11-23: «не могу вертикально зависнуть»): камень торчит из стены, и точка в 10 см
+            // перед телом ещё на полу — включалась тяга «по склону», которой некуда идти. Путь от тела до места крепления камня
+            // (чуть за ним) — непрерывная поверхность (склон) — тяга; стена (скачок выше порога) — вис.
+            return ProbeOk(Body, Flat(GripPoint3) + to / dist * 0.08f);
         }
 
         void NubClimbAlongSlope(float meters)

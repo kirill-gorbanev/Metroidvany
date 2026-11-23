@@ -1122,16 +1122,12 @@ namespace Fortress.EditorTools
         static void PlaceHero(Vector3 start, float yaw = 0f)
         {
             var src = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Characters/Hero/HeroProto.prefab");
+            // ЭКЗЕМПЛЯР ПРЕФАБА, НЕ РАСПАКОВКА (автор 2026-11-23: «почему не сделал из персонажа префаб — используй во всех сценах»):
+            // параметры героя — из префаба (одни на все сцены), у сцены своё только место, стены и поверхность (переопределения).
+            // Материалы кубиков — ассеты в префабе (Assets/Characters/Hero/ProtoMaterials), красить заново не нужно.
             var rig = (GameObject)PrefabUtility.InstantiatePrefab(src);
-            PrefabUtility.UnpackPrefabInstance(rig, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
             var proto = rig.GetComponentInChildren<HeroProto>(true);
             var body = proto.bodyCube;
-            // материалы кубиков жили в сцене прототипа и в префаб не попали (розовые) — заново, цвета как на первой трассе
-            void Paint(Transform t, Color c) { if (t && t.GetComponent<Renderer>()) t.GetComponent<Renderer>().sharedMaterial = Mat(t.name, c); }
-            Paint(body, new Color(0.45f, 0.55f, 0.75f));
-            Paint(proto.shoulderCube, new Color(0.95f, 0.85f, 0.55f));
-            Paint(proto.elbowCube, new Color(0.95f, 0.65f, 0.35f));
-            Paint(proto.handCube, new Color(0.95f, 0.45f, 0.35f));
             Vector3 d = start - new Vector3(body.position.x, 0f, body.position.z);
             rig.transform.position += d;
             body.rotation = Quaternion.Euler(0f, yaw, 0f);                // лицом по yaw (0 — на север, +Z); камера встанет за спину
@@ -1158,6 +1154,9 @@ namespace Fortress.EditorTools
                 Vector3 focus = body.position + Vector3.up * (MAIN + orbit.lookHeight);
                 orbit.transform.SetPositionAndRotation(focus - rot * Vector3.forward * orbit.distance, rot);
             }
+            // правки экземпляра префаба — записать как переопределения, иначе при загрузке сцены они пропадут
+            foreach (Object o in new Object[] { rig.transform, proto, body, proto.shoulderCube, orbit, orbit ? orbit.transform : null })
+                if (o) PrefabUtility.RecordPrefabInstancePropertyModifications(o);
         }
     }
 }

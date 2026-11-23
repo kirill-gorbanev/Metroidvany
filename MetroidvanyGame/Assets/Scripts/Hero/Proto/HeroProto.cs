@@ -596,7 +596,8 @@ namespace Fortress.Hero.Proto
             if (boxBody && r == bodyRadius && bodyCube)
             {
                 // тело — своим кубиком (блок Body): стены — пересечение прямоугольников, уступы и обрывы — пробы по углам и сторонам
-                foreach (var o in obstacles) if (BoxHitsRect(p, o, 0.001f)) return true;
+                if (!PhysBodyActive)                                   // тело в физике — стены решает физика (шаг 4, блок ItemPhysics)
+                    foreach (var o in obstacles) if (BoxHitsRect(p, o, 0.001f)) return true;
                 if (ShoulderBlocked(p)) return true;
                 if (!HasSurface) return false;
                 if (!Climbable(p)) return true;
@@ -680,7 +681,7 @@ namespace Fortress.Hero.Proto
             Vector3 n = Vector3.zero;
             foreach (var o in obstacles)
             {
-                if (box) { if (BoxRectNormal(p, o, 0.01f, out var bn)) n += bn; continue; }   // по форме кубика (блок Body)
+                if (box) { if (!PhysBodyActive && BoxRectNormal(p, o, 0.01f, out var bn)) n += bn; continue; }   // по форме кубика (блок Body); в физике — стены решает физика
                 float cx = Mathf.Clamp(p.x, o.xMin, o.xMax), cz = Mathf.Clamp(p.z, o.yMin, o.yMax);
                 Vector3 d = new Vector3(p.x - cx, 0f, p.z - cz);
                 float m = d.magnitude;

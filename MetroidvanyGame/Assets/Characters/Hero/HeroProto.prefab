@@ -66,7 +66,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 0}
+  - {fileID: 2100000, guid: b4807dc19fdc51c4382b2a0e9a189aef, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -138,6 +138,67 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2e42ca3205b1d8f409677bf952b49f39, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Fortress.Hero.Proto.HeroProto
+  backSlot: 0
+  backSlotBack: 0.35
+  backTakeDist: 0.4
+  boxBody: 1
+  boxProbe: 1
+  handBodyGap: 0.03
+  steepAngle: 35
+  steepExit: 32
+  slideDelay: 0.2
+  slideAccel: 2.5
+  slideMax: 1.5
+  handSlipSpeed: 0.3
+  handSlipMax: 0.06
+  holdSnapScreen: 0.15
+  holdSnapScreenFloor: 0.06
+  holdSnapWorld: 0.3
+  climbUp: 0.8
+  climbPerPx: 0.0012
+  mantleSpeed: 0.8
+  fallBack: 10
+  itemBodyGap: 0.03
+  carryGain: 12
+  carryMaxSpeed: 2.5
+  carryForce: 60
+  carryBreak: 0.25
+  allowFall: 1
+  fallPushPx: 60
+  fallClearDist: 0.3
+  fallClearTime: 0.12
+  fallG: 20
+  fallMaxSpeed: 12
+  fallCarryMax: 3
+  catchWindow: 1
+  landSoftH: 1.5
+  stunH: 3
+  heavyH: 4.5
+  landSoftTime: 0.25
+  stunTime: 1
+  heavyTime: 2.5
+  heroMass: 1
+  itemPhysics: 1
+  bodyMass: 5
+  bodyDepenSpeed: 2
+  nubSnapScreenWide: 0.14
+  nubSnapScreenFloor: 0.04
+  nubSnapWorld: 0.15
+  nubYield: 0.02
+  letGoPushPx: 60
+  letGoBackPx: 15
+  letGoPause: 0.5
+  nubHangMin: 0.05
+  nubHangKeep: 0.1
+  nubClimbRate: 0.0012
+  moverPush: 1
+  spinGrip: 1.5
+  spinExitK: 0.9
+  flingMax: 1.5
+  flingDecay: 2
+  spinSnapWide: 1
+  gripStamina: Infinity
+  zoneTolerance: 2
   bodyCube: {fileID: 4445879241697751770}
   shoulderCube: {fileID: 8294363047273105306}
   elbowCube: {fileID: 4805792572170659881}
@@ -147,10 +208,16 @@ MonoBehaviour:
   foreArm: 0.3
   dMin: 0.18
   shoulderSide: 0.2
+  shoulderForward: 0
   obstaclesRoot: {fileID: 0}
   bodyRadius: 0.2
   surfaceRoot: {fileID: 0}
   heightFollow: 14
+  maxStep: 0.4
+  handUp: 0.5
+  maxDrop: 0.4
+  handDown: 0.5
+  inputShift: 0
   showHints: 1
   cameraFollow: 1
   forwardSpeed: 1
@@ -164,6 +231,7 @@ MonoBehaviour:
   testHold: 0
   mode: 0
   t: 0
+  armKeepOut: 0.15
   drawArmLine: 1
   sectorLeft: 50
   sectorRight: 70
@@ -175,6 +243,20 @@ MonoBehaviour:
   moveFadeRight: 100
   moveAllAround: 0
   wallFriction: 0.15
+  avoidGain: 1
+  avoidMargin: 0.12
+  armFollowMax: 0.05
+  maxStepDt: 0.02
+  maxCatchUp: 0.25
+  holdConfinesCursor: 1
+  letGoGrace: 0.4
+  reverseSteer: 1
+  backOutDegPerPx: 0.3
+  mirrorBehind: 1
+  behindHandDist: 0.22
+  flatStepAngle: 10
+  armClearance: 0.03
+  armCutDepth: 0.15
 --- !u!1 &5348738431132483032
 GameObject:
   m_ObjectHideFlags: 0
@@ -200,7 +282,7 @@ Transform:
   m_GameObject: {fileID: 5348738431132483032}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 3, y: 0, z: 1.8}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -234,7 +316,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6111701454824217120}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0.7071068, z: -0, w: 0.7071068}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0.1, z: 0}
   m_LocalScale: {x: 0.3, y: 0.2, z: 0.3}
   m_ConstrainProportionsScale: 0
@@ -274,7 +356,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 0}
+  - {fileID: 2100000, guid: 3f7d8ccaf0c6ae7468f5783a130dede6, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -309,6 +391,7 @@ GameObject:
   - component: {fileID: 8827835611701826144}
   - component: {fileID: 4246265798406625199}
   - component: {fileID: 1957125853490466383}
+  - component: {fileID: 7112495788584683976}
   m_Layer: 0
   m_Name: "\u041A\u0430\u043C\u0435\u0440\u0430"
   m_TagString: MainCamera
@@ -324,8 +407,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6322153251172933250}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.29883626, y: 0.6408564, z: -0.29883626, w: -0.6408564}
-  m_LocalPosition: {x: 1.6712474, y: 2.2417154, z: -0.0000003874302}
+  m_LocalRotation: {x: 0.4226183, y: -0, z: -0, w: 0.9063078}
+  m_LocalPosition: {x: 0, y: 2.8417153, z: -1.6712476}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -375,8 +458,8 @@ Camera:
   m_TargetTexture: {fileID: 0}
   m_TargetDisplay: 0
   m_TargetEye: 3
-  m_HDR: 1
-  m_AllowMSAA: 1
+  m_HDR: 0
+  m_AllowMSAA: 0
   m_AllowDynamicResolution: 0
   m_ForceIntoRT: 0
   m_OcclusionCulling: 1
@@ -395,7 +478,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Fortress.Hero.Proto.ProtoOrbitCamera
   target: {fileID: 4445879241697751770}
-  yaw: 270
+  yaw: 0
   pitch: 50
   distance: 2.6
   yawSpeed: 0.3
@@ -408,6 +491,151 @@ MonoBehaviour:
   follow: 6
   followBodyTurn: 1
   startBehindBody: 1
+  smartCamera: 0
+  climbPitchDrop: 22
+  climbFocusToHand: 0.5
+  lead: 0.45
+  occlusionMinDistance: 0.7
+  smartFollow: 4
+--- !u!114 &7112495788584683976
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6322153251172933250}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 23c1ce4fb46143f46bc5cb5224c934f6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.HighDefinition.Runtime::UnityEngine.Rendering.HighDefinition.HDAdditionalCameraData
+  m_Version: 9
+  m_ObsoleteRenderingPath: 0
+  m_ObsoleteFrameSettings:
+    overrides: 0
+    enableShadow: 0
+    enableContactShadows: 0
+    enableShadowMask: 0
+    enableSSR: 0
+    enableSSAO: 0
+    enableSubsurfaceScattering: 0
+    enableTransmission: 0
+    enableAtmosphericScattering: 0
+    enableVolumetrics: 0
+    enableReprojectionForVolumetrics: 0
+    enableLightLayers: 0
+    enableExposureControl: 1
+    diffuseGlobalDimmer: 0
+    specularGlobalDimmer: 0
+    shaderLitMode: 0
+    enableDepthPrepassWithDeferredRendering: 0
+    enableTransparentPrepass: 0
+    enableMotionVectors: 0
+    enableObjectMotionVectors: 0
+    enableDecals: 0
+    enableRoughRefraction: 0
+    enableTransparentPostpass: 0
+    enableDistortion: 0
+    enablePostprocess: 0
+    enableOpaqueObjects: 0
+    enableTransparentObjects: 0
+    enableRealtimePlanarReflection: 0
+    enableMSAA: 0
+    enableAsyncCompute: 0
+    runLightListAsync: 0
+    runSSRAsync: 0
+    runSSAOAsync: 0
+    runContactShadowsAsync: 0
+    runVolumeVoxelizationAsync: 0
+    lightLoopSettings:
+      overrides: 0
+      enableDeferredTileAndCluster: 0
+      enableComputeLightEvaluation: 0
+      enableComputeLightVariants: 0
+      enableComputeMaterialVariants: 0
+      enableFptlForForwardOpaque: 0
+      enableBigTilePrepass: 0
+      isFptlEnabled: 0
+  clearColorMode: 0
+  backgroundColorHDR: {r: 0.025, g: 0.07, b: 0.19, a: 0}
+  clearDepth: 1
+  volumeLayerMask:
+    serializedVersion: 2
+    m_Bits: 1
+  volumeAnchorOverride: {fileID: 0}
+  antialiasing: 0
+  SMAAQuality: 2
+  dithering: 0
+  stopNaNs: 0
+  taaSharpenStrength: 0.5
+  TAAQuality: 1
+  taaSharpenMode: 0
+  taaRingingReduction: 0
+  taaHistorySharpening: 0.35
+  taaAntiFlicker: 0.5
+  taaMotionVectorRejection: 0
+  taaAntiHistoryRinging: 0
+  taaBaseBlendFactor: 0.875
+  taaJitterScale: 1
+  physicalParameters:
+    m_Iso: 200
+    m_ShutterSpeed: 0.005
+    m_Aperture: 16
+    m_FocusDistance: 10
+    m_BladeCount: 5
+    m_Curvature: {x: 2, y: 11}
+    m_BarrelClipping: 0.25
+    m_Anamorphism: 0
+  flipYMode: 0
+  xrRendering: 1
+  fullscreenPassthrough: 0
+  allowDynamicResolution: 0
+  customRenderingSettings: 0
+  invertFaceCulling: 0
+  probeLayerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  hasPersistentHistory: 0
+  screenSizeOverride: {x: 0, y: 0, z: 0, w: 0}
+  screenCoordScaleBias: {x: 0, y: 0, z: 0, w: 0}
+  allowDeepLearningSuperSampling: 1
+  deepLearningSuperSamplingUseCustomQualitySettings: 0
+  deepLearningSuperSamplingQuality: 0
+  deepLearningSuperSamplingUseCustomAttributes: 0
+  deepLearningSuperSamplingUseOptimalSettings: 1
+  deepLearningSuperSamplingSharpening: 0
+  allowFidelityFX2SuperResolution: 1
+  fidelityFX2SuperResolutionUseCustomQualitySettings: 0
+  fidelityFX2SuperResolutionQuality: 0
+  fidelityFX2SuperResolutionUseCustomAttributes: 0
+  fidelityFX2SuperResolutionUseOptimalSettings: 1
+  fidelityFX2SuperResolutionEnableSharpening: 0
+  fidelityFX2SuperResolutionSharpening: 0
+  fsrOverrideSharpness: 0
+  fsrSharpness: 0.92
+  exposureTarget: {fileID: 0}
+  materialMipBias: 0
+  m_RenderingPathCustomFrameSettings:
+    bitDatas:
+      data1: 5770166122053581
+      data2: 12934340311651418136
+    lodBias: 1
+    lodBiasMode: 0
+    lodBiasQualityLevel: 0
+    maximumLODLevel: 0
+    maximumLODLevelMode: 0
+    maximumLODLevelQualityLevel: 0
+    sssQualityMode: 0
+    sssQualityLevel: 0
+    sssCustomSampleBudget: 20
+    sssCustomDownsampleSteps: 0
+    msaaMode: 1
+    materialQuality: 0
+  renderingPathCustomFrameSettingsOverrideMask:
+    mask:
+      data1: 0
+      data2: 0
+  defaultFrameSettings: 0
 --- !u!1 &8187891693871308908
 GameObject:
   m_ObjectHideFlags: 0
@@ -474,7 +702,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 0}
+  - {fileID: 2100000, guid: 033fde0a7aa846a4aab0bf765b34342b, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -525,7 +753,7 @@ Transform:
   m_GameObject: {fileID: 9175241374826215260}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.000000023841858, y: 0.24000001, z: 0.20000003}
+  m_LocalPosition: {x: 0.20000005, y: 0.24000001, z: 0}
   m_LocalScale: {x: 0.07, y: 0.07, z: 0.07}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -564,7 +792,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 0}
+  - {fileID: 2100000, guid: be89da550710ffd46a385ec044b38e4b, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
