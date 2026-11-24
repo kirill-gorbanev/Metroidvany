@@ -71,6 +71,7 @@ namespace Fortress.Hero.Proto
 
         // ---- касания предмета в руке (зоны 3–4 переноса: ход мыши — в плоскость касания) ----
         Vector3 contactSum; int contactCount;
+        readonly List<Vector3> stepNormals = new List<Vector3>();   // касания прошлого шага физики — для тяги руки (CarryStep)
 
         /// <summary>Нормали касаний — от поверхности к предмету (наружу из того, во что упёрлись).</summary>
         void AddContacts(Collision c)
@@ -83,6 +84,7 @@ namespace Fortress.Hero.Proto
                 Vector3 n = cp.normal;
                 if (Vector3.Dot(n, me - cp.point) < 0f) n = -n;
                 contactSum += n; contactCount++;
+                if (stepNormals.Count < 16) stepNormals.Add(n);
             }
         }
 
@@ -106,7 +108,7 @@ namespace Fortress.Hero.Proto
         public void BeginCarry()
         {
             held = true; rb.isKinematic = false; rb.WakeUp();
-            contactSum = Vector3.zero; contactCount = 0;
+            contactSum = Vector3.zero; contactCount = 0; stepNormals.Clear();
             Vector3 f = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
             if (f.sqrMagnitude < 1e-4f) f = Vector3.ProjectOnPlane(transform.up, Vector3.up);   // лежал «лицом» вверх/вниз
             holdRot = f.sqrMagnitude < 1e-4f ? Quaternion.identity : Quaternion.LookRotation(f.normalized, Vector3.up);
@@ -124,6 +126,11 @@ namespace Fortress.Hero.Proto
             Vector3 c = rb.worldCenterOfMass;
             Vector3 vel = Vector3.ClampMagnitude((target - c) / Mathf.Max(dt, 1e-4f), maxSpeed);
             if (!canLift) vel.y = Mathf.Min(rb.linearVelocity.y, 0f);       // тяжёлый: вверх не поднять, вниз — сам, тяжестью
+            // НЕ ДАВИТЬ В ТО, ЧЕГО КАСАЕШЬСЯ (автор 2026-11-24: «поднять могу, но врезаюсь в стену — застрял, упёрся, вместо того чтобы
+            // подняться»): цель руки чуть в стене — предмет давил в неё, трение от давления держало. Скорость «в поверхность» убрана
+            // для каждого касания прошлого шага (стены, пол, застывшие предметы) — прилегает без давления, вдоль идёт свободно.
+            foreach (var n in stepNormals) { float d = Vector3.Dot(vel, n); if (d < 0f) vel -= n * d; }
+            stepNormals.Clear();
             rb.linearVelocity = vel;
             HoldRotation();
             rb.WakeUp();

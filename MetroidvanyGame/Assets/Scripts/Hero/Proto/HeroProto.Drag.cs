@@ -111,9 +111,12 @@ namespace Fortress.Hero.Proto
 
         /// <summary>Точка под курсором (зона пола при переносе): первая поверхность по лучу — пол, верх застывшего предмета, стена.
         /// Попал в бок — точка чуть внутрь (высота возьмётся с верха у этой кромки).</summary>
-        bool CarryCursorPoint(Vector2 px, out Vector3 p)
+        bool CarryCursorPoint(Vector2 px, out Vector3 p) => CarryCursorPoint(px, out p, out _);
+
+        /// <summary>side — курсор на вертикальной грани (стена, бок застывшего предмета): p — у грани снаружи, на высоте курсора.</summary>
+        bool CarryCursorPoint(Vector2 px, out Vector3 p, out bool side)
         {
-            p = default;
+            p = default; side = false;
             Ray ray = cam.ScreenPointToRay(px);
             // ПЛОСКОСТЬ ТЕКУЩЕЙ ВЫСОТЫ (автор 2026-11-24): сошёл курсором с края ящика — луч уходил на пол далеко за ящиком (за зону,
             // в «воздух»). Точка — на плоскости высоты низа предмета; поверхность раньше неё по лучу (верх ящика, уступ) — она.
@@ -127,7 +130,9 @@ namespace Fortress.Hero.Proto
                 if (!CarrySurfaceCollider(h.collider)) continue;
                 if (havePlane && h.distance > dP + 0.005f) break;                // поверхность ниже плоскости — точка на плоскости
                 p = h.point;
-                if (Mathf.Abs(h.normal.y) < 0.5f) p -= Flat(h.normal).normalized * 0.01f;
+                // ВЕРТИКАЛЬНАЯ ГРАНЬ (автор 2026-11-24: «могу поднять, но врезаюсь в стену — застрял»): курсор на стене / боку — кисть
+                // идёт ПО ГРАНИ: у неё снаружи, на высоте курсора (раньше — по полу у её основания, поднять было нельзя)
+                if (Mathf.Abs(h.normal.y) < 0.5f) { p += Flat(h.normal).normalized * 0.01f; side = true; }
                 return true;
             }
             if (havePlane) { p = ray.GetPoint(dP); return true; }
@@ -257,7 +262,7 @@ namespace Fortress.Hero.Proto
             {
                 if (!inp.pressed && !falling && TryLockToBack()) return true;   // курсор был за спиной — на спину (блок Back)
                 if (!inp.pressed || falling) { EndDrag(falling ? "падение — предмет выпал" : "положил предмет"); return true; }
-                bool haveP = CarryCursorPoint(px, out var p);                         // поверхность под курсором: пол, верх предмета, стена
+                bool haveP = CarryCursorPoint(px, out var p, out bool onSide);        // поверхность под курсором: пол, верх предмета, стена
                 if (!haveP) haveP = FloorPoint(px, out p);
                 if (!haveP && new Plane(Vector3.up, new Vector3(0f, BodyLevel, 0f)).Raycast(cam.ScreenPointToRay(px), out float pe))
                 { p = cam.ScreenPointToRay(px).GetPoint(pe); haveP = true; }          // луч мимо поверхностей — плоскость своего уровня
@@ -297,7 +302,9 @@ namespace Fortress.Hero.Proto
                     // ВЫСОТА — ПО ПОВЕРХНОСТИ ПОД КИСТЬЮ (автор 2026-11-24: «опустил курсор сверху на поверхность и двигаю по ней — рука
                     // должна тоже по ней ходить»): низ предмета — на верх того, что под кистью (пол, верх застывшего предмета, уступ);
                     // догоняет плавно: навёл на ящик — предмет поднимается на его верх, увёл на пол — опускается, за край — вниз.
-                    float surf = CarrySurfaceAt(want);
+                    // на вертикальной грани (стена, бок) — кисть на высоте курсора: низ предмета = высота курсора − точка хвата над низом
+                    float surf = onSide ? p.y - (CarryGrabY - dragItem.WorldBounds.min.y) : CarrySurfaceAt(want);
+                    if (onSide && !float.IsNaN(CarrySurfaceAt(want))) surf = Mathf.Max(surf, CarrySurfaceAt(want));   // не ниже того, что под кистью
                     if (!float.IsNaN(surf))
                     {
                         float liftWant = Mathf.Clamp(surf - BodyLevel + 0.005f, -handDown, shoulderLift + L);   // сверху — длина руки (шар в CarryItem)
