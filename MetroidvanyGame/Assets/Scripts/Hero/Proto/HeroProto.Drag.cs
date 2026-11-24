@@ -28,14 +28,10 @@ namespace Fortress.Hero.Proto
         public float carrySpeedMass = 1f;
         [Tooltip("Перенос: сила руки (Н). Тяжелее силы / g — рука не поднимает, только тащит.")]
         public float carryForce = 60f;
-        [Tooltip("Высота курсором: курсор за синей зоной на N пикселей (1080p) выше / ниже неё — предмет поднимается / опускается со скоростью N × столько (м/с).")]
-        public float carryLiftRate = 0.01f;
         [Tooltip("Зона 2 (курсор за синей зоной сверху): ход мыши на 1 пиксель (1080p) — столько метров хода кисти с предметом.")]
         public float carryAirRate = 0.002f;
         [Tooltip("Из воздуха в зону: смещение «кисть − курсор» гаснет по ходу курсора — за 1 м хода курсора в e^N раз (только пока ведёшь мышь).")]
         public float carryOffDecay = 8f;
-        [Tooltip("Высота курсором: не быстрее этого (м/с).")]
-        public float carryLiftSpeed = 1f;
         [Tooltip("Точка хвата ушла от плеча дальше руки на столько (м) — не удержал, предмет отпущен.")]
         public float carryBreak = 0.25f;
 
@@ -101,6 +97,55 @@ namespace Fortress.Hero.Proto
             dragTarget = want;
             carryLift = Mathf.Clamp(P.y - grabAbove - BodyLevel, -handDown, shoulderLift + L);
             carryAirOutY = P.y;
+        }
+
+        /// <summary>Коллайдер — поверхность для кисти с предметом: не несомый предмет, не тело и не части героя, не то, что едет
+        /// на несомом (живая физика); пол, рельеф, стены, застывшие предметы — да.</summary>
+        bool CarrySurfaceCollider(Collider c)
+        {
+            if (!c || c.isTrigger || c == BodyCollider || c.transform.IsChildOf(transform)) return false;
+            var rb = c.attachedRigidbody;
+            if (dragItem && rb == dragItem.Body) return false;
+            return !rb || rb.isKinematic;
+        }
+
+        /// <summary>Точка под курсором (зона пола при переносе): первая поверхность по лучу — пол, верх застывшего предмета, стена.
+        /// Попал в бок — точка чуть внутрь (высота возьмётся с верха у этой кромки).</summary>
+        bool CarryCursorPoint(Vector2 px, out Vector3 p)
+        {
+            p = default;
+            Ray ray = cam.ScreenPointToRay(px);
+            // ПЛОСКОСТЬ ТЕКУЩЕЙ ВЫСОТЫ (автор 2026-11-24): сошёл курсором с края ящика — луч уходил на пол далеко за ящиком (за зону,
+            // в «воздух»). Точка — на плоскости высоты низа предмета; поверхность раньше неё по лучу (верх ящика, уступ) — она.
+            // За краем под точкой пол — предмет опускается, плоскость с ним, точка сходится с настоящей на полу плавно.
+            float planeY = BodyLevel + carryLift;
+            bool havePlane = new Plane(Vector3.up, new Vector3(0f, planeY, 0f)).Raycast(ray, out float dP);
+            var hits = Physics.RaycastAll(ray, 500f, ~0, QueryTriggerInteraction.Ignore);
+            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+            foreach (var h in hits)
+            {
+                if (!CarrySurfaceCollider(h.collider)) continue;
+                if (havePlane && h.distance > dP + 0.005f) break;                // поверхность ниже плоскости — точка на плоскости
+                p = h.point;
+                if (Mathf.Abs(h.normal.y) < 0.5f) p -= Flat(h.normal).normalized * 0.01f;
+                return true;
+            }
+            if (havePlane) { p = ray.GetPoint(dP); return true; }
+            return false;
+        }
+
+        /// <summary>Верх поверхности под точкой кисти (луч вниз с высоты досягаемости руки); NaN — ничего.</summary>
+        float CarrySurfaceAt(Vector3 xz)
+        {
+            float top = BodyLevel + shoulderLift + L + 0.05f;
+            var hits = Physics.RaycastAll(new Vector3(xz.x, top, xz.z), Vector3.down, top + 50f, ~0, QueryTriggerInteraction.Ignore);
+            float best = float.NaN, bestD = float.MaxValue;
+            foreach (var h in hits)
+            {
+                if (h.normal.y < 0.3f || !CarrySurfaceCollider(h.collider)) continue;
+                if (h.distance < bestD) { bestD = h.distance; best = h.point.y; }
+            }
+            return best;
         }
 
         readonly System.Collections.Generic.List<ProtoItem> frozenItems = new System.Collections.Generic.List<ProtoItem>();
@@ -212,7 +257,8 @@ namespace Fortress.Hero.Proto
             {
                 if (!inp.pressed && !falling && TryLockToBack()) return true;   // курсор был за спиной — на спину (блок Back)
                 if (!inp.pressed || falling) { EndDrag(falling ? "падение — предмет выпал" : "положил предмет"); return true; }
-                bool haveP = FloorPoint(px, out var p);
+                bool haveP = CarryCursorPoint(px, out var p);                         // поверхность под курсором: пол, верх предмета, стена
+                if (!haveP) haveP = FloorPoint(px, out p);
                 if (!haveP && new Plane(Vector3.up, new Vector3(0f, BodyLevel, 0f)).Raycast(cam.ScreenPointToRay(px), out float pe))
                 { p = cam.ScreenPointToRay(px).GetPoint(pe); haveP = true; }          // луч мимо поверхностей — плоскость своего уровня
                 Vector3 r = haveP ? Reach(p) : default;                                // курсор, прижатый к синей зоне
@@ -221,16 +267,19 @@ namespace Fortress.Hero.Proto
                 if (haveP && bodyCube && InBodyZone(p) && Flat(p - Shoulder).magnitude <= L) r = Flat(p);
                 float outBy = haveP ? Flat(p - r).magnitude : 0f;                     // насколько курсор за зоной (м по полу)
                 bool outside = haveP && outBy > 0.005f;
-                bool above = !haveP || (outside && px.y > cam.WorldToScreenPoint(new Vector3(r.x, BodyLevel, r.z)).y);
+                // выше зоны — на экране, НА ОДНОЙ ВЫСОТЕ с точкой курсора (край зоны — на высоте точки: точка на верхе ящика / в плоскости
+                // поднятого предмета на экране всегда выше края зоны на полу — сход с края ящика считался уходом вверх)
+                float abovePx = haveP && outside ? (px.y - cam.WorldToScreenPoint(new Vector3(r.x, p.y, r.z)).y) * Px1080 : 0f;
+                bool above = !haveP || abovePx > 30f;
                 // глубоко внутри зоны: точка на 3 см дальше от плеча — тоже в зоне
                 bool deepInside = haveP && !outside && Flat(Reach(p + Flat(p - Shoulder).normalized * 0.03f) - (p + Flat(p - Shoulder).normalized * 0.03f)).magnitude < 0.005f;
                 // ЗОНА 2 — ВОЗДУХ (автор 2026-11-24: «в зоне 1 двигаю по полу xz, в зоне 2 — уже по (x или z) и y»): курсор ушёл за синюю
                 // зону вверх — ход мыши: вбок — горизонталь поперёк взгляда камеры, вверх-вниз — высота; глубина держится; кисть — в сфере руки.
                 // Курсор вернулся в зону — снова по полу (высота держится).
                 // ЗАПАС НА ГРАНИЦЕ (автор 2026-11-24: «подёргивание — рука утягивается или притягивается резко на переходе»): в воздух —
-                // курсор вышел за зону на 3 см, обратно — зашёл внутрь на 3 см; на самой кромке режимы не дребезжат.
+                // курсор выше края зоны на экране больше 30 px (1080p), обратно — зашёл внутрь на 3 см; на кромке режимы не дребезжат.
                 bool wasAir = carryAir;
-                if (!orbit && (!haveP || (above && outBy > 0.03f))) { if (!carryAir) carryAirGoalSet = false; carryAir = true; }
+                if (!orbit && above) { if (!carryAir) carryAirGoalSet = false; carryAir = true; }
                 else if (!orbit && deepInside) carryAir = false;
                 if (!orbit && carryAir) CarryAirStep(inp.delta, dt);
                 else if (!orbit && haveP)
@@ -245,16 +294,15 @@ namespace Fortress.Hero.Proto
                     Vector3 want = HandAtLedge(rr, carry: true);                           // с предметом на весу — через край вниз можно
                     if (ArmThroughBody3(want, CarryGrabY)) want = FreeHandAroundBody(want);
                     dragTarget = Vector3.Lerp(dragTarget, want, 1f - Mathf.Exp(-handFollow * dt));
-                    // ВЫСОТА — КУРСОРОМ ЗА ЗОНОЙ (автор 2026-11-23: «мышка за зоной — вверх, за зоной снизу — вниз, внутри зоны — движение
-                    // по зоне»): курсор вышел из синей зоны — выше неё на экране предмет поднимается, ниже — опускается; скорость — от того,
-                    // насколько вышел (пиксели); внутри зоны высота держится
-                    float vy = 0f;
-                    if (Flat(p - r).magnitude > 0.005f)
+                    // ВЫСОТА — ПО ПОВЕРХНОСТИ ПОД КИСТЬЮ (автор 2026-11-24: «опустил курсор сверху на поверхность и двигаю по ней — рука
+                    // должна тоже по ней ходить»): низ предмета — на верх того, что под кистью (пол, верх застывшего предмета, уступ);
+                    // догоняет плавно: навёл на ящик — предмет поднимается на его верх, увёл на пол — опускается, за край — вниз.
+                    float surf = CarrySurfaceAt(want);
+                    if (!float.IsNaN(surf))
                     {
-                        Vector3 rs = cam.WorldToScreenPoint(new Vector3(r.x, BodyLevel, r.z));
-                        vy = Mathf.Clamp((px.y - rs.y) * Px1080 * carryLiftRate, -carryLiftSpeed, carryLiftSpeed);
+                        float liftWant = Mathf.Clamp(surf - BodyLevel + 0.005f, -handDown, shoulderLift + L);   // сверху — длина руки (шар в CarryItem)
+                        carryLift = Mathf.Lerp(carryLift, liftWant, 1f - Mathf.Exp(-handFollow * dt));
                     }
-                    carryLift = Mathf.Clamp(carryLift + vy * dt, -handDown, shoulderLift + L);   // сверху — длина руки (шар в CarryItem)
                 }
                 if (!CarryItem(dt)) return true;
                 gestureOwner = "тащит предмет";
