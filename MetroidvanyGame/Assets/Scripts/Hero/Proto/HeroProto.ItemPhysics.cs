@@ -15,6 +15,7 @@ namespace Fortress.Hero.Proto
         public bool itemPhysics = true;
 
         bool itemWorldReady;
+        int physStepsLeft = 1;               // сколько шагов физики осталось в этом кадре (с текущим)
 
         /// <summary>Неподвижные коллайдеры мира — один раз: рельеф и стены (по сеткам, все зоны), пол (y = 0).</summary>
         public void EnsureItemWorld()
@@ -68,7 +69,11 @@ namespace Fortress.Hero.Proto
             // Теперь кадр делится на n равных шагов: шаг почти постоянный (контакт не дрожит), и движение — в каждом кадре.
             int n = Mathf.Clamp(Mathf.RoundToInt(dt / Mathf.Max(0.001f, physicsDt)), 1, 40);
             float h = dt / n;
-            for (int i = 0; i < n; i++) PhysicsStep(h);
+            // ход предмета в руке — РАВНОМЕРНО по шагам кадра (автор 2026-11-24: «башня улетает»): цель руки ставится раз в кадр;
+            // раньше предмет проходил весь ход кадра за первый шаг и стоял на втором — скорость скакала 1 ↔ 0 м/с каждые 5 мс,
+            // то, что лежит сверху, проскальзывало и слетало. Теперь скорость = остаток хода / остаток времени кадра.
+            for (int i = 0; i < n; i++) { physStepsLeft = n - i; PhysicsStep(h); }
+            physStepsLeft = 1;
         }
 
         void PhysicsStep(float dt)

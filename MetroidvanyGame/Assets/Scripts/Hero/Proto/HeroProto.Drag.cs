@@ -47,6 +47,8 @@ namespace Fortress.Hero.Proto
         bool carryOnSupport;                 // предмет в руке стоит на опоре (высота упёрлась в опору / голову) — касание сверху
         bool carryOnHead;                    // опора — голова (верх кубика тела)
         Vector3 carryFloorOff, carryCursorPrev;   // из воздуха в зону: смещение «кисть − курсор», гаснет по ходу курсора
+        float carryHover;                    // зазор «над опорой» несомого предмета: после хвата нарастает плавно от 0 до 1 см
+        bool carryJustGrabbed;               // первый шаг после хвата: кисть — в точке хвата, смещение до курсора гаснет по ходу мыши
         Vector3 carryTouchN;                 // диагностика: нормаль, на плоскость которой повёрнут ход (0 — воздух)
 
         /// <summary>ЗОНА 2 — ВОЗДУХ: ход мыши (пиксели) — кисть с предметом: вбок — по горизонтали поперёк взгляда камеры,
@@ -182,7 +184,7 @@ namespace Fortress.Hero.Proto
         /// <summary>Фиксированный шаг физики (блок ItemPhysics): рука ведёт предмет к цели, посчитанной логикой в этом кадре.</summary>
         void CarryPhysicsStep(float dt)
         {
-            if (dragItem && carryHave) dragItem.CarryStep(carryTc, dt, carrySpeedNow, carryCanLift);
+            if (dragItem && carryHave) dragItem.CarryStep(carryTc, dt * Mathf.Max(1, physStepsLeft), carrySpeedNow, carryCanLift);   // ход — до конца кадра
         }
 
         public ProtoItem DraggedItem => dragItem;
@@ -237,7 +239,7 @@ namespace Fortress.Hero.Proto
             dragItem = it;
             carryLift = b.min.y - BodyLevel;                           // высота — та, на которой лежал
             carryHave = false;                                         // тяги ещё нет — до первого шага переноса
-            carryAir = false; carryFloorOff = Vector3.zero;
+            carryAir = false; carryFloorOff = Vector3.zero; carryJustGrabbed = true; carryHover = 0f;
             FreezeOthers(it);
             it.BeginCarry();
             hand = h; dragTarget = h;
@@ -286,16 +288,24 @@ namespace Fortress.Hero.Proto
                 bool wasAir = carryAir;
                 if (!orbit && above) { if (!carryAir) carryAirGoalSet = false; carryAir = true; }
                 else if (!orbit && deepInside) carryAir = false;
-                if (!orbit && carryAir) CarryAirStep(inp.delta, dt);
+                if (!orbit && carryAir) { CarryAirStep(inp.delta, dt); carryJustGrabbed = false; }
                 else if (!orbit && haveP)
                 {
                     // ИЗ ВОЗДУХА — БЕЗ ПРЫЖКА К КУРСОРУ: в воздухе кисть вёл ход мыши, курсор ушёл в сторону. Смещение «кисть − курсор»
                     // запоминается и гаснет только пока ведёшь мышь (сама кисть не едет) — сходится с курсором плавно.
-                    if (wasAir) { carryFloorOff = Flat(dragTarget) - r; carryCursorPrev = r; }
-                    carryFloorOff *= Mathf.Exp(-carryOffDecay * Flat(r - carryCursorPrev).magnitude);
-                    carryCursorPrev = r;
+                    // ХВАТ — ТОЖЕ БЕЗ ПРЫЖКА (автор 2026-11-24: «схватил второй-третий в башне — улетает всё, в момент хвата дёргается»):
+                    // луч курсора идёт СКВОЗЬ предмет в руке — точка курсора за ним (бок нижнего, пол позади), кисть ехала туда со всей
+                    // скоростью и сбивала стопку. Сразу после хвата кисть остаётся в точке хвата, смещение до курсора гаснет по ходу мыши.
+                    if (wasAir || carryJustGrabbed) { carryFloorOff = Flat(dragTarget) - r; carryCursorPrev = r; }
+                    // гаснет по ходу курсора, но не быстрее самого хода (большое смещение — хват за бок: точка курсора за предметом —
+                    // кисть не летит к ней на пределе скорости, а идёт не быстрее двух ходов курсора)
+                    float cMove = Flat(r - carryCursorPrev).magnitude, offM = carryFloorOff.magnitude;
+                    if (offM > 1e-6f) carryFloorOff *= Mathf.Max(Mathf.Exp(-carryOffDecay * cMove), offM - cMove > 0f ? (offM - cMove) / offM : 0f);
+                    carryCursorPrev = r; carryJustGrabbed = false;
                     Vector3 rr = r + carryFloorOff;
-                    if (!(bodyCube && InBodyZone(rr))) rr = Reach(rr);
+                    // в зону прижат курсор (r), смещение к нему гаснет по ходу мыши: схватил у самого тела (ближе края зоны) — кисть
+                    // не сдёргивается на край зоны в первый же кадр, приходит в зону вместе с ходом мыши
+                    if (carryFloorOff.sqrMagnitude < 1e-6f && !(bodyCube && InBodyZone(rr))) rr = Reach(rr);
                     Vector3 want = HandAtLedge(rr, carry: true);                           // с предметом на весу — через край вниз можно
                     if (ArmThroughBody3(want, CarryGrabY)) want = FreeHandAroundBody(want);
                     dragTarget = Vector3.Lerp(dragTarget, want, 1f - Mathf.Exp(-handFollow * dt));
@@ -363,7 +373,10 @@ namespace Fortress.Hero.Proto
             }
             carryOnSupport = carryLift <= floorLift + 0.005f;                    // стоит на опоре — касание сверху (зона 3)
             carryLift = Mathf.Max(carryLift, floorLift);
-            tc.y = BodyLevel + carryLift + (com.y - b.min.y) + 0.01f;
+            // ЗАЗОР НАД ОПОРОЙ — ПЛАВНО (автор 2026-11-24: «схватил второй-третий в башне — всё улетает»): несомый висит на 1 см над
+            // опорой (не трётся); раньше этот сантиметр брался за один кадр — толчок вверх ~1 м/с подбрасывал то, что лежит сверху
+            carryHover = Mathf.MoveTowards(carryHover, 0.01f, 0.1f * dt);
+            tc.y = BodyLevel + carryLift + (com.y - b.min.y) + carryHover;
             float m = Mathf.Max(0.05f, it.Body.mass);
             carryTc = tc; carryHave = true;                                                        // тягу задаёт каждый фиксированный шаг физики (CarryPhysicsStep)
             carrySpeedNow = carryMaxSpeed * Mathf.Min(1f, carrySpeedMass / m);
