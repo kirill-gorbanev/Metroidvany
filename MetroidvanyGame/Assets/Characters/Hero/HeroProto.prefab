@@ -218,7 +218,7 @@ MonoBehaviour:
   maxDrop: 0.4
   handDown: 0.5
   inputShift: 0
-  showHints: 1
+  showHints: 0
   cameraFollow: 1
   forwardSpeed: 1
   backSpeed: 0.45

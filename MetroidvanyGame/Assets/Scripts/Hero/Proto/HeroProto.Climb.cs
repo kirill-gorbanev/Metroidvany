@@ -117,7 +117,8 @@ namespace Fortress.Hero.Proto
         {
             // сплошное от своего уровня: луч вверх изнутри упирается в крышку (нормаль вверх)
             Vector3 o = new Vector3(p.x, BodyLevel + 0.03f, p.z);
-            if (!(RayHit(new Ray(o, Vector3.up), false, out _, out var nu) && nu.y > 0.1f)) return false;
+            bool wallSolid = WallTopAt(p) >= top - 0.001f;                           // верх стены (тумба) — сплошное от пола
+            if (!wallSolid && !(RayHit(new Ray(o, Vector3.up), false, out _, out var nu) && nu.y > 0.1f)) return false;
             Vector3 h3 = new Vector3(p.x, top + handLift, p.z);
             return (h3 - Shoulder3).magnitude <= L - 0.01f;
         }
@@ -199,7 +200,8 @@ namespace Fortress.Hero.Proto
             if (mode == Mode.Grip && gripHold) return gripHold.At(gripHoldS).y - handLift;
             if (mode == Mode.Free && (dragItem || hoverItem)) return ItemHandY();       // кисть на предмете (блок Drag)
             if (mode == Mode.Free && hoverHold) return hoverHold.At(hoverS).y - handLift;
-            return HandLevel(hand);
+            float hl = HandLevel(hand);
+            return mode != Mode.Free || float.IsNaN(handRiseTo) || float.IsInfinity(hl) ? hl : Mathf.Max(hl, handRiseTo);   // у бока тумбы — к её верху
         }
 
         // ---------------- кисть на крутом не держит ----------------

@@ -71,6 +71,15 @@ namespace Fortress.Hero.Proto
             // по стенам; ход от поверхности — без поворота (отрыв: с верха кубика мышь вверх — поднимается).
             bool touch = it.TakeContact(out Vector3 n);
             if (!touch && carryOnSupport && !carryOnHead) { touch = true; n = Vector3.up; }   // голова — опора, но не поверхность для скольжения (иначе «вниз» уводит назад, за спину)
+            // ПРИЦЕЛ ПРИ СПУСКЕ (автор 2026-11-24, лаборатория: «с камеры кажется, что сейчас поставлю, а рука ещё далеко — поднимаю на
+            // максимум и сверху пытаюсь прицельно попасть на слой; пускай луч прицела с руки»): глубина с камеры не видна. Опускаешь —
+            // луч из камеры через низ предмета; первым на нём верх поверхности (тумба, полка, ящик) и кисть там достаёт — спуск идёт
+            // ПО ЭТОМУ ЛУЧУ (та же скорость по высоте): на экране предмет стоит на месте и садится ровно туда, куда «целится».
+            if (!touch && m.y < 0f && CarryAimLanding(it, out Vector3 land, out Vector3 bot))
+            {
+                float drop = bot.y - land.y;
+                if (drop > 1e-3f) m = new Vector3(m.x, 0f, m.z) + (land - bot) * Mathf.Min(1f, -m.y / drop);
+            }
             if (touch && m.sqrMagnitude > 1e-12f && Vector3.Dot(m, n) < 0f)
             {
                 Vector3 airN = -Flat(cam.transform.forward); airN = airN.sqrMagnitude > 1e-6f ? airN.normalized : -Face;
@@ -99,6 +108,29 @@ namespace Fortress.Hero.Proto
             dragTarget = want;
             carryLift = Mathf.Clamp(P.y - grabAbove - BodyLevel, -handDown, shoulderLift + L);
             carryAirOutY = P.y;
+        }
+
+        /// <summary>Прицел спуска: луч из камеры через низ предмета (центр низа) — первая поверхность за ним; верх (нормаль вверх),
+        /// ниже низа предмета и кисть в точке посадки в пределах руки — land (точка посадки низа), bot — низ предмета сейчас.
+        /// Первым попался бок или ничего — прицела нет (спуск по вертикали, как был).</summary>
+        bool CarryAimLanding(ProtoItem it, out Vector3 land, out Vector3 bot)
+        {
+            land = default;
+            Bounds b = it.WorldBounds;
+            bot = new Vector3(b.center.x, b.min.y, b.center.z);
+            Vector3 o = cam.transform.position, d = bot - o;
+            float d0 = d.magnitude; if (d0 < 1e-4f) return false;
+            var hits = Physics.RaycastAll(new Ray(o, d / d0), d0 + 5f, ~0, QueryTriggerInteraction.Ignore);
+            System.Array.Sort(hits, (x, y) => x.distance.CompareTo(y.distance));
+            foreach (var h in hits)
+            {
+                if (h.distance <= d0 + 1e-3f || !CarrySurfaceCollider(h.collider)) continue;
+                if (h.normal.y < 0.5f || h.point.y >= bot.y - 1e-3f) return false;     // первым — бок / выше низа: не верх под предметом
+                Vector3 grabW = it.transform.TransformPoint(grabLocal);
+                if ((h.point + (grabW - bot) - Shoulder3).magnitude > L) return false;   // кисть там не достаёт
+                land = h.point; return true;
+            }
+            return false;
         }
 
         /// <summary>Коллайдер — поверхность для кисти с предметом: не несомый предмет, не тело и не части героя, не то, что едет
@@ -225,8 +257,15 @@ namespace Fortress.Hero.Proto
         {
             Vector3 v = Flat(q - Shoulder);
             if (v.magnitude > L + 0.03f || ArmThroughBody(q)) return false;
-            foreach (var o in obstacles)                                          // стена между плечом и точкой
-                for (int k = 1; k <= 8; k++) { Vector3 m = Shoulder + v * (k / 8f); if (o.Contains(new Vector2(m.x, m.z))) return false; }
+            // стена между плечом и точкой — только если она выше руки над ней (автор 2026-11-24, лаборатория: «без предмета руку не
+            // поднять» — предмет на тумбе не ловился: тумба считалась стеной во всю высоту). Рука — прямая от плеча до точки.
+            for (int i = 0; i < obstacles.Count; i++)
+                for (int k = 1; k <= 8; k++)
+                {
+                    Vector3 m = Shoulder + v * (k / 8f);
+                    float armY = Mathf.Lerp(ShoulderY, q.y, k / 8f);
+                    if (obstacles[i].Contains(new Vector2(m.x, m.z)) && obstacleTop[i] > armY + 0.01f) return false;
+                }
             return true;
         }
 
@@ -314,6 +353,9 @@ namespace Fortress.Hero.Proto
                     // догоняет плавно: навёл на ящик — предмет поднимается на его верх, увёл на пол — опускается, за край — вниз.
                     // на вертикальной грани (стена, бок) — кисть на высоте курсора: низ предмета = высота курсора − точка хвата над низом
                     float surf = onSide ? p.y - (CarryGrabY - dragItem.WorldBounds.min.y) : CarrySurfaceAt(want);
+                    // курсор на верху стены (тумба, полка), а кисть ещё у её бока — высота по верху под курсором: предмет поднимается
+                    // над стеной, и кисть проходит над ней (HandAtLedge: стена ниже низа предмета — не преграда)
+                    if (!onSide) { float sc = CarrySurfaceAt(rr); if (!float.IsNaN(sc) && (float.IsNaN(surf) || sc > surf)) surf = sc; }
                     if (onSide && !float.IsNaN(CarrySurfaceAt(want))) surf = Mathf.Max(surf, CarrySurfaceAt(want));   // не ниже того, что под кистью
                     if (!float.IsNaN(surf))
                     {

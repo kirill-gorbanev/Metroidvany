@@ -1042,6 +1042,43 @@ namespace Fortress.EditorTools
             PlaceHero(new Vector3(3f, 0f, 1.8f), 0f);                     // лицом на север, предметы перед героем
         }
 
+        // ================= ЗОНА 1 — ЛАБОРАТОРИЯ МИКРОКОНТРОЛЯ (перенос предметов) =================
+        /// <summary>Лаборатория (автор 2026-11-24: «сделаем лабораторию для микроконтроля, без визуальных подсказок зон — понять,
+        /// насколько удобно и нативно»). Без целей и табличек — только места, куда класть точно:
+        /// · ближняя дуга перед плечом (без шага): тумбы 0.18 × 0.18 высотой 0.15 / 0.30 / 0.45 / 0.60;
+        /// · на полу перед телом — мелкие лёгкие предметы разной формы (кубики 0.10 и 0.15, плитка, брусок, кирпич);
+        /// · дальше (нужен шаг): щель 0.2 между блоками 0.25, узкая полка 0.45 на восточной стене, высокая полка 0.75 у северной.
+        /// Всё мебельное — стены (тело не заходит, предметы на них ложатся).</summary>
+        static void Fill1()
+        {
+            walls = new GameObject("Арена: стены").transform;
+            surf = new GameObject("Арена: поверхность").transform;
+            decor = new GameObject("Арена: декор (не опора)").transform;
+            Box("Земля", -2f, 10f, -0.05f, 0f, -2f, 10f, GroundC, decor);
+            Vector2 sh = new Vector2(2.9f, 1.3f);                          // плечо героя на старте (тело 2.7, 1.3 + 0.2 вправо)
+            float[] hs = { 0.15f, 0.30f, 0.45f, 0.60f }, angs = { -40f, -13f, 13f, 40f };
+            for (int i = 0; i < 4; i++)
+            {
+                float a = angs[i] * Mathf.Deg2Rad, cx = sh.x + 0.55f * Mathf.Sin(a), cz = sh.y + 0.55f * Mathf.Cos(a);
+                Box($"Тумба {hs[i]:0.00}", cx - 0.09f, cx + 0.09f, 0f, hs[i], cz - 0.09f, cz + 0.09f, StepA, walls);
+            }
+            Box("Щель: блок запад", 3.6f, 3.8f, 0f, 0.25f, 1.75f, 2.05f, StepA, walls);
+            Box("Щель: блок восток", 4.0f, 4.2f, 0f, 0.25f, 1.75f, 2.05f, StepA, walls);
+            Box("Стена восток", 4.45f, 4.75f, 0f, 1.0f, 0.3f, 3.9f, WallC, walls);
+            Box("Полка на стене 0.45", 4.3f, 4.45f, 0f, 0.45f, 1.0f, 1.6f, StepA, walls);
+            Box("Стена север", 1.2f, 4.75f, 0f, 1.0f, 3.6f, 3.9f, WallC, walls);
+            Box("Полка высокая 0.75", 2.6f, 3.2f, 0f, 0.75f, 3.42f, 3.6f, StepA, walls);
+            Item("Кубик 0.10", 2.71f, 1.57f, new Vector3(0.10f, 0.10f, 0.10f), ItemC2, 0.5f);
+            Item("Плитка", 2.90f, 1.63f, new Vector3(0.18f, 0.03f, 0.18f), ItemC3, 0.5f);
+            Item("Кубик 0.15", 3.09f, 1.57f, new Vector3(0.15f, 0.15f, 0.15f), ItemC, 1f);
+            Item("Брусок", 3.26f, 1.51f, new Vector3(0.08f, 0.08f, 0.25f), ItemC3, 1f);
+            Item("Кирпич", 3.43f, 1.44f, new Vector3(0.20f, 0.10f, 0.10f), ItemC, 1.5f);
+            var sun = new GameObject("Свет").AddComponent<Light>();
+            sun.type = LightType.Directional; sun.intensity = 1.1f; sun.shadows = LightShadows.Soft;
+            sun.transform.rotation = Quaternion.Euler(55f, -35f, 0f);
+            PlaceHero(new Vector3(2.7f, 0f, 1.3f), 0f);                   // лицом на север, тумбы — дугой перед плечом
+        }
+
         // ================= ОДНА АРЕНА «ВСЁ СРАЗУ» (шаг 4 долга) =================
         public const string SceneAllPath = "Assets/Scenes/HeroArena.unity";
 
@@ -1073,10 +1110,10 @@ namespace Fortress.EditorTools
             GameObject keepRig = null; bool haveSun = false;
             var list = new (int n, string title, System.Action fill)[]
             {
-                (2, "ярусы", Fill), (3, "подвижные", Fill3), (4, "карусели и склоны", Fill4), (5, "вскарабкивание", Fill5),
+                (1, "лаборатория: микроконтроль", Fill1), (2, "ярусы", Fill), (3, "подвижные", Fill3), (4, "карусели и склоны", Fill4), (5, "вскарабкивание", Fill5),
                 (6, "полоса препятствий", Fill6), (7, "выступы", Fill7), (8, "полоса: выступы", Fill8), (9, "падение", Fill9), (10, "предметы", Fill10),
             };
-            const int StartZone = 10;                                 // старт — зона предметов (блок Drag, на проверке); прежние зоны — клавиши 2–9
+            const int StartZone = 1;                                  // старт — лаборатория микроконтроля (перенос, на проверке); остальные — клавиши 2–9, 0
             foreach (var (n, title, fill) in list)
             {
                 var before = new System.Collections.Generic.HashSet<GameObject>(scene.GetRootGameObjects());
@@ -1101,7 +1138,7 @@ namespace Fortress.EditorTools
             }
             var proto = keepRig.GetComponentInChildren<HeroProto>(true);
             proto.obstaclesRoot = gWalls; proto.surfaceRoot = gSurf;
-            var zo = new GameObject("Зоны (клавиши 2–9, 0)").AddComponent<ProtoZones>();
+            var zo = new GameObject("Зоны (клавиши 1–9, 0)").AddComponent<ProtoZones>();
             zo.zones = zones.ToArray(); zo.startZone = StartZone; zo.hero = proto;
             zo.cam = keepRig.GetComponentInChildren<ProtoOrbitCamera>(true);
             foreach (var z in zones) { bool on = z.number == StartZone; z.walls.SetActive(on); z.surface.SetActive(on); z.decor.SetActive(on); }
@@ -1133,7 +1170,7 @@ namespace Fortress.EditorTools
             body.rotation = Quaternion.Euler(0f, yaw, 0f);                // лицом по yaw (0 — на север, +Z); камера встанет за спину
             proto.obstaclesRoot = walls;
             proto.surfaceRoot = surf;
-            proto.showHints = true;                                       // подсказки и Gizmos включены
+            // подсказки — как в префабе (выключены, автор 2026-11-24: проверить без визуальных подсказок зон); в игре — клавиша H
             // плечо — справа от тела
             proto.shoulderCube.position = body.position + body.right * proto.shoulderSide + Vector3.up * 0.14f;
             if (proneBody)
