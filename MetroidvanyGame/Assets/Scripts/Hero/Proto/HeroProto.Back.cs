@@ -39,6 +39,7 @@ namespace Fortress.Hero.Proto
         {
             if (!backArmed || !dragItem) return false;
             var it = dragItem;
+            UnfreezeOthers();                                          // остальные предметы — снова физика (блок Drag)
             it.EndCarry();
             dragItem = null; backArmed = false;
             backItem = it; it.Lock(true);                              // закреплён: физика выключена, не препятствие, не ловится как лежащий

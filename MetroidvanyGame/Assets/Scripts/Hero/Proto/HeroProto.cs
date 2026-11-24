@@ -240,9 +240,25 @@ namespace Fortress.Hero.Proto
         /// <summary>Рука сквозь тело?</summary>
         bool ArmThroughBody(Vector3 H) => armKeepOut > 0f && ArmToBody(Body, Shoulder, H) < armKeepOut;
 
+        /// <summary>Верх кубика тела (мир).</summary>
+        float BodyTopY => bodyCube ? bodyCube.position.y + Mathf.Abs(bodyCube.lossyScale.y) * 0.5f : ShoulderY;
+
+        /// <summary>РУКА С ПРЕДМЕТОМ НАД ГОЛОВОЙ (автор 2026-11-24: «не хватает сгиба руки и движения — вплоть до над головой»):
+        /// «рука сквозь тело» — в 3D: кисть на высоте hy, в ближайшей к телу точке рука выше верха кубика — тело не мешает
+        /// (то же правило, что ArmToBodyGrip у хвата за камень).</summary>
+        bool ArmThroughBody3(Vector3 H, float hy)
+        {
+            if (!ArmThroughBody(H)) return false;
+            Vector3 b = Body, s = Flat(Shoulder), h = Flat(H), d = h - s;
+            float k = d.sqrMagnitude > 1e-8f ? Mathf.Clamp01(Vector3.Dot(b - s, d) / d.sqrMagnitude) : 0f;
+            return Mathf.Lerp(ShoulderY, hy, k) <= BodyTopY + 0.02f;
+        }
+
         /// <summary>Кисть дотягивается только до первой преграды на линии плечо → цель: стены (препятствие) или уступа выше досягаемости.
         /// Рука не проходит сквозь тонкую стену. Ввод не теряется: хват всегда есть, направление то же.</summary>
-        Vector3 HandAtLedge(Vector3 target)
+        /// carry — кисть держит предмет на весу (перенос, блок Drag): обрыв вниз и край, через который кисти не лечь, — не барьер
+        /// (автор 2026-11-23: «опустить, спустить — рука замирает»); стены, своё тело и уступ выше — как обычно.
+        Vector3 HandAtLedge(Vector3 target, bool carry = false)
         {
             Vector3 S = Shoulder, d = Flat(target - S);
             float len = d.magnitude;
@@ -250,36 +266,44 @@ namespace Fortress.Hero.Proto
             len = Mathf.Min(len, 2f * L);
             if (len < 1e-4f) return target;
             if (InObstacle(S, HandGap) || float.IsInfinity(HandLevel(S))) return PushOut(target);   // плечо само в преграде (не должно) — по-старому
+            // с предметом — «сквозь тело» в 3D (кисть на высоте точки хвата: над головой тело не мешает)
+            float gy = CarryGrabY;
+            System.Func<Vector3, bool> through = carry ? (m => ArmThroughBody3(m, gy)) : (System.Func<Vector3, bool>)ArmThroughBody;
             // рука резала бы тело — доворот направления к лицу до границы, ДЛИНА та же (без скачка кисти к груди)
-            if (ArmThroughBody(target))
+            if (through(target))
             {
                 Vector3 fc = Face;
                 float phi = Vector3.SignedAngle(fc, d, Vector3.up), lo = 0f, hi = phi;
                 for (int i = 0; i < 12; i++)
                 {
                     float mid = (lo + hi) * 0.5f;
-                    if (ArmThroughBody(S + Quaternion.AngleAxis(mid, Vector3.up) * fc * len)) hi = mid; else lo = mid;
+                    if (through(S + Quaternion.AngleAxis(mid, Vector3.up) * fc * len)) hi = mid; else lo = mid;
                 }
                 d = Quaternion.AngleAxis(lo, Vector3.up) * fc * len;
             }
             Vector3 dir = d / len;
             const float step = 0.02f;
             float ok = 0f;
+            System.Func<Vector3, bool> stop = carry
+                ? (m => InObstacle(m, HandGap) || !HandOkAbove(m) || through(m))
+                : (m => InObstacle(m, HandGap) || !HandOk(m) || ArmThroughBody(m) || ArmDownCutsSurface(m));
             for (float s = step; ; s += step)
             {
                 float sc = Mathf.Min(s, len);
                 Vector3 q = S + dir * sc;
-                if (InObstacle(q, HandGap) || !HandOk(q) || ArmThroughBody(q) || ArmDownCutsSurface(q))
+                if (stop(q))
                 {
                     // уточнить кромку между ok и sc (стена, уступ, своё тело или край, через который вниз не дотянуться)
                     float lo = ok, hi = sc;
-                    for (int i = 0; i < 6; i++) { float mid = (lo + hi) * 0.5f; Vector3 m = S + dir * mid; if (InObstacle(m, HandGap) || !HandOk(m) || ArmThroughBody(m) || ArmDownCutsSurface(m)) hi = mid; else lo = mid; }
+                    for (int i = 0; i < 6; i++) { float mid = (lo + hi) * 0.5f; Vector3 m = S + dir * mid; if (stop(m)) hi = mid; else lo = mid; }
                     ok = lo; break;
                 }
                 ok = sc;
                 if (sc >= len) break;
             }
-            return HandOutOfBody(S + dir * Mathf.Max(ok, 0.05f));    // не ближе 5 см к плечу — чтобы у хвата было направление; не внутри кубика тела (Body)
+            Vector3 res = S + dir * Mathf.Max(ok, 0.05f);              // не ближе 5 см к плечу — чтобы у хвата было направление
+            if (carry && gy > BodyTopY + 0.02f) return res;            // кисть с предметом над головой — над кубиком можно
+            return HandOutOfBody(res);                                 // не внутри кубика тела (Body)
         }
 
         /// <summary>Точка внутри препятствия (прямоугольник, расширенный на gap)?</summary>
@@ -588,6 +612,14 @@ namespace Fortress.Hero.Proto
             float h = HandLevel(p);
             if (float.IsInfinity(h) || h < groundY - handDown) return false;
             return h <= BodyLevel + maxStep || LedgeGrabOk(p, h);     // выше порога — только кромка уступа в досягаемости (вскарабкивание)
+        }
+
+        /// <summary>HandOk без нижнего предела: кисть с предметом на весу — обрыв вниз не барьер, уступ выше — как обычно.</summary>
+        bool HandOkAbove(Vector3 p)
+        {
+            float h = HandLevel(p);
+            if (float.IsInfinity(h)) return false;                    // сплошное (уступ выше) — барьер
+            return h <= BodyLevel + maxStep || LedgeGrabOk(p, h);     // обрыв вниз (низкий h) — можно
         }
 
         /// <summary>Круг радиуса r в точке p задевает препятствие или уступ выше порога (центр + 4 точки по краю)?</summary>
@@ -1322,7 +1354,8 @@ namespace Fortress.Hero.Proto
             // кисть: поверхность своего уровня (или зацеп); под ней уступ выше досягаемости — остаётся на прежней высоте (не прыгает наверх).
             // Высота кисти догоняет плавно (без скачка на перила и со ступени).
             float hl = HandTargetY();
-            if (!float.IsInfinity(hl)) handY = Mathf.MoveTowards(handY, Mathf.Lerp(handY, hl, 1f - Mathf.Exp(-handFollow * dtNow)), 5f * dtNow);   // не быстрее 5 м/с
+            if (dragItem && mode == Mode.Free) handY = hl;                  // кисть с предметом — ровно в точке хвата (не догоняет: предмет не «скользит в руке»)
+            else if (!float.IsInfinity(hl)) handY = Mathf.MoveTowards(handY, Mathf.Lerp(handY, hl, 1f - Mathf.Exp(-handFollow * dtNow)), 5f * dtNow);   // не быстрее 5 м/с
             // КУЛАК НЕ В ПОВЕРХНОСТЬ (автор 2026-11-21): высота догоняет плавно — и при быстром ходе вверх по склону кисть отставала
             // и уходила под склон. Плавно — только над поверхностью (на перила, со ступени); ниже поверхности под собой — никогда.
             float handSurf = HandLevel(hand);

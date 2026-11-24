@@ -36,7 +36,10 @@ namespace Fortress.Hero.Proto
             rb = GetComponent<Rigidbody>();
             if (!rb) rb = gameObject.AddComponent<Rigidbody>();
             rb.mass = Mathf.Max(0.05f, mass);
-            rb.interpolation = RigidbodyInterpolation.Interpolate;
+            // БЕЗ ИНТЕРПОЛЯЦИИ (автор 2026-11-24: «нет плавности — как будто 30 к/с при 200»): физику шагает герой сам каждый кадр
+            // (Script-режим, HeroProto.Tick) — после шага место точное; интерполяция Unity привязана к FixedUpdate и рисовала
+            // предмет по своему таймеру
+            rb.interpolation = RigidbodyInterpolation.None;
             rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
             rb.maxDepenetrationVelocity = depenSpeed;
             rb.isKinematic = true;                                       // до Start: мир (коллайдеры рельефа и пола) ещё не поставлен
@@ -59,9 +62,37 @@ namespace Fortress.Hero.Proto
         /// <summary>Тело героя предмет не подбрасывает: в касании с телом скорость вверх гасится.</summary>
         void OnCollisionStay(Collision c)
         {
-            if (rb.isKinematic || c.collider != HeroProto.BodyCollider) return;
+            if (rb.isKinematic) return;
+            if (c.collider != HeroProto.BodyCollider) { if (held) AddContacts(c); return; }
             Vector3 v = rb.linearVelocity;
             if (v.y > 0f) rb.linearVelocity = new Vector3(v.x, 0f, v.z);
+        }
+        void OnCollisionEnter(Collision c) { if (!rb.isKinematic && held && c.collider != HeroProto.BodyCollider) AddContacts(c); }
+
+        // ---- касания предмета в руке (зоны 3–4 переноса: ход мыши — в плоскость касания) ----
+        Vector3 contactSum; int contactCount;
+
+        /// <summary>Нормали касаний — от поверхности к предмету (наружу из того, во что упёрлись).</summary>
+        void AddContacts(Collision c)
+        {
+            if (c.rigidbody && !c.rigidbody.isKinematic) return;         // едущее на предмете (живая физика) — не поверхность; стены, пол, застывшие — да
+            Vector3 me = rb.worldCenterOfMass;
+            for (int i = 0; i < c.contactCount; i++)
+            {
+                var cp = c.GetContact(i);
+                Vector3 n = cp.normal;
+                if (Vector3.Dot(n, me - cp.point) < 0f) n = -n;
+                contactSum += n; contactCount++;
+            }
+        }
+
+        /// <summary>Касания с прошлого опроса (шаги физики за кадр): средняя нормаль; сбрасывает накопленное.</summary>
+        public bool TakeContact(out Vector3 n)
+        {
+            n = contactSum; bool any = contactCount > 0 && n.sqrMagnitude > 1e-8f;
+            contactSum = Vector3.zero; contactCount = 0;
+            if (any) n.Normalize();
+            return any;
         }
 
         void OnEnable() { if (!Live.Contains(this)) Live.Add(this); }
@@ -75,6 +106,7 @@ namespace Fortress.Hero.Proto
         public void BeginCarry()
         {
             held = true; rb.isKinematic = false; rb.WakeUp();
+            contactSum = Vector3.zero; contactCount = 0;
             Vector3 f = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
             if (f.sqrMagnitude < 1e-4f) f = Vector3.ProjectOnPlane(transform.up, Vector3.up);   // лежал «лицом» вверх/вниз
             holdRot = f.sqrMagnitude < 1e-4f ? Quaternion.identity : Quaternion.LookRotation(f.normalized, Vector3.up);
@@ -83,16 +115,16 @@ namespace Fortress.Hero.Proto
         /// <summary>Отпустили: дальше — просто физика (встанет, съедет, упадёт).</summary>
         public void EndCarry() { held = false; rb.WakeUp(); }
 
-        /// <summary>Шаг руки: центр предмета — к цели. Желаемая скорость (target − центр) · gain, не быстрее maxSpeed; разгон за шаг —
-        /// не больше maxForce / масса, причём поддержка против тяжести тратит ту же силу: тяжёлый не поднимается, только тащится.
-        /// dt — шаг героя: несколько шагов за шаг физики складываются в правильный толчок (тяжесть добавляет сама физика).</summary>
-        public void CarryStep(Vector3 target, float dt, float gain, float maxSpeed, float maxForce)
+        /// <summary>Шаг руки: центр предмета идёт С РУКОЙ, БЕЗ ИНЕРЦИИ (автор 2026-11-23: «движение бесшовное, без подёргивания;
+        /// двигаем вместе с рукой, масса большая — скорость ниже»): скорость = (цель − центр) / dt — за шаг ровно в цель, не быстрее
+        /// maxSpeed (предел уже с учётом массы). Ни силы, ни разгона — нечему перелетать и раскачиваться. Стены и опору решает физика.
+        /// canLift = false (рука не держит вес) — высоту не ведёт: тяжесть и пол, только тащится.</summary>
+        public void CarryStep(Vector3 target, float dt, float maxSpeed, bool canLift)
         {
-            Vector3 c = rb.worldCenterOfMass, v = rb.linearVelocity;
-            Vector3 want = Vector3.ClampMagnitude((target - c) * gain, maxSpeed);
-            Vector3 acc = (want - v) / Mathf.Max(dt, 1e-4f) - Physics.gravity;   // нужное ускорение сверх тяжести
-            acc = Vector3.ClampMagnitude(acc, maxForce / rb.mass);
-            rb.linearVelocity = v + acc * dt;
+            Vector3 c = rb.worldCenterOfMass;
+            Vector3 vel = Vector3.ClampMagnitude((target - c) / Mathf.Max(dt, 1e-4f), maxSpeed);
+            if (!canLift) vel.y = Mathf.Min(rb.linearVelocity.y, 0f);       // тяжёлый: вверх не поднять, вниз — сам, тяжестью
+            rb.linearVelocity = vel;
             HoldRotation();
             rb.WakeUp();
         }
@@ -115,6 +147,19 @@ namespace Fortress.Hero.Proto
             held = on;
             rb.isKinematic = on;
             if (!on) rb.WakeUp();
+        }
+
+        /// <summary>Застыл, пока герой несёт ДРУГОЙ предмет (автор 2026-11-23: «другие item считаются неподвижными, пока мы рукой
+        /// двигаем и пытаемся сверху что-то установить — не расталкиваем ни рукой, ни предметом в руке»): кинематический —
+        /// для несомого предмета как стена и опора. Отпустил — снова физика. В руке / на спине — не трогаем.</summary>
+        public bool Frozen { get; private set; }
+        public void Freeze(bool on)
+        {
+            if (on == Frozen) return;
+            Frozen = on;
+            if (held) return;
+            if (on) { rb.linearVelocity = Vector3.zero; rb.angularVelocity = Vector3.zero; rb.isKinematic = true; }
+            else { rb.isKinematic = false; rb.WakeUp(); }
         }
 
         /// <summary>СЛЕД ПРЕДМЕТА НА ПОЛУ — повёрнутый прямоугольник (автор 2026-11-23: «форма коллайдера» — касание считалось по
