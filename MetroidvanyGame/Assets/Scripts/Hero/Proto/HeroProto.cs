@@ -1195,6 +1195,7 @@ namespace Fortress.Hero.Proto
         {
             dtNow = dt;
             pullWhy = "";
+            RightingUndo();                                           // после физического падения — логика видит тело прямым
             RefreshWallClass();                                       // стена / рельеф — от уровня, где стоишь
             gripAge = mode == Mode.Grip ? gripAge + dt : 0f;                // сколько держишься (окно после хвата — letGoGrace)
             Carry();
@@ -1726,6 +1727,7 @@ namespace Fortress.Hero.Proto
 
         void Draw()
         {
+            RightingStep(dtNow);                                       // плавный подъём после физического падения (рисунок)
             Vector3 S = Shoulder;
             lnArm.enabled = drawArmLine;
             lnArm.positionCount = 3;
