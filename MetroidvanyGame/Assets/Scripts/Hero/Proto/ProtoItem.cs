@@ -29,6 +29,10 @@ namespace Fortress.Hero.Proto
         Renderer rend; MaterialPropertyBlock mpb; Color baseColor = Color.white; bool haveColor;
 
         public Rigidbody Body => rb;
+        float sleepDefault;
+        /// <summary>В РУКЕ НЕ ЗАСЫПАЕТ (автор 2026-11-24, лаборатория: брусок не крутился): лёгкий узкий предмет при медленном повороте —
+        /// энергия ниже порога сна, физика его «усыпляла» прямо в руке. Пока несёшь / крутишь — порог 0; отпустил — как был.</summary>
+        void InHand(bool on) { rb.sleepThreshold = on ? 0f : sleepDefault; }
 
         void Awake()
         {
@@ -42,6 +46,7 @@ namespace Fortress.Hero.Proto
             rb.interpolation = RigidbodyInterpolation.None;
             rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
             rb.maxDepenetrationVelocity = depenSpeed;
+            sleepDefault = rb.sleepThreshold;
             rb.isKinematic = true;                                       // до Start: мир (коллайдеры рельефа и пола) ещё не поставлен
             rend = GetComponentInChildren<Renderer>();
             if (rend && rend.sharedMaterial)
@@ -107,7 +112,7 @@ namespace Fortress.Hero.Proto
         /// «в момент подъёма крутится, хотя я его держу — в руке болтаться не должен»).</summary>
         public void BeginCarry()
         {
-            held = true; rb.isKinematic = false; rb.WakeUp();
+            held = true; rb.isKinematic = false; InHand(true); rb.WakeUp();
             contactSum = Vector3.zero; contactCount = 0; stepNormals.Clear();
             Vector3 f = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
             if (f.sqrMagnitude < 1e-4f) f = Vector3.ProjectOnPlane(transform.up, Vector3.up);   // лежал «лицом» вверх/вниз
@@ -115,7 +120,7 @@ namespace Fortress.Hero.Proto
         }
 
         /// <summary>Отпустили: дальше — просто физика (встанет, съедет, упадёт).</summary>
-        public void EndCarry() { held = false; rb.WakeUp(); }
+        public void EndCarry() { held = false; InHand(false); rb.WakeUp(); }
 
         /// <summary>Шаг руки: центр предмета идёт С РУКОЙ, БЕЗ ИНЕРЦИИ (автор 2026-11-23: «движение бесшовное, без подёргивания;
         /// двигаем вместе с рукой, масса большая — скорость ниже»): скорость = (цель − центр) / dt — за шаг ровно в цель, не быстрее
@@ -147,6 +152,23 @@ namespace Fortress.Hero.Proto
             if (ang < 0.01f || float.IsNaN(axis.x) || float.IsInfinity(axis.x)) { rb.angularVelocity = Vector3.zero; return; }
             rb.angularVelocity = Vector3.ClampMagnitude(axis * (ang * Mathf.Deg2Rad * gain), holdTurnSpeed);
         }
+
+        /// <summary>Кручение на месте (ПКМ, HeroProto): угловая скорость — к target за оставшееся время кадра, не быстрее maxW (рад/с);
+        /// по горизонтали стоит (не съезжает), вниз — тяжесть и опора.</summary>
+        public void TurnStep(Quaternion target, Vector3 center, float dtLeft, float maxW)
+        {
+            InHand(true);
+            Quaternion d = target * Quaternion.Inverse(rb.rotation);
+            if (d.w < 0f) d = new Quaternion(-d.x, -d.y, -d.z, -d.w);
+            d.ToAngleAxis(out float ang, out Vector3 axis);
+            if (ang < 0.01f || float.IsNaN(axis.x) || float.IsInfinity(axis.x)) rb.angularVelocity = Vector3.zero;
+            else rb.angularVelocity = Vector3.ClampMagnitude(axis * (ang * Mathf.Deg2Rad / Mathf.Max(dtLeft, 1e-4f)), maxW);
+            // НА МЕСТЕ, НА ВЕСУ 1 см (как несомый): лёжа под весом трение о пол съедало поворот каждый шаг — центр держится в center
+            rb.linearVelocity = Vector3.ClampMagnitude((center - rb.worldCenterOfMass) / Mathf.Max(dtLeft, 1e-4f), 0.5f);
+            rb.WakeUp();
+        }
+        /// <summary>Кручение кончилось: не докручивается по инерции.</summary>
+        public void EndTurn() { if (!rb.isKinematic) rb.angularVelocity = Vector3.zero; InHand(false); rb.WakeUp(); }
 
         /// <summary>На спине (блок HeroProto.Back): закреплён, физика выключена; снят — снова физика.</summary>
         public void Lock(bool on)

@@ -216,6 +216,7 @@ namespace Fortress.Hero.Proto
         /// <summary>Фиксированный шаг физики (блок ItemPhysics): рука ведёт предмет к цели, посчитанной логикой в этом кадре.</summary>
         void CarryPhysicsStep(float dt)
         {
+            if (turnItem) turnItem.TurnStep(turnTarget, turnCenter + Vector3.up * turnHover, dt * Mathf.Max(1, physStepsLeft), turnMaxSpeed * Mathf.Deg2Rad * TurnMassK);   // кручение — до конца кадра
             if (dragItem && carryHave) dragItem.CarryStep(carryTc, dt * Mathf.Max(1, physStepsLeft), carrySpeedNow, carryCanLift);   // ход — до конца кадра
         }
 
@@ -369,6 +370,7 @@ namespace Fortress.Hero.Proto
                 dragItem.SetLook(false, true, backArmed);
                 return true;
             }
+            if (TurnFreeStep(dt, inp)) return true;                     // ПКМ на предмете — крутишь на месте
             hoverItem = null;
             if (!orbit && FindItem(px, out var it, out var ih, out var ip)) { hoverItem = it; hoverItemHand = ih; hoverItemPoint = ip; }
             if (prevHover && prevHover != hoverItem) prevHover.SetLook(false, false);
@@ -469,8 +471,58 @@ namespace Fortress.Hero.Proto
             return float.IsNaN(hoverItemPoint.y) ? hoverItem.WorldBounds.max.y : hoverItemPoint.y - handLift;   // кисть — в точке хвата (бок, угол, верх)
         }
 
+        // ================= КРУЧЕНИЕ НА МЕСТЕ (ПКМ) =================
+        // Автор 2026-11-24: «навёлся на объект, нажал ПКМ — двигаю мышью, и объект крутится на месте; не поднимаю, не таскаю —
+        // просто кручу; у инвалида трудности должны быть с поворотом». Кусок 1: вокруг вертикали (мышь вбок). Переворот — следующий.
+        [Header("Кручение предмета (ПКМ)")]
+        [Tooltip("Градусов поворота на пиксель хода мыши вбок (экран 1080 по высоте), при массе ≤ carrySpeedMass.")]
+        public float turnRate = 0.25f;
+        [Tooltip("Предмет крутится не быстрее этого (°/с) при массе ≤ carrySpeedMass; тяжелее — медленнее (как перенос).")]
+        public float turnMaxSpeed = 60f;
+
+        ProtoItem turnItem;                  // крутишь (ПКМ зажата)
+        Quaternion turnStartRot, turnTarget; float turnYaw, turnHover; Vector3 turnGrabLocal, turnCenter;
+        float TurnMassK => turnItem ? Mathf.Min(1f, carrySpeedMass / Mathf.Max(0.05f, turnItem.Body.mass)) : 1f;
+
+        /// <summary>ПКМ на наведённом предмете — кручение: мышь вбок — поворот вокруг вертикали (цель копится, физика доворачивает),
+        /// кисть на точке, за которую взялся. Отпустил ПКМ / нажал ЛКМ — конец. true — шаг руки забран.</summary>
+        bool TurnFreeStep(float dt, InputFrame inp)
+        {
+            if (turnItem && (!inp.rmb || inp.pressed || !turnItem.isActiveAndEnabled)) EndTurn();
+            if (!turnItem && inp.rmbDown && !inp.pressed && hoverItem && hoverItem != backItem) BeginTurn(hoverItem, hoverItemPoint);
+            if (!turnItem) return false;
+            turnYaw += inp.delta.x * Px1080 * turnRate * TurnMassK;
+            turnTarget = Quaternion.AngleAxis(turnYaw, Vector3.up) * turnStartRot;
+            turnHover = Mathf.MoveTowards(turnHover, 0.01f, 0.1f * dt);           // на весу 1 см — плавно (трение о пол не держит поворот)
+            Vector3 g = turnItem.transform.TransformPoint(turnGrabLocal);           // точка хвата ходит с предметом — кисть на ней
+            if (Flat(g - Shoulder).magnitude > L + carryBreak) { EndTurn(); return false; }   // ушла дальше руки — не удержал
+            hoverItem = turnItem; hoverItemPoint = g; hoverItemHand = Flat(g);
+            hand = Vector3.Lerp(hand, hoverItemHand, 1f - Mathf.Exp(-handFollow * dt));
+            turnItem.SetLook(true, false);
+            gestureOwner = "крутит предмет";
+            return true;
+        }
+
+        void BeginTurn(ProtoItem it, Vector3 point)
+        {
+            turnItem = it; ItemTurning = true;
+            turnStartRot = turnTarget = it.Body.rotation; turnYaw = 0f; turnHover = 0f; turnCenter = it.Body.worldCenterOfMass;
+            Vector3 g = float.IsNaN(point.y) ? new Vector3(point.x, it.WorldBounds.max.y, point.z) : point;
+            turnGrabLocal = it.transform.InverseTransformPoint(g);
+            FreezeOthers(it);                                          // остальные — неподвижны (как при переносе), лежащее сверху едет
+        }
+
+        void EndTurn()
+        {
+            if (!turnItem) return;
+            UnfreezeOthers();
+            turnItem.EndTurn();
+            turnItem = null; ItemTurning = false;
+        }
+
         void DragReset()
         {
+            EndTurn();
             UnfreezeOthers();
             if (dragItem) { dragItem.EndCarry(); dragItem.SetLook(false, false); }
             BackReset();
