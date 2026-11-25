@@ -88,6 +88,9 @@
 
 ## Грабли Unity и инструментов
 
+- **Unity CLI 1.0** стоит: `C:\Users\Kirill\AppData\Local\Unity\bin\unity.exe`. Для управления открытым редактором нужен пакет Pipeline (`com.unity.pipeline`) в проекте — на 2026-11-25 ещё не поставлен (`unity pipeline install --project-path D:\Metroidvany\MetroidvanyGame`). Руководство для агентов: `unity skill show`. Само руководство CLI советует его вместо MCP, когда есть оболочка.
+- **Unity MCP** (сервер на 127.0.0.1:8080) отклоняет соединение, пока Unity закрыт или перезапускается; после перезапуска Unity поднимается сам.
+
 - **Unity MCP:** каждый скрипт симуляции начинается с проверки `EditorApplication.isPlaying` и того, что герой запущен (`shoulderLift > 0`), иначе прогон портит сохранённую сцену. Ставить `Application.runInBackground = true`. Компилировать только при остановленном Play и ждать `isCompiling == false`. Сцена испортилась — пересобрать сборщиком.
 - **MCP часто отваливается** (соединение отклоняется). Тогда — аккуратная правка кода и передача автору; не гонять повторные вызовы.
 - **Слои через MCP** могут не записаться в `TagManager.asset` — проверять `LayerMask.NameToLayer` в игре.
