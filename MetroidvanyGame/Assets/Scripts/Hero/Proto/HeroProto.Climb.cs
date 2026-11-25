@@ -428,6 +428,11 @@ namespace Fortress.Hero.Proto
 
         [Tooltip("Отпустил вис у стенки: тело отходит от неё ровно на перекрытие (чтобы не приземлиться в уступ) с этой скоростью (м/с).")]
         public float hangReleaseClearSpeed = 0.6f;
+        [Tooltip("Перевал: центр тела подходит к кисти не ближе этого (м) — точка там должна быть на верху, иначе рука коротка, перевала нет.")]
+        public float mantleReach = 0.15f;
+        float hangSagV;                      // скорость провисания в висе (м/с)
+        float mantleActiveT;                 // перевал прямо сейчас поднимает / надвигает тело (с) — провисание молчит
+
         [Tooltip("Перевал: тело поднимается до верха уступа (не входя в него) с этой скоростью (м/с), потом заходит на уступ.")]
         public float mantleLiftSpeed = 0.6f;
         [Tooltip("Отпустил низкий вис (не выше maxDrop) — тело опускается на опору не быстрее этого (м/с).")]
@@ -450,13 +455,18 @@ namespace Fortress.Hero.Proto
             // твёрдой преграды»): тело на новом месте вошло бы в уступ — сначала поднимается (плавно) до верха того, что под ним, потом идёт
             if (HangOverlaps(np))
             {
+                // ВИС — НЕ ВЫШЕ КРОМКИ, ЕСЛИ НА УСТУП НЕ НАДВИНУТЬСЯ (кусок 3; автор 2026-11-25: «левитация — больше на физику Unity»):
+                // центр подходит к кисти не ближе mantleReach — точка там должна быть на верху; нет — рука коротка: не поднимать (висишь)
+                Vector3 pc = gripHand - dir * mantleReach;
+                if (Height(pc) < gripTop - 0.02f) return;
                 float topUnder = Height(np);
                 foreach (var q in BodyProbes(np)) topUnder = Mathf.Max(topUnder, Height(q));
                 float want = topUnder - groundY + 0.005f;
-                if (want > climbLift) { climbLift = Mathf.MoveTowards(climbLift, want, mantleLiftSpeed * dt); return; }
+                if (want > climbLift) { climbLift = Mathf.MoveTowards(climbLift, want, mantleLiftSpeed * dt); mantleActiveT = 0.25f; return; }
             }
             np = Slide(Body, np - Body);
             if (!ZoneAllows(np, climbLift)) return;                       // кисть вышла бы из зоны — перевал стоит (блок Zone)
+            if ((np - Body).sqrMagnitude > 1e-8f) mantleActiveT = 0.25f;  // надвигается — провисание молчит
             MoveBodyXZ(np.x, np.z);
             float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0);
         }
@@ -465,10 +475,25 @@ namespace Fortress.Hero.Proto
         {
             sinceHold = (OnHold || (mode == Mode.Free && hoverHold)) ? 0f : sinceHold + dt;
             if (mode == Mode.Grip) ArmReachStep();
+            mantleActiveT = Mathf.Max(0f, mantleActiveT - dt);
             MantleStep(dt);
             crestFlash = Mathf.Max(0f, crestFlash - dt); slipFlash = Mathf.Max(0f, slipFlash - dt);
             bool holding = ClimbGrip && climbLift > 0f;
-            if (holding) return;
+            if (holding)
+            {
+                // ПРОВИСАЕТ ПОД ТЯЖЕСТЬЮ (кусок 3): тело в висе выше «кромка − полкорпуса», а на уступ не надвигается — плавно с
+                // разгоном опускается до этой высоты (не висит в воздухе у стенки)
+                float cap = gripTop - groundY - Mathf.Abs(bodyCube.lossyScale.y) * 0.5f;
+                bool overTop = !HangOverlaps(Body) && FootSupportDir(groundY + climbLift).sqrMagnitude > 1e-8f;   // уже над уступом (перевал)
+                if (!overTop && mantleActiveT <= 0f && climbLift > cap + 0.005f && !OnNub && !gripHold)
+                {
+                    hangSagV = Mathf.Min(hangSagV + 9.81f * dt, 2f);
+                    LowerHang(Mathf.Max(cap, climbLift - hangSagV * dt));
+                }
+                else hangSagV = 0f;
+                return;
+            }
+            hangSagV = 0f;
             // ОТПУСТИЛ ВИС, ПОДНЯВШИСЬ ДО ВЕРХА, А КУБИК УЖЕ НАД НИМ (автор 2026-11-25: «залез на столбик и скатился»): встаёт на верх
             // и садится на него (Place: «утвердиться на верху»), не падает
             if (climbLift > maxDrop + 0.01f && FootSupportDir(groundY + climbLift).sqrMagnitude > 1e-8f)

@@ -84,7 +84,9 @@ namespace Fortress.Hero.Proto
         [Tooltip("Падение — физика Unity (гравитация, вращение, столкновения). Выкл — прежний скриптовый полёт.")]
         public bool physicsFall = true;
         [Tooltip("Затухание вращения тела в физическом падении: выше — меньше кувырков.")]
-        public float fallSpinDamping = 2f;
+        public float fallSpinDamping = 4f;
+        [Tooltip("Тело в физическом падении вращается не быстрее этого (рад/с).")]
+        public float fallMaxSpin = 3f;
         bool PhysFallOn => physicsFall && itemPhysics && bodyRb;
         float physFallT; bool physFallInit; float physStillT; PhysicsMaterial fallMat, slipMat;
         Vector3 physStableAt; bool physStableSet;                           // физика оставила тело на той же высоте — здесь устоит
@@ -127,6 +129,7 @@ namespace Fortress.Hero.Proto
                 bodyRb.linearVelocity = new Vector3(fallVel.x, -fallVy, fallVel.z);
                 bodyRb.angularVelocity = Vector3.zero;
                 bodyRb.angularDamping = fallSpinDamping;                    // опрокидывается, а не кувыркается от малейшего толчка
+                bodyRb.maxAngularVelocity = fallMaxSpin;                     // не волчком (автор: «вот перевороты»)
                 slipMat = bodyBox.sharedMaterial;                           // у стен тело скользкое; в падении — обычное трение (затихает)
                 if (fallMat == null) fallMat = new PhysicsMaterial("Тело (падение)") { dynamicFriction = 0.6f, staticFriction = 0.7f, bounciness = 0.05f,
                     frictionCombine = PhysicsMaterialCombine.Average, bounceCombine = PhysicsMaterialCombine.Minimum };
@@ -183,6 +186,7 @@ namespace Fortress.Hero.Proto
             bodyRb.constraints = RigidbodyConstraints.FreezeRotation | RigidbodyConstraints.FreezePositionY;
             bodyRb.linearVelocity = Vector3.zero; bodyRb.angularVelocity = Vector3.zero;
             bodyRb.maxDepenetrationVelocity = bodyDepenSpeed;
+            bodyRb.maxAngularVelocity = 7f;
             if (slipMat != null && bodyBox) bodyBox.sharedMaterial = slipMat;
             physFallInit = false;
             ignoredColliders = -1;                                          // столкновения — снова только с высокими стенами
