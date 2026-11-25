@@ -3,6 +3,15 @@ using UnityEngine.InputSystem;
 
 namespace Fortress.Hero.Proto
 {
+    // ======================= АБСОЛЮТНЫЕ ПРАВИЛА КОНТРОЛЛЕРА (автор 2026-11-25: «самые главные — нарушать нельзя») =======================
+    // 1. СКВОЗЬ ТВЁРДОЕ — НИКОГДА. Рука (оба звена и кисть) и тело не проходят сквозь стены, уступы, блоки.
+    // 2. СКОЛЬЖЕНИЕ ВДОЛЬ ПОВЕРХНОСТИ. Ход в поверхность гасится по нормали (скалярное произведение), остаток идёт вдоль неё —
+    //    и у тела, и у руки.
+    // 3. ПЛАВНОСТЬ. Никаких телепортов и рывков: любое перемещение (тело, кисть, перехват) — последовательность во времени, не скачок.
+    // 4. ФИЗИКА UNITY. Где можно — решает физика Unity: блоки не спорят друг с другом, нет дёрганья, состояние согласовано.
+    // Каждое новое правило проверяется против этих четырёх; код, двигающий тело или кисть напрямую, обязан их соблюдать.
+    // ======================================================================================================================================
+
     /// <summary>Прототип движения одной рукой — «из позиций», без физики и анимации (кубики).
     ///
     /// Три точки: ТЕЛО (таз) B, ПЛЕЧО S (сбоку от тела), КИСТЬ H. Всё в плоскости XZ (высота — потом, по поверхности).
@@ -381,7 +390,7 @@ namespace Fortress.Hero.Proto
         const float ShoulderR = 0.05f;    // плечо — маленький круг: не входит в стены и уступы выше порога
 
         /// <summary>Плечо при теле в точке bodyP (текущий разворот) задевает стену или уступ выше порога?</summary>
-        bool ShoulderBlocked(Vector3 bodyP)
+        bool ShoulderBlocked(Vector3 bodyP, bool dropOk = false)
         {
             if (shoulderSide == 0f) return false;
             Vector3 S = Flat(bodyP) + SideOff;
@@ -391,7 +400,7 @@ namespace Fortress.Hero.Proto
                 float dx = S.x - cx, dz = S.z - cz;
                 if (dx * dx + dz * dz < ShoulderR * ShoulderR) return true;
             }
-            return HasSurface && !ProbeOk(bodyP, S);                 // плечо на склоне — как край кубика (ProbeOk)
+            return HasSurface && !ProbeOk(bodyP, S, dropOk);         // плечо на склоне — как край кубика (ProbeOk); спуск — обрыв можно
         }
 
         /// <summary>Высота для подсказок: со своего уровня, а где стена — по верху.</summary>
@@ -664,9 +673,10 @@ namespace Fortress.Hero.Proto
         /// Угол кубика / плечо, не прошедшие порог от уровня тела: от центра к ним шагами по 2 см — между соседними точками вверх
         /// не больше maxStep, вниз не больше maxDrop (как обычный шаг; камень на склоне — не преграда, автор: «лучше, но ситуации есть»)
         /// — это склон, можно; уступ выше порога или обрыв — край, как был.</summary>
-        bool ProbeOk(Vector3 c, Vector3 q)
+        bool ProbeOk(Vector3 c, Vector3 q, bool dropOk = false)
         {
             if (Climbable(q)) return true;
+            if (dropOk && HasSurface && !TooHighAt(q) && !TooHighAt(c)) return true;   // спуск спиной (Climb): обрыв не край, уступ выше — край
             if (!HasSurface) return true;
             Vector3 a = Flat(c), b = Flat(q);
             float prev = LevelHeight(a, BodyLevel, maxStep);
@@ -705,10 +715,12 @@ namespace Fortress.Hero.Proto
                 // тело — своим кубиком (блок Body): стены — пересечение прямоугольников, уступы и обрывы — пробы по углам и сторонам
                 if (!PhysBodyActive)                                   // тело в физике — стены решает физика (шаг 4, блок ItemPhysics)
                     foreach (var o in obstacles) if (BoxHitsRect(p, o, 0.001f)) return true;
-                if (ShoulderBlocked(p)) return true;
+                bool edge = DescentMove(p);                            // спуск спиной (блок Climb): ход от кисти — обрыв не стена
+                if (ShoulderBlocked(p, edge)) return true;
                 if (!HasSurface) return false;
-                if (!Climbable(p)) return true;
-                foreach (var q in BodyProbes(p)) if (!ProbeOk(p, q)) return true;
+                if (edge ? TooHighAt(p) : !Climbable(p)) return true;
+                if (hangFromTop && climbLift > 0.01f && HangOverlaps(p)) return true;   // вис после спуска — не в уступ
+                foreach (var q in BodyProbes(p)) if (!ProbeOk(p, q, edge)) return true;
                 return false;
             }
             foreach (var o in obstacles)
@@ -737,7 +749,7 @@ namespace Fortress.Hero.Proto
 
         /// <summary>Анти-вектор: сумма отталкиваний от стен, стоек, уступов выше порога (тело) и стен у плеча.
         /// Сила 0 на расстоянии avoidMargin от края → 1 при касании. В углу складывается наружу по диагонали.</summary>
-        Vector3 Repulsion(Vector3 p)
+        Vector3 Repulsion(Vector3 p, bool dropOk = false)
         {
             p = Flat(p);
             Vector3 rep = Vector3.zero;
@@ -774,8 +786,9 @@ namespace Fortress.Hero.Proto
                 for (int i = 0; i < 8; i++)
                 {
                     Vector3 dir = Quaternion.AngleAxis(i * 45f, Vector3.up) * Vector3.forward;
-                    if (!Climbable(p + dir * bodyRadius * 0.95f)) rep -= dir * 0.6f;
-                    else if (!Climbable(p + dir * (bodyRadius + avoidMargin))) rep -= dir * 0.3f;
+                    // спуск спиной (блок Climb): обрыв не отталкивает, только уступ выше
+                    if (dropOk ? TooHighAt(p + dir * bodyRadius * 0.95f) : !Climbable(p + dir * bodyRadius * 0.95f)) rep -= dir * 0.6f;
+                    else if (dropOk ? TooHighAt(p + dir * (bodyRadius + avoidMargin)) : !Climbable(p + dir * (bodyRadius + avoidMargin))) rep -= dir * 0.3f;
                 }
             return rep;
         }
@@ -1080,6 +1093,7 @@ namespace Fortress.Hero.Proto
         {
             dtNow = dt;
             pullWhy = "";
+            RightingUndo();                                           // после физического падения — логика видит тело прямым
             gripAge = mode == Mode.Grip ? gripAge + dt : 0f;                // сколько держишься (окно после хвата — letGoGrace)
             Carry();
             PushStep();                                               // подвижная стена толкает тело / зажим (блок Push)
@@ -1205,7 +1219,7 @@ namespace Fortress.Hero.Proto
                 float dm = delta.magnitude;
                 if (avoidGain > 0f && dm > 1e-5f)
                 {
-                    Vector3 rep = Repulsion(cur);
+                    Vector3 rep = Repulsion(cur, DescentMove(cur + delta));
                     if (rep.sqrMagnitude > 1e-6f)
                     {
                         Vector3 sd = delta + rep * dm * avoidGain;
@@ -1350,6 +1364,7 @@ namespace Fortress.Hero.Proto
             // Ledge: «от себя» до упора — отпустить; камень ниже плеча — «на себя» спускает к нему. До проверки линии: она бывает короткой на экране.
             float push = -md.y;                                       // на себя (+) — к кисти
             if (LetGoPush(push)) { gestureOwner = "отпустить"; return; }
+            if (DescentDrag(push)) return;                           // рука прямая, позади обрыв — кисть сползает, тело уходит за край в вис (Climb)
             if (BackFallPush(push)) { gestureOwner = "срыв спиной"; return; }
             BackOutTurn(push);                                       // рука через грудь, «от себя» в упор — тело доворачивается
             Vector2 s0 = cam.WorldToScreenPoint(farEnd), s1 = cam.WorldToScreenPoint(nearEnd);
@@ -1418,6 +1433,8 @@ namespace Fortress.Hero.Proto
             // ВЫСОТА: тело — на поверхности под своим центром (плавно), плечо — с телом, кисть — на поверхности под собой
             // уровень тела — поверхность под центром СО СВОЕГО уровня (мост/перекрытие сверху не поднимают; вниз — падает)
             float gWant = LevelHit(Body, BodyLevel, maxStep, out var rm, out var bn);
+            // СПУСК СПИНОЙ (блок Climb): кисть держит пол уступа, центр ушёл за край — вис на кромке (не падение, не опора на углу)
+            DescentToHang(gWant);
             // ТЕЛО НА СТУПЕНЬКУ СРАЗУ (автор 2026-11-22: «залез полтелом внутрь ступеньки, а должен был сразу оказаться сверху»):
             // высота бралась только под центром — центр над нижним полом, а половина кубика уже в ступеньке. Теперь — самая высокая
             // РОВНАЯ площадка под кубиком тела (центр, углы, середины сторон), не выше порога шага. Склоны (наклонная грань) не в счёт —
@@ -1554,6 +1571,7 @@ namespace Fortress.Hero.Proto
 
         void Draw()
         {
+            RightingStep(dtNow);                                       // плавный подъём после физического падения (рисунок)
             Vector3 S = Shoulder;
             lnArm.enabled = drawArmLine;
             lnArm.positionCount = 3;

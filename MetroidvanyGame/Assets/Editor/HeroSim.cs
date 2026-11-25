@@ -198,6 +198,53 @@ namespace Fortress.EditorTools
             return sb.ToString();
         }
 
+        /// <summary>СПУСК СПИНОЙ (зона 9, площадки 1.2 / 1.8 / 4.6): стоишь спиной к краю, кисть на полу перед собой, «от себя» —
+        /// тело уходит за край в вис, опускается вдоль стенки; потом отпустил. Пишет: когда вис, самый большой шаг тела за кадр
+        /// (рывок), до какой высоты опустился, исход отпускания, сторожа (вход в блок и т. п.).</summary>
+        public static string Descent9()
+        {
+            if (!Setup()) return "нет Play / героя";
+            var f = typeof(HeroProto).GetField("shoulderLift", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (f == null || (float)f.GetValue(H) <= 0f) { End(); return "герой ещё не запущен"; }
+            var sb = new StringBuilder("СПУСК СПИНОЙ (зона 9)\n");
+            feelLog.Length = 0;
+            try
+            {
+                float[] hs = { 1.2f, 1.8f, 4.6f }; int[] idx = { 0, 1, 3 };
+                for (int j = 0; j < hs.Length; j++)
+                {
+                    float xc = 0.5f + idx[j] * 3f + 1.2f, h = hs[j];
+                    TP(new Vector3(xc, h, 4.5f), 0f); H.driver = () => Free(); for (int k = 0; k < 5; k++) Step();
+                    H.BeginGrip(new Vector3(xc + 0.2f, 0f, 4.85f)); H.driver = () => Hold(8f);
+                    int f0 = H.fallCount, hangAt = -1; float maxJump = 0f, maxDy = 0f, minLift = 99f, minArm = 99f;
+                    Vector3 prev = new Vector3(H.BodyXZ.x, H.BodyY, H.BodyXZ.z);
+                    int steps = 400;
+                    for (int k = 0; k < steps; k++)
+                    {
+                        Step();
+                        Vector3 now = new Vector3(H.BodyXZ.x, H.BodyY, H.BodyXZ.z);
+                        maxJump = Mathf.Max(maxJump, Vector3.Distance(Flat(now), Flat(prev))); maxDy = Mathf.Max(maxDy, Mathf.Abs(now.y - prev.y)); prev = now;
+                        if (hangAt < 0 && H.Hanging) hangAt = k;
+                        if (H.Hanging) minLift = Mathf.Min(minLift, H.ClimbLift);
+                        if (H.Gripping) minArm = Mathf.Min(minArm, H.DiagArmClearance());
+                        if (k % 25 == 0) sb.Append($"   [{Sec(k)}] z {H.BodyXZ.z:F2} подъём {H.ClimbLift:F2}\n");
+                        if (H.fallCount > f0 || !H.Gripping) break;
+                    }
+                    sb.Append($"{h:F1} м: вис {(hangAt < 0 ? "НЕТ" : "через " + Sec(hangAt))}, опустился до подъёма {(minLift > 50f ? "—" : minLift.ToString("F2"))} м, " +
+                              $"тело z {H.BodyXZ.z:F2} (край 4.00), шаг за кадр макс {maxJump:F3} м / по высоте {maxDy:F3} м, падений {H.fallCount - f0}, хват {(H.Gripping ? "держит" : "отпущен")}, зазор руки мин {minArm:F3} м{(minArm < -0.01f ? " — РУКА СКВОЗЬ" : "")}\n");
+                    // отпустил
+                    float y0 = H.BodyY; H.driver = () => Free(); int fl = H.fallCount; string land = "";
+                    for (int k = 0; k < 300; k++) { Step(); if (H.fallCount > fl && !H.Falling) { land = H.lastLanding; break; } }
+                    for (int k = 0; k < 40; k++) Step();
+                    sb.Append($"   отпустил с {y0:F2}: {(H.fallCount > fl ? "падение — " + land : "без падения")}, оглушён {(H.Stunned ? "да" : "нет")}, тело ({H.BodyXZ.x:F2}, {H.BodyY:F2}, {H.BodyXZ.z:F2})\n");
+                }
+                sb.Append(feelLog.Length > 0 ? "сторожа:" + feelLog : "") .Append(W.Total > 0 ? "\n  " + W.Report() : "\nсторожа: нарушений нет");
+            }
+            finally { End(); }
+            return sb.ToString();
+        }
+        static Vector3 Flat(Vector3 v) => new Vector3(v.x, 0f, v.z);
+
         public static void End() { HeroProto.ManualTick = false; if (H) H.driver = null; }
 
         public static void Step()

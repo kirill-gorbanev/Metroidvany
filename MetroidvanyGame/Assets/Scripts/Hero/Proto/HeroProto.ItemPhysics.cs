@@ -47,7 +47,7 @@ namespace Fortress.Hero.Proto
         public float bodyDepenSpeed = 2f;
 
         public static Collider BodyCollider { get; private set; }
-        Rigidbody bodyRb; BoxCollider bodyBox; int ignoredColliders = -1;
+        Rigidbody bodyRb; BoxCollider bodyBox; int ignoredColliders = -1; bool ignoredFallAll;
 
         /// <summary>Тело в физике всегда (шаг 6): на опоре (земля, платформа, карусель — ход опоры кладёт логика в желаемое место),
         /// в падении (горизонталь — к месту, что считает блок Fall) и в висе на кромке / камне (высота — climbLift логики).
@@ -97,6 +97,7 @@ namespace Fortress.Hero.Proto
             }
             IgnoreWorld();
             bodyRb.mass = Mathf.Max(0.1f, bodyMass);
+            if (falling && PhysFallOn) { PhysFallStep(dt); return; }       // падение — физика Unity (блок Fall), только в состоянии «падаю»
             bodyRb.maxDepenetrationVelocity = bodyDepenSpeed;                      // угол на повороте вошёл в стену — отодвинуть быстро
             Vector3 target = BodyTarget(out Quaternion rot);
             bodyRb.rotation = rot;                                                   // поворот ставит логика
@@ -159,7 +160,7 @@ namespace Fortress.Hero.Proto
             float top = bodyCube.position.y + Mathf.Abs(bodyCube.lossyScale.y) * 0.5f;
             float hgt = Mathf.Max(0.05f, top - bottom);
             if (bodyBox) bodyBox.size = new Vector3(half.x * 2f, hgt, half.y * 2f);
-            rot = Quaternion.Euler(0f, bodyCube.eulerAngles.y, 0f);
+            rot = Quaternion.Euler(0f, rightT < 1f && !falling ? rightYaw : bodyCube.eulerAngles.y, 0f);   // встаёт после падения — поворот логики, не рисунка
             return new Vector3(Body.x, bottom + hgt * 0.5f, Body.z);
         }
 
@@ -170,14 +171,17 @@ namespace Fortress.Hero.Proto
         void IgnoreWorld()
         {
             var all = FindObjectsByType<Collider>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            if (all.Length == ignoredColliders) return;
-            ignoredColliders = all.Length;
+            bool fallAll = falling && PhysFallOn;                                   // в физическом падении — со всем твёрдым
+            if (all.Length == ignoredColliders && fallAll == ignoredFallAll) return;
+            ignoredColliders = all.Length; ignoredFallAll = fallAll;
             foreach (var c in all)
             {
                 if (!c || c == bodyBox) continue;
                 var rb = c.attachedRigidbody;
                 if (rb && rb.GetComponent<ProtoItem>()) continue;
-                Physics.IgnoreCollision(bodyBox, c, !IsWallCollider(c));
+                // в падении на физике — пол, уступы, стены (кроме триггеров и частей самого героя); иначе — только стены
+                bool ignore = fallAll ? (c.isTrigger || (bodyCube && c.transform.IsChildOf(bodyCube.root))) : !IsWallCollider(c);
+                Physics.IgnoreCollision(bodyBox, c, ignore);
             }
         }
     }

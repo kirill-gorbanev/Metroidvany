@@ -355,6 +355,7 @@ namespace Fortress.Hero.Proto
         {
             p = Flat(p);
             foreach (var o in obstacles) if (BoxHitsRect(p, o, 0.001f)) return "стена (препятствие)";
+            bool edge = DescentMove(p);                                      // зеркало Blocked: спуск спиной — обрыв не стена
             if (shoulderSide != 0f)
             {
                 Vector3 S = p + SideOff;
@@ -363,10 +364,11 @@ namespace Fortress.Hero.Proto
                     float cx = Mathf.Clamp(S.x, o.xMin, o.xMax), cz = Mathf.Clamp(S.z, o.yMin, o.yMax);
                     if ((S.x - cx) * (S.x - cx) + (S.z - cz) * (S.z - cz) < ShoulderR * ShoulderR) return "плечо в стене";
                 }
-                if (HasSurface && !ProbeOk(p, S)) return "плечо: уступ выше порога / обрыв";
+                if (HasSurface && !ProbeOk(p, S, edge)) return "плечо: уступ выше порога / обрыв";
             }
-            if (HasSurface && !Climbable(p)) return "центр тела: уступ выше порога / обрыв";
-            if (HasSurface) { int i = 0; foreach (var q in BodyProbes(p)) { if (!ProbeOk(p, q)) return $"угол/бок кубика №{i}: уступ / обрыв"; i++; } }
+            if (HasSurface && (edge ? TooHighAt(p) : !Climbable(p))) return "центр тела: уступ выше порога / обрыв";
+            if (HasSurface && hangFromTop && climbLift > 0.01f && HangOverlaps(p)) return "вис после спуска: тело вошло бы в уступ";
+            if (HasSurface) { int i = 0; foreach (var q in BodyProbes(p)) { if (!ProbeOk(p, q, edge)) return $"угол/бок кубика №{i}: уступ / обрыв"; i++; } }
             if (mode == Mode.Grip && armKeepOut > 0f && ArmToBodyGrip(p, p + SideOff) < armKeepOut) return "рука сквозь тело";
             return "скольжение не нашло хода";
         }
@@ -376,6 +378,7 @@ namespace Fortress.Hero.Proto
         {
             float meters = px * Px1080 * (OnNub ? nubClimbRate : climbPerPx);   // камень — быстрее кромки, как езда (Ledge)
             if (!ClimbGrip) return false;
+            if (meters > 0f) hangFromTop = false;                          // «на себя» — снова подъём (перевал работает)
             float need = ClimbNeed;                                       // уступ — пока не станет ступенькой; камень только для руки — кисть у пояса (Ledge)
             if (meters > 0f)
             {
@@ -385,15 +388,154 @@ namespace Fortress.Hero.Proto
                 climbLift = ZoneLiftLimit(Mathf.Min(climbLift + meters, need));   // не выше края зоны руки (блок Zone): кисть не уходит за спину
                 return true;
             }
-            if (climbLift > 0.001f) { climbLift = Mathf.Max(0f, climbLift + meters); return true; }
+            if (climbLift > 0.001f)
+            {
+                float want = Mathf.Max(0f, climbLift + meters);
+                // ПРАВИЛО 1 (рука не сквозь уступ): после спуска плечо не ниже кисти, пока кисть не на самой кромке (HangHandCreep)
+                if (hangFromTop && !HandAtEdge()) want = Mathf.Max(want, Mathf.Min(climbLift, gripTop + handLift - shoulderLift - groundY));
+                LowerHang(Mathf.Max(LowestHang(), want), true);
+                return true;
+            }
             return false;
+        }
+
+        // ================= СПУСК С УСТУПА СПИНОЙ (кусок 2; идея из 4ae4d5b, только спуск, локально) =================
+        // Автор 2026-11-25: «стою на уступе спиной к краю, держусь кистью за верх перед собой, толкаю „от себя“ — тело уходит за край
+        // и повисает на кромке; дальше „от себя“ плавно опускает вдоль стенки; отпустил низко — встаю, высоко — падаю».
+        // Локально: обрыв перестаёт быть стеной ТОЛЬКО для хода ОТ кисти, когда кисть держит поверхность твоего уровня (не зацеп, не
+        // съезжает, не вис). Ход к кисти, свободная кисть, зацепы, склоны — старые правила «обрыв = стена» как были.
+        [Tooltip("Спуск спиной: держишься за пол своего уровня, ход от кисти — край обрыва не стена, центр за краем — вис на кромке.")]
+        public bool allowDescent = true;
+        /// <summary>Вис после схода с края: перевал сам не тянет обратно на уступ, пока не потянешь «на себя».</summary>
+        bool hangFromTop;
+
+        /// <summary>Кисть держит поверхность на уровне тела (пол уступа, на котором стоишь) — можно сойти с края спиной.</summary>
+        bool DescentGrip => allowDescent && mode == Mode.Grip && !gripHold && !gripSlip && climbLift <= 0.01f
+                            && gripTop >= groundY - 0.03f && gripTop <= groundY + maxStep;
+        /// <summary>Ход в p уводит тело от кисти — обрыв для него не стена (спуск).</summary>
+        /// (Не ближе к кисти, чем сейчас: и само текущее место — иначе «тело в стене» на краю выталкивало его вперёд.)
+        bool DescentMove(Vector3 p) => DescentGrip && Flat(p - gripHand).sqrMagnitude >= Flat(Body - gripHand).sqrMagnitude - 1e-6f;
+        bool TooHighAt(Vector3 q) => float.IsInfinity(LevelHeight(q, BodyLevel, maxStep));
+
+        /// <summary>РУКА ПРЯМАЯ, ЗА СПИНОЙ ОБРЫВ — КИСТЬ СПОЛЗАЕТ ВСЛЕД (автор 2026-11-25, скрины: «оно не опускается» — тело вставало
+        /// у края: кончилась рука, а не край). Держишься за пол уступа, тело в дальнем конце хода, позади — обрыв: «от себя» дальше
+        /// ведёт тело назад, кисть едет по полу следом (рука прямая), пока центр не уйдёт за край (Place → вис). Кисть за край
+        /// не уходит. Раньше в этом месте был срыв «спиной с края» (Fall) — теперь сход в вис. true — жест ушёл в сход.</summary>
+        bool DescentDrag(float alongPx)
+        {
+            if (alongPx >= 0f || !DescentGrip || gripAge < letGoGrace) return false;
+            if (tTarget > 0.01f || t > 0.15f) return false;                         // жест ещё не дожат до дальнего конца — обычная езда
+            Vector3 away = Flat(farEnd - nearEnd); if (away.sqrMagnitude < 1e-6f) return false;
+            away.Normalize();
+            if (!DropAt(Body + away * (BodyReach + 0.08f))) return false;           // позади не обрыв — рука просто прямая (стоп, как было)
+            float m = Mathf.Min(-alongPx * Px1080 * climbPerPx, 0.03f);
+            float hl = LevelHeight(gripHand + away * m, gripTop + 0.01f, 0.05f);
+            if (float.IsInfinity(hl) || hl < gripTop - 0.02f) return false;     // кисть дошла бы до края — дальше не едет
+            if (InObstacle(gripHand + away * m, 0.03f)) return false;              // ПРАВИЛО 1: кисть не в стену
+            Vector3 np = Slide(Body, away * m);
+            if ((np - Body).sqrMagnitude < 1e-10f) return false;
+            Vector3 d = Flat(np - Body);
+            MoveBodyXZ(np.x, np.z);
+            gripHand += d; farEnd += d; nearEnd += d; hand = gripHand;
+            gestureOwner = "сход спиной";
+            return true;
+        }
+
+        [Tooltip("Вис после спуска: кисть по верху уступа доползает до кромки с этой скоростью (м/с) — рука не режет угол уступа.")]
+        public float hangHandCreep = 0.5f;
+
+        /// <summary>Кисть на самой кромке: шаг 1 см к плечу — уже не верх уступа.</summary>
+        bool HandAtEdge()
+        {
+            Vector3 v = Flat(Shoulder - gripHand); if (v.sqrMagnitude < 1e-8f) return true;
+            float h = LevelHeight(gripHand + v.normalized * 0.01f, gripTop + 0.01f, 0.05f);
+            return float.IsInfinity(h) || h < gripTop - 0.02f;
+        }
+
+        /// <summary>КИСТЬ ДОПОЛЗАЕТ ДО КРОМКИ (автор 2026-11-25: «рука теперь пролезает сквозь стены — рука и тело НЕ могут проходить
+        /// насквозь»; «никаких телепортов — через секвенцию»). Висишь после спуска, а кисть в глубине уступа — прямая плечо → кисть
+        /// режет угол блока, как только плечо ниже верха. Кисть плавно (hangHandCreep) ползёт по верху к плечу, до самой кромки;
+        /// в стену (препятствие) не заходит. Опускание ниже кисти ждёт её (ClimbConvert).</summary>
+        void HangHandCreep(float dt)
+        {
+            if (!hangFromTop || mode != Mode.Grip || gripHold || climbLift <= 0.01f) return;
+            Vector3 v = Flat(Shoulder - gripHand); float dh = v.magnitude;
+            if (dh < 1e-4f) return;
+            v /= dh;
+            float go = Mathf.Min(hangHandCreep * dt, dh), moved = 0f;
+            for (float s = 0.002f; s <= go + 1e-5f; s += 0.002f)
+            {
+                Vector3 q = gripHand + v * s;
+                float h = LevelHeight(q, gripTop + 0.01f, 0.05f);
+                if (float.IsInfinity(h) || h < gripTop - 0.02f || InObstacle(q, 0.03f)) break;   // кромка / стена — дальше не идёт
+                moved = s;
+            }
+            if (moved <= 0f) return;
+            gripHand += v * moved; hand = gripHand;
+            float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0);   // линия — через новую кисть; тело не едет
+        }
+
+        /// <summary>Ниже этого подъёма не опуститься: рука прямая (плечо — кисть по 3D не длиннее руки).</summary>
+        float LowestHang()
+        {
+            if (mode != Mode.Grip) return 0f;
+            float dh = Flat(gripHand - Shoulder).magnitude, Lr = L - 0.01f;
+            float dv = dh >= Lr ? 0f : Mathf.Sqrt(Lr * Lr - dh * dh);                // плечо ниже кисти не больше чем на dv
+            return Mathf.Clamp(gripTop + handLift - dv - groundY - shoulderLift, 0f, climbLift);
+        }
+
+        /// <summary>ВНИЗ — ВДОЛЬ СТЕНКИ, НЕ В НЕЁ (из 4ae4d5b): вис опускается до lift; на новой высоте тело зашло бы в уступ — сначала
+        /// отходит от стенки на тот же шаг (одно движение «вниз и от стенки»), не дальше руки.</summary>
+        void LowerHang(float lift, bool armCap)
+        {
+            float step = climbLift - lift; if (step <= 0f) { climbLift = lift; return; }
+            float was = climbLift;
+            climbLift = lift;
+            if (!HangOverlaps(Body)) return;
+            climbLift = was;
+            Vector3 away = Flat(Body - (mode == Mode.Grip ? gripHand : hand)); float am = away.magnitude;
+            if (am < 1e-4f) away = -Face; else away /= am;
+            // отход ОТ стенки — уступ, с которого перекрытие, не преграда (пробы углов меряют от центра и видят его «стеной»);
+            // не пускают только стены и твёрдое под самим центром
+            Vector3 np = Body + away * step;
+            if (HasSurface && TooHighAt(np)) return;
+            if (!PhysBodyActive) foreach (var o in obstacles) if (BoxHitsRect(np, o, 0.001f)) return;   // отойти некуда — не опускается (не в блок)
+            if (armCap && mode == Mode.Grip && (new Vector3(gripHand.x, gripTop + handLift, gripHand.z) - (Flat(np) + SideOff + Vector3.up * ShoulderY)).magnitude > L - 0.01f) return;   // рука не пустит дальше
+            MoveBodyXZ(np.x, np.z);
+            if (mode == Mode.Grip) { float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0); }
+        }
+
+        /// <summary>Висящее тело (низ на высоте BodyLevel) перекрылось бы с уступом: луч вверх от низа тела изнутри упирается в верхнюю
+        /// грань (центр, углы, середины сторон). Крыша / мост над телом — нижняя грань — не перекрытие.</summary>
+        bool HangOverlaps(Vector3 c)
+        {
+            if (!HasSurface) return false;
+            float bottom = BodyLevel + 0.005f;
+            bool InSolid(Vector3 q) => RayHit(new Ray(new Vector3(q.x, bottom, q.z), Vector3.up), false, out _, out var nu) && nu.y > 0.1f;
+            if (InSolid(c)) return true;
+            foreach (var q in BodyProbes(c)) if (InSolid(q)) return true;
+            return false;
+        }
+
+        /// <summary>Сход с края в вис (из Place): кисть держит пол уступа, центр тела ушёл за край — не падение, а вис на этой кромке.
+        /// Уровень опоры — пол внизу, тело на прежней высоте (climbLift = перепад). true — перешёл в вис.</summary>
+        bool DescentToHang(float gCenter)
+        {
+            if (falling || !DescentGrip || float.IsInfinity(gCenter) || gCenter >= groundY - maxDrop - 0.02f) return false;
+            float total = groundY;
+            groundY = gCenter; climbLift = total - gCenter;
+            gripTop = Mathf.Max(gripTop, total);                                     // кромка — верх уступа, с которого сошёл
+            hangFromTop = true;
+            tTarget = t;                                                             // остаток хода назад погашен: висишь у кромки
+            return true;
         }
 
         /// <summary>ПЕРЕВАЛ: поднялся настолько, что уступ стал ступенькой, — тело само заходит на него к кисти (пока держишься).
         /// Иначе короткая рука на высоком уступе (кисть у самой кромки) не довела бы тело за кромку.</summary>
         void MantleStep(float dt)
         {
-            if (!ClimbGrip || OnNub) return;                              // через камень не перевалить (Ledge)
+            if (mode != Mode.Grip || climbLift <= 0.001f) hangFromTop = false;
+            if (!ClimbGrip || OnNub || hangFromTop) return;               // через камень не перевалить (Ledge); сошёл с края — висишь
             float need = gripTop - groundY - maxStep + 0.03f;
             if (climbLift < need - 1e-3f) return;
             Vector3 dir = Flat(gripHand - Body); float d = dir.magnitude;
@@ -409,13 +551,15 @@ namespace Fortress.Hero.Proto
         {
             sinceHold = (OnHold || (mode == Mode.Free && hoverHold)) ? 0f : sinceHold + dt;
             if (mode == Mode.Grip) ArmReachStep();
+            HangHandCreep(dt);                                            // вис после спуска: кисть к кромке (рука не сквозь уступ)
             MantleStep(dt);
             crestFlash = Mathf.Max(0f, crestFlash - dt); slipFlash = Mathf.Max(0f, slipFlash - dt);
             bool holding = ClimbGrip && climbLift > 0f;
             if (holding) return;
             if (allowFall && climbLift > maxDrop + 0.01f) { StartFall("отпустил вис", Vector3.zero, Vector3.zero); return; }   // над полом глубже порога — падение (Fall)
             if (Mathf.Abs(climbLift) < 0.002f) { climbLift = 0f; return; }
-            climbLift = Mathf.Lerp(climbLift, 0f, 1f - Mathf.Exp(-fallBack * dt));    // назад вниз / докатиться на уступ
+            // назад вниз / докатиться на уступ — как было; после спуска — вдоль стенки, не в неё (LowerHang: без перекрытия — то же самое)
+            LowerHang(Mathf.Lerp(climbLift, 0f, 1f - Mathf.Exp(-fallBack * dt)), false);
         }
 
         /// <summary>РУКА НЕ ДЛИННЕЕ ДОСЯГАЕМОСТИ: досягаемость по полу меняется с высотой (тело опустилось под высоким зацепом,

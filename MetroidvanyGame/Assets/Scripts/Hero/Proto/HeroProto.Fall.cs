@@ -40,7 +40,7 @@ namespace Fortress.Hero.Proto
         public bool Stunned => stunT > 0f;
         public bool DiagRespawned { get; private set; }
 
-        void FallReset() { falling = false; fallVy = 0f; stunT = 0f; fallPx = 0f; fallCount = deathCount = catchCount = 0; lastLanding = ""; }
+        void FallReset() { if (falling && bodyRb) RestoreBodyRb(); rightT = 1f; falling = false; fallVy = 0f; stunT = 0f; fallPx = 0f; fallCount = deathCount = catchCount = 0; lastLanding = ""; }
 
         /// <summary>Перепад под точкой глубже maxDrop (обрыв), а не стена и не ступень.</summary>
         bool DropAt(Vector3 q)
@@ -61,13 +61,105 @@ namespace Fortress.Hero.Proto
             fallClearT = fallClearDir.sqrMagnitude > 0f ? fallClearTime : 0f;
             rideMover = null; slideV = 0f; steepTimer = 0f; fallPx = 0f;
             hand = Flat(Shoulder + Face * 0.35f);                          // кисть сразу перед плечом: не тянется через тело с пола
+            if (PhysFallOn) { fallClearT = 0f; physFallT = 0f; physFallInit = false; physStillT = 0f; }   // от кромки — сама физика (опрокинется, соскользнёт)
+        }
+
+        // ================= ПАДЕНИЕ НА ФИЗИКЕ UNITY (кусок 1 спуска и падения, идея b54cf18 на базе af641ab) =================
+        // Автор 2026-11-25: «оставить физичность — на краю через физику могу упасть; нет разгона от гравитации»; «давай больше на физику
+        // Unity». Физика включается ЛОКАЛЬНО — только в состоянии «падаю»: ходьба, опора, вис, стены — прежняя логика, правила не меняются.
+        // Падение — настоящий Rigidbody: гравитация Unity, вращение свободно, столкновения со всем твёрдым (пол, уступы, стены):
+        // центр за краем — тело само опрокидывается через кромку и соскальзывает. Кубик тела рисуется по физике. Затих на опоре —
+        // логика снова ставит тело прямо на эту опору (цена — как была, по высоте падения), встаёт прямо плавно (только рисунок).
+        [Tooltip("Падение — физика Unity (гравитация, вращение, столкновения). Выкл — прежний скриптовый полёт.")]
+        public bool physicsFall = true;
+        bool PhysFallOn => physicsFall && itemPhysics && bodyRb;
+        float physFallT; bool physFallInit; float physStillT; PhysicsMaterial fallMat, slipMat;
+        Quaternion rightFrom; float rightT = 1f, rightYaw; const float RightTime = 0.3f;
+
+        /// <summary>После физического падения тело встаёт прямо плавно: рисунок кубика — от позы, в которой легло, к прямой (логика уже
+        /// считает его прямым). Вызывается в конце шага (Draw), поверх логики.</summary>
+        void RightingStep(float dt)
+        {
+            if (rightT >= 1f || falling) return;
+            rightT = Mathf.Min(1f, rightT + dt / RightTime);
+            float k = rightT * rightT * (3f - 2f * rightT);
+            bodyCube.rotation = Quaternion.Slerp(rightFrom, Quaternion.Euler(0f, rightYaw, 0f), k);   // только рисунок
+        }
+        /// <summary>Начало шага: логика видит тело прямым (наклон подъёма — только рисунок конца шага).</summary>
+        void RightingUndo() { if (rightT < 1f && !falling) bodyCube.rotation = Quaternion.Euler(0f, rightYaw, 0f); }
+
+        /// <summary>Шаг физики в падении (вместо обычного шага тела в PhysicsStep): тело — Rigidbody с гравитацией;
+        /// после шага кубик тела — по физике; затих на опоре — посадка.</summary>
+        void PhysFallStep(float dt)
+        {
+            float hgt = Mathf.Abs(bodyCube.lossyScale.y);
+            if (!physFallInit)
+            {
+                physFallInit = true;
+                Vector2 half = BodyHalf;
+                bodyBox.size = new Vector3(half.x * 2f, hgt, half.y * 2f);
+                bodyRb.constraints = RigidbodyConstraints.None;
+                bodyRb.useGravity = true;
+                bodyRb.maxDepenetrationVelocity = 1f;
+                bodyRb.position = new Vector3(Body.x, fallY + hgt * 0.5f, Body.z);
+                bodyRb.rotation = bodyCube.rotation;
+                // отступ от кромки — не скриптом, а начальной скоростью: спиной с края центр ещё на уступе (край был упором),
+                // толчок «от себя» уводит его за кромку, дальше опрокидывание и соскальзывание — физика
+                Vector3 push = fallClearDir * (fallClearDist / Mathf.Max(0.01f, fallClearTime));
+                bodyRb.linearVelocity = new Vector3(fallVel.x + push.x, -fallVy, fallVel.z + push.z);
+                bodyRb.angularVelocity = Vector3.zero;
+                bodyRb.angularDamping = 0.5f;
+                slipMat = bodyBox.sharedMaterial;                           // у стен тело скользкое; в падении — обычное трение (затихает)
+                if (fallMat == null) fallMat = new PhysicsMaterial("Тело (падение)") { dynamicFriction = 0.6f, staticFriction = 0.7f, bounciness = 0.05f,
+                    frictionCombine = PhysicsMaterialCombine.Average, bounceCombine = PhysicsMaterialCombine.Minimum };
+                bodyBox.sharedMaterial = fallMat;
+                IgnoreWorld();                                              // столкновения — со всем твёрдым
+            }
+            CarryPhysicsStep(dt);
+            Physics.Simulate(dt);
+            physFallT += dt;
+            Vector3 v = bodyRb.linearVelocity;
+            if (v.y < -fallMaxSpeed) bodyRb.linearVelocity = new Vector3(v.x, -fallMaxSpeed, v.z);
+            bodyCube.SetPositionAndRotation(bodyRb.position, bodyRb.rotation);
+            fallY = bodyRb.position.y - hgt * 0.5f;                         // для ловли в полёте и цены падения
+            // затих на опоре — посадка (не сразу после старта: тело ещё лежит на кромке, с которой срывается)
+            bool still = bodyRb.linearVelocity.magnitude < 0.06f && bodyRb.angularVelocity.magnitude < 0.4f;
+            physStillT = still ? physStillT + dt : 0f;
+            if ((physFallT > 0.15f && physStillT > 0.08f) || physFallT > 3f) PhysLand();   // затих — или 3 с (застрял, крутится) — посадка
+        }
+
+        /// <summary>Посадка после физического падения: тело прямо (поворот — только вокруг вертикали), на опору под собой.</summary>
+        void PhysLand()
+        {
+            float yaw = Vector3.SignedAngle(Vector3.forward, Flat(bodyCube.forward).sqrMagnitude > 1e-4f ? Flat(bodyCube.forward) : Flat(bodyCube.up), Vector3.up);
+            float low = bodyRb.position.y - Mathf.Abs(bodyCube.lossyScale.y) * 0.5f;
+            Quaternion lay = bodyCube.rotation;
+            bodyCube.rotation = Quaternion.Euler(0f, yaw, 0f);
+            float ground = LevelHit(Body, low + 0.1f, 0.15f, out var mover, out var n);
+            if (float.IsInfinity(ground)) ground = low;
+            RestoreBodyRb();
+            Land(ground, mover, n);
+            if (!falling && !DiagRespawned) { rightFrom = lay; rightT = 0f; rightYaw = yaw; bodyCube.rotation = lay; }   // в кадре посадки рисунок — как легло (выпрямится плавно)
+        }
+
+        /// <summary>Тело снова «логическое»: без гравитации, высоту ставит логика, вращение — только логикой.</summary>
+        void RestoreBodyRb()
+        {
+            if (!bodyRb) return;
+            bodyRb.useGravity = false;
+            bodyRb.constraints = RigidbodyConstraints.FreezeRotation | RigidbodyConstraints.FreezePositionY;
+            bodyRb.linearVelocity = Vector3.zero; bodyRb.angularVelocity = Vector3.zero;
+            bodyRb.maxDepenetrationVelocity = bodyDepenSpeed;
+            if (slipMat != null && bodyBox) bodyBox.sharedMaterial = slipMat;
+            physFallInit = false;
+            ignoredColliders = -1;                                          // столкновения — снова только со стенами (IgnoreWorld)
         }
 
         /// <summary>СПИНОЙ С КРАЯ: жест «от себя» ведёт тело назад (от лица), тело упёрлось в обрыв — копим px, дожал — сорвался.
         /// true — жест ушёл в дожим (тело не едет).</summary>
         bool BackFallPush(float alongPx)
         {
-            if (!allowFall || mode != Mode.Grip || Hanging || alongPx >= 0f || gripAge < letGoGrace) { if (alongPx > 0f || gripAge < letGoGrace) fallPx = 0f; return false; }
+            if (!allowFall || mode != Mode.Grip || Hanging || (allowDescent && !gripHold) || alongPx >= 0f || gripAge < letGoGrace) { if (alongPx > 0f || gripAge < letGoGrace) fallPx = 0f; return false; }
             Vector3 away = Flat(farEnd - nearEnd);                          // «от себя» — от кисти
             if (away.sqrMagnitude < 1e-6f) return false;
             away.Normalize();
@@ -102,6 +194,7 @@ namespace Fortress.Hero.Proto
                 hoverHold = hh; hoverS = hs;
                 if (inp.down)
                 {
+                    if (PhysFallOn) { bodyCube.rotation = Quaternion.Euler(0f, bodyCube.eulerAngles.y, 0f); RestoreBodyRb(); }   // из физики — снова логика
                     float g = LevelHit(Body, fallY, 0.01f, out _, out _);
                     groundY = g; climbLift = Mathf.Max(0f, fallY - g); falling = false; catchCount++;
                     lastLanding = $"поймал «{hh.name}» в полёте ({fallStartY - fallY:F2} м)";
@@ -110,6 +203,7 @@ namespace Fortress.Hero.Proto
                 }
             }
             hand = Flat(Shoulder + Face * 0.35f);                          // кисть перед плечом и в отступе, и в полёте (не через тело)
+            if (PhysFallOn) return;                                         // ПАДЕНИЕ НА ФИЗИКЕ UNITY — полёт и посадку ведёт PhysFallStep
             // горизонталь: отступ от кромки + перенесённая скорость; стены — препятствия и всё выше текущей высоты
             Vector3 move = fallVel * dt;
             if (fallClearT > 0f) { float k = Mathf.Min(dt, fallClearT); move += fallClearDir * (fallClearDist / fallClearTime) * k; fallClearT -= dt; }
