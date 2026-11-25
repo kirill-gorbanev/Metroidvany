@@ -47,7 +47,7 @@ namespace Fortress.Hero.Proto
         public float bodyDepenSpeed = 2f;
 
         public static Collider BodyCollider { get; private set; }
-        Rigidbody bodyRb; BoxCollider bodyBox; int ignoredColliders = -1, ignoredWallVersion = -1; bool ignoredFallAll;
+        Rigidbody bodyRb; BoxCollider bodyBox; int ignoredColliders = -1, ignoredWallVersion = -1, ignoredLevelKey = int.MinValue; bool ignoredFallAll;
 
         /// <summary>Тело в физике всегда (шаг 6): на опоре (земля, платформа, карусель — ход опоры кладёт логика в желаемое место),
         /// в падении (горизонталь — к месту, что считает блок Fall) и в висе на кромке / камне (высота — climbLift логики).
@@ -165,13 +165,18 @@ namespace Fortress.Hero.Proto
         }
 
         /// <summary>Стена (препятствие арены): коллайдер под obstaclesRoot.</summary>
-        bool IsWallCollider(Collider c) => c && obstaclesRoot && c.transform.IsChildOf(obstaclesRoot) && !IsLowWallTop(c.bounds.max.y);   // не выше опоры + climbUp — рельеф (логика)
+        // ХОД ПО ПОЛУ — ФИЗИКА (кусок 4; автор 2026-11-25: «больше на физику Unity»): блок, который для тела уже не ступенька (верх выше
+        // уровня тела больше порога шага), — для физического тела стена: упор и скольжение вдоль — силами физики, не правилами углов
+        // (на них тело застревало у углов блоков). Ступенька (не выше порога) — логика (шаг на неё), перевал — логика.
+        bool IsWallCollider(Collider c) => c && obstaclesRoot && c.transform.IsChildOf(obstaclesRoot) && c.bounds.max.y > BodyLevel + maxStep + 0.001f;
 
         /// <summary>Тело в физике сталкивается с предметами и СТЕНАМИ (шаг 4 плана, 2026-11-23); рельеф, ступени, платформы — логика.</summary>
         void IgnoreWorld()
         {
             var all = FindObjectsByType<Collider>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            if (all.Length == ignoredColliders && wallClassVersion == ignoredWallVersion && (falling && PhysFallOn) == ignoredFallAll) return;
+            int levelKey = Mathf.RoundToInt(BodyLevel * 50f);                   // уровень тела сменился на 2 см — стены / ступени заново
+            if (all.Length == ignoredColliders && wallClassVersion == ignoredWallVersion && (falling && PhysFallOn) == ignoredFallAll && levelKey == ignoredLevelKey) return;
+            ignoredLevelKey = levelKey;
             ignoredFallAll = falling && PhysFallOn;   // стена стала рельефом (или обратно) — пересчёт
             ignoredColliders = all.Length; ignoredWallVersion = wallClassVersion;
             foreach (var c in all)
