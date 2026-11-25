@@ -17,8 +17,8 @@ TagManager:
   - RigBody
   - RigProbe
   - RigMover
-  - 
-  - 
+  - HeroArm
+  - Item
   - 
   - 
   - 

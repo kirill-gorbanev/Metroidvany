@@ -41,7 +41,8 @@ namespace Fortress.Hero.Proto
         Vector3 grabLocal;                   // точка хвата в координатах предмета
         Vector3 dragTarget;                  // цель кисти (XZ) — за курсором
         float carryLift;                     // высота низа предмета в руке от уровня тела — курсором за зоной
-        Vector3 carryTc; float carrySpeedNow; bool carryCanLift, carryHave;   // тяга руки — для фиксированных шагов физики
+        Vector3 carryTc; float carrySpeedNow; bool carryCanLift, carryHave;
+        Vector3 carryGoodTc; bool carryGoodHave;                           // ПРАВИЛО 1: последняя цель, до которой рука шла мимо твёрдого   // тяга руки — для фиксированных шагов физики
         bool carryAir;                       // зона 2: курсор за синей зоной сверху — ход мыши ведёт кисть в вертикальной плоскости
         Vector3 carryAirGoal; bool carryAirGoalSet; float carryAirOutY;   // зона 2: сырая цель кисти (ход мыши) и последняя выданная высота
         bool carryOnSupport;                 // предмет в руке стоит на опоре (высота упёрлась в опору / голову) — касание сверху
@@ -137,7 +138,7 @@ namespace Fortress.Hero.Proto
         /// на несомом (живая физика); пол, рельеф, стены, застывшие предметы — да.</summary>
         bool CarrySurfaceCollider(Collider c)
         {
-            if (!c || c.isTrigger || c == BodyCollider || c.transform.IsChildOf(transform)) return false;
+            if (!c || c.isTrigger || c == BodyCollider || c.transform.IsChildOf(transform) || c == armUpperCol || c == armForeCol) return false;   // своя рука — не поверхность
             var rb = c.attachedRigidbody;
             if (dragItem && rb == dragItem.Body) return false;
             return !rb || rb.isKinematic;
@@ -257,6 +258,9 @@ namespace Fortress.Hero.Proto
         {
             Vector3 v = Flat(q - Shoulder);
             if (v.magnitude > L + 0.03f || ArmThroughBody(q)) return false;
+            // ПРАВИЛО 1 (автор 2026-11-25, скрин: кисть на предмете за высоким блоком, рука сквозь блок): рука до точки должна пройти
+            // мимо твёрдого (стены, блоки, другие предметы и сам этот предмет) — иначе предмет не ловится
+            if (armNoSolid && !ArmPhysOn && !ArmPose(Shoulder3, ArmClampLen(q), out _, out _)) return false;   // рука на физике — упор решает она
             // стена между плечом и точкой — только если она выше руки над ней (автор 2026-11-24, лаборатория: «без предмета руку не
             // поднять» — предмет на тумбе не ловился: тумба считалась стеной во всю высоту). Рука — прямая от плеча до точки.
             for (int i = 0; i < obstacles.Count; i++)
@@ -278,6 +282,7 @@ namespace Fortress.Hero.Proto
             dragItem = it;
             carryLift = b.min.y - BodyLevel;                           // высота — та, на которой лежал
             carryHave = false;                                         // тяги ещё нет — до первого шага переноса
+            carryGoodHave = false;                                     // ПРАВИЛО 1: прошлой «хорошей» цели ещё нет
             carryAir = false; carryFloorOff = Vector3.zero; carryJustGrabbed = true; carryHover = 0f;
             FreezeOthers(it);
             it.BeginCarry();
@@ -420,6 +425,19 @@ namespace Fortress.Hero.Proto
             carryHover = Mathf.MoveTowards(carryHover, 0.01f, 0.1f * dt);
             tc.y = BodyLevel + carryLift + (com.y - b.min.y) + carryHover;
             float m = Mathf.Max(0.05f, it.Body.mass);
+            // ПРАВИЛО 1 (рука не сквозь твёрдое) и при переносе: цель предмета такая, чтобы рука до кисти на нём прошла мимо стен
+            // и других предметов. Нет — цель скользит вдоль преграды (ход без составляющей по нормали, ПРАВИЛО 2) или стоит.
+            if (armNoSolid && !ArmPhysOn)                                     // рука на физике — упор руки решает физика (рука не достаёт — предмет выпадает, блок ArmPhysics)
+            {
+                Vector3 off = grabW - com;
+                if (!ArmPose(Shoulder3, ArmClampLen(tc + off), out _, out var cn) && carryGoodHave)
+                {
+                    Vector3 dl = tc - carryGoodTc, nf = cn.sqrMagnitude > 1e-6f ? cn.normalized : Vector3.zero;
+                    Vector3 slid = carryGoodTc + dl - nf * Mathf.Min(0f, Vector3.Dot(dl, nf));
+                    tc = ArmPose(Shoulder3, ArmClampLen(slid + off), out _, out _) ? slid : carryGoodTc;
+                }
+                else { carryGoodTc = tc; carryGoodHave = true; }
+            }
             carryTc = tc; carryHave = true;                                                        // тягу задаёт каждый фиксированный шаг физики (CarryPhysicsStep)
             carrySpeedNow = carryMaxSpeed * Mathf.Min(1f, carrySpeedMass / m);
             carryCanLift = m * -Physics.gravity.y < carryForce;

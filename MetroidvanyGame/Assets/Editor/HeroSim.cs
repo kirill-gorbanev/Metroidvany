@@ -198,6 +198,154 @@ namespace Fortress.EditorTools
             return sb.ToString();
         }
 
+        // ================= ПОЛИГОН РУКИ: ЗАМЕР ПО СТАНЦИЯМ (HeroArmCourse) =================
+        /// <summary>Меню: прогон замера полигона руки (сцена HeroArmCourse, в Play). Отчёт — в консоль и в tools/herosim/out/arm_course.txt.</summary>
+        [UnityEditor.MenuItem("Fortress/Hero/Arm Course: замер (в Play)")]
+        public static void ArmCourseMenu()
+        {
+            string r = ArmCourse();
+            Debug.Log(r);
+            try { System.IO.File.WriteAllText(System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "../../tools/herosim/out/arm_course.txt")), r); } catch { }
+        }
+
+        static System.Reflection.FieldInfo fHover, fHoverHold, fArmTgtH, fShoulderLift;
+        static object Fld(ref System.Reflection.FieldInfo f, string n)
+        {
+            if (f == null) f = typeof(HeroProto).GetField(n, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+            return f != null ? f.GetValue(H) : null;
+        }
+
+        /// <summary>Звено руки a → b (без 4 см у концов, толщина 1 см) в твёрдом: items = false — стены, блоки, тумбы, уступы, пол, своё тело;
+        /// items = true — лежащие предметы (кроме того, что в руке).</summary>
+        static bool ArmSegIn(Vector3 a, Vector3 b, bool items)
+        {
+            Vector3 d = b - a; float len = d.magnitude;
+            if (len < 0.09f) return false;
+            d /= len;
+            int armL = LayerMask.NameToLayer("HeroArm");
+            foreach (var c in Physics.OverlapCapsule(a + d * 0.04f, b - d * 0.04f, 0.01f, ~0, QueryTriggerInteraction.Ignore))
+            {
+                if (!c || c.isTrigger || (armL >= 0 && c.gameObject.layer == armL)) continue;
+                var rb = c.attachedRigidbody;
+                bool isItem = rb && rb.GetComponent<ProtoItem>();
+                if (isItem) { if (!items || (H.DraggedItem && rb == H.DraggedItem.Body)) continue; return true; }
+                if (items) continue;
+                if (H.bodyCube && c.transform.IsChildOf(H.bodyCube.root) && c != HeroProto.BodyCollider) continue;
+                return true;
+            }
+            return false;
+        }
+
+        class ArmStat
+        {
+            public int frames, inSolid, inItem, jitter, floating, bodyPushed, itemsPushed, tries, ok; public float maxLag, ms;
+            public string Line(string name) =>
+                $"{name}: успех {ok}/{tries} | рука в твёрдом {inSolid} кадр. | в предмете {inItem} | дрожь {jitter} | кисть в воздухе {floating} | " +
+                $"тело толкнуто {bodyPushed} | чужих предметов сдвинуто {itemsPushed} | отставание кисти макс {maxLag:F2} м | {(frames > 0 ? ms / frames : 0f):F2} мс/кадр";
+        }
+
+        /// <summary>Один кадр под замером: шаг, время, рука в твёрдом / в предмете, дрожь (кисть прыгнула больше своей цели на 2+ см),
+        /// кисть в воздухе (свободна, не на предмете / зацепе, выше поверхности под собой на 8+ см), тело сдвинулось без хвата.</summary>
+        static void ArmFrame(ArmStat s, ref Vector3 prevH, ref Vector3 prevT, ref Vector3 prevB)
+        {
+            bool wasGrip = H.Gripping;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Step();
+            s.ms += (float)sw.Elapsed.TotalMilliseconds; s.frames++;
+            Vector3 S = H.shoulderCube.position, E = H.elbowCube.position, Hh = H.handCube.position;
+            if (ArmSegIn(S, E, false) || ArmSegIn(E, Hh, false)) s.inSolid++;
+            if (ArmSegIn(S, E, true) || ArmSegIn(E, Hh, true)) s.inItem++;
+            object tg = Fld(ref fArmTgtH, "armTgtH"); Vector3 T = tg is Vector3 v ? v : Hh;
+            if ((Hh - prevH).magnitude - (T - prevT).magnitude > 0.02f) s.jitter++;
+            s.maxLag = Mathf.Max(s.maxLag, H.DiagArmPhysLag);
+            bool hover = Fld(ref fHover, "hoverItem") as Object, hoverHold = Fld(ref fHoverHold, "hoverHold") as Object;
+            if (!H.Gripping && !H.DraggedItem && !hover && !hoverHold)
+            {
+                float hs = H.HandLevelAt(Hh);
+                if (!float.IsInfinity(hs) && Hh.y - hs > 0.08f) s.floating++;
+            }
+            Vector3 B = new Vector3(H.BodyXZ.x, H.BodyY, H.BodyXZ.z);
+            if (!wasGrip && !H.Gripping && Flat(B - prevB).magnitude > 0.01f) s.bodyPushed++;
+            prevH = Hh; prevT = T; prevB = B;
+        }
+
+        static HeroProto.InputFrame Cursor(Vector3 world, bool pressed, bool down, float dy = 0f)
+        {
+            Vector3 sp = H.cam.WorldToScreenPoint(world);
+            return new HeroProto.InputFrame { pos = new Vector2(sp.x, sp.y + dy) - new Vector2(0f, H.inputShift * Screen.height), pressed = pressed, down = down };
+        }
+
+        /// <summary>ПОЛИГОН РУКИ — прогон всех станций (HeroArmCourse). reach: навести на цель 25 кадров, ЛКМ, тянуть вверх 20 кадров,
+        /// отпустить; hold: навести, ЛКМ, держать — хват за зацеп; climb: стенд подъёма (HeroSim.Stand); descent: спуск спиной с 1.2.
+        /// Итог — строка на станцию и общая строка: для оценки контроллера руки (документ и промт для нового контроллера).</summary>
+        public static string ArmCourse()
+        {
+            if (!Setup()) return "нет Play / героя (открой сцену HeroArmCourse и войди в Play)";
+            if (!(Fld(ref fShoulderLift, "shoulderLift") is float sl) || sl <= 0f) { End(); return "герой ещё не запущен"; }
+            var sb = new StringBuilder("ПОЛИГОН РУКИ (HeroArmCourse)\n");
+            var total = new ArmStat();
+            try
+            {
+                foreach (var st in HeroArmCourse.Stations)
+                {
+                    var s = new ArmStat(); string extra = "";
+                    for (int k = 0; k < st.targets.Length; k++)
+                    {
+                        Vector3 tgt = st.targets[k];
+                        if (st.kind == "climb")
+                        {
+                            s.tries++;
+                            sb.Append("  ").Append(Stand($"{st.name} · {tgt.y:0.0}", new Vector3(tgt.x, 0f, 1.3f), 0f, tgt, st.expect[k], 120, out bool okC, out _)).Append('\n');
+                            if (okC == st.expect[k]) s.ok++;
+                            Setup();                                                     // Stand в конце снимает ручной шаг — вернуть
+                            continue;
+                        }
+                        TP(st.spawn, st.yaw);
+                        H.driver = () => Free(); for (int i = 0; i < 10; i++) Step();
+                        var items = new System.Collections.Generic.List<ProtoItem>(ProtoItem.Live);
+                        var before = new System.Collections.Generic.List<Vector3>(); foreach (var it in items) before.Add(it ? it.transform.position : Vector3.zero);
+                        var dragged = new System.Collections.Generic.HashSet<ProtoItem>();
+                        Vector3 pH = H.handCube.position, pT = pH, pB = new Vector3(H.BodyXZ.x, H.BodyY, H.BodyXZ.z);
+                        s.tries++;
+                        if (st.kind == "descent")
+                        {
+                            H.BeginGrip(new Vector3(tgt.x, 0f, tgt.z)); H.driver = () => Hold(8f);
+                            int f0 = H.fallCount; bool hung = false; float minLift = 99f;
+                            for (int i = 0; i < 400 && H.Gripping && H.fallCount == f0; i++) { ArmFrame(s, ref pH, ref pT, ref pB); if (H.Hanging) { hung = true; minLift = Mathf.Min(minLift, H.ClimbLift); } }
+                            H.driver = () => Free(); int fl = H.fallCount;
+                            for (int i = 0; i < 200; i++) ArmFrame(s, ref pH, ref pT, ref pB);
+                            if (hung) s.ok++;
+                            extra = $" | вис {(hung ? "да" : "НЕТ")}, опустился до {(minLift > 50f ? "—" : minLift.ToString("F2"))} м, отпустил: {(H.fallCount > fl ? H.lastLanding : "без падения")}, оглушён {(H.Stunned ? "да" : "нет")}";
+                            continue;
+                        }
+                        bool success = false;
+                        for (int i = 0; i < 25; i++) { var fr = Cursor(tgt, false, false); H.driver = () => fr; ArmFrame(s, ref pH, ref pT, ref pB); }
+                        int holdFrames = st.kind == "hold" ? 30 : 20;
+                        for (int i = 0; i < holdFrames; i++)
+                        {
+                            var fr = Cursor(tgt, true, i == 0, st.kind == "reach" && i > 2 ? (i - 2) * 3f : 0f);
+                            H.driver = () => fr; ArmFrame(s, ref pH, ref pT, ref pB);
+                            if (H.DraggedItem) dragged.Add(H.DraggedItem);
+                            if (i == 5) success = st.kind == "hold" ? H.OnHold : (H.Gripping || H.DraggedItem);
+                        }
+                        if (st.kind == "hold") success = success && H.OnHold;
+                        if (success) s.ok++;
+                        for (int i = 0; i < 6; i++) { var fr = Cursor(tgt, false, false); H.driver = () => fr; ArmFrame(s, ref pH, ref pT, ref pB); }
+                        for (int j = 0; j < items.Count; j++)
+                            if (items[j] && !dragged.Contains(items[j]) && (items[j].transform.position - before[j]).magnitude > 0.01f) s.itemsPushed++;
+                    }
+                    sb.Append(s.Line(st.name)).Append(extra).Append('\n');
+                    total.frames += s.frames; total.inSolid += s.inSolid; total.inItem += s.inItem; total.jitter += s.jitter; total.floating += s.floating;
+                    total.bodyPushed += s.bodyPushed; total.itemsPushed += s.itemsPushed; total.tries += s.tries; total.ok += s.ok; total.ms += s.ms;
+                    total.maxLag = Mathf.Max(total.maxLag, s.maxLag);
+                }
+                sb.Append(total.Line("ИТОГО")).Append('\n');
+                sb.Append("цель: рука в твёрдом 0, дрожь 0, кисть в воздухе 0, тело толкнуто 0, чужих предметов сдвинуто 0, успех — все станции, мс/кадр — как без руки\n");
+            }
+            finally { End(); }
+            return sb.ToString();
+        }
+
         /// <summary>СПУСК СПИНОЙ (зона 9, площадки 1.2 / 1.8 / 4.6): стоишь спиной к краю, кисть на полу перед собой, «от себя» —
         /// тело уходит за край в вис, опускается вдоль стенки; потом отпустил. Пишет: когда вис, самый большой шаг тела за кадр
         /// (рывок), до какой высоты опустился, исход отпускания, сторожа (вход в блок и т. п.).</summary>
@@ -337,8 +485,8 @@ namespace Fortress.EditorTools
             float M = 0.6f;
             (string n, int lane, float top, float goalZ, bool expect)[] st =
             {
-                ("1 уступ 0.3", 0, M + 0.3f, 3.8f, true), ("2 уступ 0.5", 1, M + 0.5f, 3.8f, true),
-                ("3 уступ 0.7", 2, M + 0.7f, 3.8f, true), ("4 уступ 1.0", 3, M + 1.0f, 3.8f, false),
+                ("1 уступ 0.3", 0, M + 0.3f, 3.8f, true), ("2 уступ 0.5", 1, M + 0.5f, 3.8f, false),   // подъём не выше 0.4 (автор 2026-11-25)
+                ("3 уступ 0.7", 2, M + 0.7f, 3.8f, false), ("4 уступ 1.0", 3, M + 1.0f, 3.8f, false),
                 ("5 склон 30°", 4, 1.8f, 7f, true), ("6 склон 45° без перил", 5, 1.8f, 7f, false),
                 ("7 склон 45° перила справа", 6, 1.8f, 7f, true), ("8 склон 60° перила справа", 7, 1.8f, 7f, true),
                 ("9 склон 60° перила слева", 8, 1.8f, 7f, true), ("10 склон 60° без перил", 9, 1.8f, 7f, false),

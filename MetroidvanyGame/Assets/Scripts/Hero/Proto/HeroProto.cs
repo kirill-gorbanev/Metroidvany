@@ -1148,8 +1148,14 @@ namespace Fortress.Hero.Proto
                 else if (!orbit && inp.down && FloorPoint(px, out var c))
                 {
                     Vector3 cm = MirrorBehind(c, out bool behind);
-                    BeginGrip(HandAtLedge(Reach(cm)));
-                    mirrorGrip = behind;                                  // только для строки состояния: жест прежний
+                    Vector3 gp = HandAtLedge(Reach(cm));
+                    // ПРАВИЛО 1: в точку хвата рука должна дойти мимо твёрдого (через угол уступа — только если локоть перекинется);
+                    // нет — хвата нет (кисть уже стоит, где можно; хват «где кисть сейчас» прыгал по высоте — ПРАВИЛО 3)
+                    if (!armNoSolid || ArmPhysOn || ArmReaches(gp))   // рука на физике — проверку хвата не делаем (рядом с телом отсекала почти всё: «я застрял»)
+                    {
+                        BeginGrip(gp);
+                        mirrorGrip = behind;                              // только для строки состояния: жест прежний
+                    }
                 }
             }
             else
@@ -1478,32 +1484,170 @@ namespace Fortress.Hero.Proto
             // движении снизу вверх локоть считался по полу, а высота — отдельно: звенья тянулись раньше, чем локоть успевал вывернуться).
             // Теперь как при медленном движении: локоть всегда там, где сходятся плечо (upperArm) и кисть (foreArm).
             // Сгиб — наружу (вправо); локоть ушёл бы в поверхность — плоскость сгиба поворачивается вокруг оси плечо → кисть к «вверх».
-            Vector3 S3 = new Vector3(S.x, sy, S.z), H3 = new Vector3(hand.x, hy, hand.z);
-            Vector3 v = H3 - S3;
-            Vector3 dn = v.sqrMagnitude > 1e-8f ? v.normalized : Face;
-            // кисть по высоте ещё догоняет (не быстрее 5 м/с), а рука уже прямая — рисунок кисти на длине руки, звенья не тянутся
+            Vector3 S3 = new Vector3(S.x, sy, S.z), H3 = ArmHand3(S3, hy);
+            // ПРАВИЛО 1 — РУКА НЕ СКВОЗЬ ТВЁРДОЕ (автор 2026-11-25, скрин у столба: «правила не реализовал??»): локоть ищется так, чтобы
+            // оба звена шли мимо всего твёрдого (стены, столбы, уступы — коллайдеры мира, физика Unity). Не нашлось ни одной позы —
+            // кисть туда не идёт: свободная кисть скользит вдоль преграды (ПРАВИЛО 2: ход без составляющей по нормали), в хвате тело не
+            // делает шаг, после которого руке не пройти. Откат — только на прошлое место этого же кадра (не телепорт, ПРАВИЛО 3).
+            // рука на физике (блок ArmPhysics): твёрдое решает физика — здесь только плавная цель локтя (без перебора поз: дискретный
+            // выбор позы перескакивал между кадрами, физическая рука металась за ним)
+            // рука на физике (блок ArmPhysics) — твёрдое решает она (локоть обходит преграду поворотом); здесь только плавная цель локтя
+            // без перебора поз по лучам (дорого каждый кадр — автор: «фпс упал до 10–20»)
+            bool armOk = ArmPose(S3, H3, out Vector3 E, out Vector3 armN, !ArmPhysOn);
+            if (!armOk && armGoodHave && armNoSolid && !ArmPhysOn)
+            {
+                if (mode == Mode.Free && !dragItem)                               // и при скачке кисти на предмет / зацеп (автор: «иногда идёт за блок насквозь»)
+                {
+                    Vector3 dl = Flat(hand - armGoodHand), nf = Flat(armN);
+                    Vector3 slid = armGoodHand;
+                    if (nf.sqrMagnitude > 1e-6f) { nf.Normalize(); slid = armGoodHand + dl - nf * Mathf.Min(0f, Vector3.Dot(dl, nf)); }
+                    foreach (var tryH in new[] { slid, armGoodHand })
+                    {
+                        hand = tryH; handY = armGoodHandY;
+                        H3 = ArmHand3(S3, handY + handLift);
+                        if (armOk = ArmPose(S3, H3, out E, out armN)) break;
+                    }
+                }
+                else if (mode == Mode.Grip && !gripHold && Flat(Body - armGoodBody).magnitude < 0.3f && Flat(Body - armGoodBody).sqrMagnitude > 1e-10f)
+                {
+                    MoveBodyXZ(armGoodBody.x, armGoodBody.z);                       // шаг тела вёл руку сквозь — тело его не делает
+                    { float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0); }
+                    S = Shoulder; S3 = new Vector3(S.x, sy, S.z); H3 = ArmHand3(S3, hy);
+                    shoulderCube.position = S3;
+                    armOk = ArmPose(S3, H3, out E, out armN);
+                }
+            }
+            if (armOk) { armGoodHave = true; armGoodHand = hand; armGoodHandY = handY; armGoodBody = Body; }
+            handCube.position = H3;
+            elbowCube.position = E;
+            ArmSetTarget(S3, E, H3);                                            // поза для физической руки (блок ArmPhysics)
+        }
+
+        [Tooltip("ПРАВИЛО 1: толщина руки для проверки «звено не сквозь твёрдое» (м).")]
+        public float armRadius = 0.006f;
+        [Tooltip("ПРАВИЛО 1: кисть и тело не делают шаг, после которого руке не пройти мимо твёрдого (выкл — только поиск локтя).")]
+        public bool armNoSolid = true;
+        bool armGoodHave; Vector3 armGoodHand, armGoodBody; float armGoodHandY;
+        /// <summary>Замер ПРАВИЛА 1: звено руки (по кубикам) задевает твёрдое мира.</summary>
+        public bool DiagArmInSolid => shoulderCube && (ElbowInSolid(elbowCube.position) || !ArmSegFree(shoulderCube.position, elbowCube.position, out _) || !ArmSegFree(elbowCube.position, handCube.position, out _));
+
+        /// <summary>ПРАВИЛО 1 для точки хвата: рука от плеча до кисти на поверхности в p проходит мимо твёрдого (есть поза локтя).</summary>
+        bool ArmReaches(Vector3 p)
+        {
+            float h = HandHit(Flat(p), out _, out _);
+            if (float.IsInfinity(h)) return false;
+            Vector3 S3 = Shoulder3, H3 = new Vector3(p.x, h + handLift, p.z);
+            if ((H3 - S3).magnitude > L * 0.999f) H3 = S3 + (H3 - S3).normalized * (L * 0.999f);
+            return ArmPose(S3, H3, out _, out _);
+        }
+
+        /// <summary>Кисть в точке p, но не дальше руки от плеча (для проверки позы).</summary>
+        Vector3 ArmClampLen(Vector3 p) { Vector3 S3 = Shoulder3, v = p - S3; return v.magnitude > L * 0.999f ? S3 + v.normalized * (L * 0.999f) : p; }
+
+        /// <summary>Кисть в 3D: рука не длиннее L (кисть по высоте догоняет — рисунок на длине руки) и не в поверхность.</summary>
+        Vector3 ArmHand3(Vector3 S3, float hy)
+        {
+            Vector3 H3 = new Vector3(hand.x, hy, hand.z), v = H3 - S3;
+            // СВОБОДНАЯ КИСТЬ НЕ ВИСИТ В ВОЗДУХЕ (автор 2026-11-25, скрин: «левитация за пределами руки»): точка на поверхности дальше
+            // руки по 3D (верх высокого блока) — кисть ложится на ближайшую к плечу точку поверхности на пути к ней, до которой рука
+            // достаёт; логика кисти — там же. Перенос (кисть с предметом в воздухе), зацеп, предмет под курсором — как были.
+            if (v.magnitude > L * 0.999f && mode == Mode.Free && !dragItem && !hoverItem && !hoverHold)
+            {
+                Vector3 h0 = Flat(hand), toS = Flat(S3) - h0; float dd = toS.magnitude;
+                for (float s = 0.01f; s < dd; s += 0.01f)
+                {
+                    Vector3 q = h0 + toS * (s / dd);
+                    float hq = HandLevel(q);
+                    if (float.IsInfinity(hq)) continue;
+                    Vector3 Q = new Vector3(q.x, hq + handLift, q.z);
+                    if ((Q - S3).magnitude <= L * 0.999f) { hand = q; handY = hq; return Q; }
+                }
+            }
             if (v.magnitude > L * 0.999f)
             {
-                H3 = S3 + dn * (L * 0.999f);
-                float hs2 = HandLevel(Flat(H3));                              // и подтянутая к прямой руке — не в поверхность
+                H3 = S3 + v.normalized * (L * 0.999f);
+                float hs2 = HandLevel(Flat(H3));
                 if (!float.IsInfinity(hs2) && H3.y < hs2 + handLift) H3.y = hs2 + handLift;
             }
-            handCube.position = H3;
-            float d = Mathf.Clamp((H3 - S3).magnitude, 1e-4f, L * 0.999f);
+            return H3;
+        }
+
+        /// <summary>Отрезок руки a → b не задевает твёрдое мира (коллайдеры: стены, рельеф, пол). Тело, части героя и предметы
+        /// (их рука держит и двигает, блок Drag) — не в счёт. Концы укорочены на 3 см: кисть лежит на поверхности, плечо у тела.
+        /// n — нормаль того, во что упёрлось.</summary>
+        bool ArmSegFree(Vector3 a, Vector3 b, out Vector3 n)
+        {
+            n = Vector3.zero;
+            if (!itemPhysics) return true;
+            Vector3 d = b - a; float len = d.magnitude;
+            if (len < 0.07f) return true;
+            d /= len; a += d * 0.03f; len -= 0.06f;
+            // СКВОЗЬ = ВОШЛО И ВЫШЛО: луч туда и луч обратно задели один и тот же коллайдер. Касание (предплечье лежит на ступеньке,
+            // на которой кисть) — не «сквозь».
+            var back = Physics.SphereCastAll(a + d * len, armRadius, -d, len, ~0, QueryTriggerInteraction.Ignore);
+            foreach (var h in Physics.SphereCastAll(a, armRadius, d, len, ~0, QueryTriggerInteraction.Ignore))
+            {
+                var c = h.collider;
+                if (!ArmSolid(c) || h.distance <= 0f) continue;
+                foreach (var hb in back)
+                    if (hb.collider == c && hb.distance > 0f) { n = h.normal; return false; }
+            }
+            return true;
+        }
+
+        /// <summary>ПРАВИЛО 1 (автор 2026-11-25, скрин: «вон локоть внутри»): кубик локтя перекрывается с твёрдым. Звено, кончающееся
+        /// внутри блока, проверка «вошло и вышло» не видит — поэтому сама точка локтя проверяется отдельно, по размеру кубика.</summary>
+        bool ElbowInSolid(Vector3 e)
+        {
+            if (!itemPhysics) return false;
+            float r = elbowCube ? Mathf.Max(0.015f, Mathf.Abs(elbowCube.lossyScale.x) * 0.5f) : 0.03f;
+            foreach (var c in Physics.OverlapSphere(e, r, ~0, QueryTriggerInteraction.Ignore)) if (ArmSolid(c)) return true;
+            return false;
+        }
+
+        /// <summary>Твёрдое для руки: стены, блоки, тумбы, уступы, пол. Не в счёт: тело, части героя, своя рука и ПРЕДМЕТЫ — как в
+        /// физике руки (слои HeroArm и Item не сталкиваются; автор 2026-11-25: «в игнор по слоям, чтобы я кистью не толкался»).
+        /// Были твёрдыми — наведение на предмет отбрасывалось проверкой «рука сквозь предмет» (автор: «прицеливание на плоскость
+        /// предмета стало хуже работать»).</summary>
+        bool ArmSolid(Collider c)
+        {
+            if (!c || c.isTrigger || c == armUpperCol || c == armForeCol) return false;   // своя физическая рука — не преграда; своё тело — преграда (ПРАВИЛО 1)
+            if (c.attachedRigidbody && c.attachedRigidbody.GetComponent<ProtoItem>()) return false;
+            return !(bodyCube && c.transform.IsChildOf(bodyCube.root));
+        }
+
+        /// <summary>ЛОКОТЬ: два звена в 3D, длины сохраняются. Сгиб — наружу (вправо); ушёл бы в поверхность или в твёрдое — плоскость
+        /// сгиба поворачивается вокруг оси плечо → кисть (сначала к «вверх», потом вниз, потом через верх на другую сторону).
+        /// false — ни одной позы без твёрдого (E — прежний выбор по поверхности, n — нормаль преграды на прямой плечо → кисть).</summary>
+        bool ArmPose(Vector3 S3, Vector3 H3, out Vector3 E, out Vector3 n, bool solidSearch = true)
+        {
+            Vector3 v = H3 - S3;
+            Vector3 dn = v.sqrMagnitude > 1e-8f ? v.normalized : Face;
+            float d = Mathf.Clamp(v.magnitude, 1e-4f, L * 0.999f);
             float a = upperArm, b = foreArm;
             float A = Mathf.Acos(Mathf.Clamp((a * a + d * d - b * b) / (2f * a * d), -1f, 1f));
             Vector3 outw = Vector3.Cross(Vector3.up, dn);
             if (outw.sqrMagnitude < 1e-6f) outw = SideDir;
             outw = Vector3.ProjectOnPlane(outw, dn).normalized;
             Vector3 upw = Vector3.Cross(dn, outw); if (upw.y < 0f) upw = -upw;
-            float lo = Mathf.Min(sy, hy) - 0.3f, up = Mathf.Max(sy, hy) - lo + 0.05f;
-            Vector3 E = S3 + (dn * Mathf.Cos(A) + outw * Mathf.Sin(A)) * a;
-            for (int k = 1; k <= 9 && (ElbowUnder(E, lo, up) || SegCutsSurface(S3, E, false) || SegCutsSurface(E, H3, false)); k++)
-            {
-                float ang = k * 10f * Mathf.Deg2Rad;
-                E = S3 + (dn * Mathf.Cos(A) + (outw * Mathf.Cos(ang) + upw * Mathf.Sin(ang)) * Mathf.Sin(A)) * a;
-            }
-            elbowCube.position = E;
+            float lo = Mathf.Min(S3.y, H3.y) - 0.3f, up = Mathf.Max(S3.y, H3.y) - lo + 0.05f;
+            Vector3 At(float deg) { float r = deg * Mathf.Deg2Rad; return S3 + (dn * Mathf.Cos(A) + (outw * Mathf.Cos(r) + upw * Mathf.Sin(r)) * Mathf.Sin(A)) * a; }
+            bool SurfOk(Vector3 e) => !ElbowUnder(e, lo, up) && !SegCutsSurface(S3, e, false) && !SegCutsSurface(e, H3, false);
+            // прежний выбор (по поверхности) — запасной рисунок
+            E = At(0f);
+            for (int k = 1; k <= 9 && !SurfOk(E); k++) E = At(k * 10f);
+            n = Vector3.zero;
+            if (!solidSearch) return true;
+            ArmSegFree(S3, H3, out n);                                               // нормаль преграды на прямой (для скольжения кисти)
+            for (int k = 0; k <= 18; k++)
+                foreach (float sg in k == 0 || k == 18 ? new[] { 1f } : new[] { 1f, -1f })
+                {
+                    Vector3 e = At(sg * k * 10f);
+                    if (!SurfOk(e)) continue;
+                    if (!ElbowInSolid(e) && ArmSegFree(S3, e, out var n1) && ArmSegFree(e, H3, out var n2)) { E = e; return true; }
+                }
+            if (n == Vector3.zero) n = -dn;
+            return false;
         }
 
         [Tooltip("Рука (плечо → локоть → кисть) не проходит сквозь поверхность: локоть поднимается так, чтобы оба звена шли над ней с таким зазором (м).")]

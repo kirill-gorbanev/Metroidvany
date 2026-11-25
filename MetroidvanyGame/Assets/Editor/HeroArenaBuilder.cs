@@ -1079,6 +1079,94 @@ namespace Fortress.EditorTools
             PlaceHero(new Vector3(2.7f, 0f, 1.3f), 0f);                   // лицом на север, тумбы — дугой перед плечом
         }
 
+        // ================= ПОЛИГОН РУКИ (HeroArmCourse) =================
+        /// <summary>Полигон руки — отдельная сцена (автор 2026-11-25: «карта, где Fable сможет оценить и проходить карту нашим
+        /// персонажем»). Станции и цели — HeroArmCourse (общие с замером HeroSim.ArmCourse). Меню Fortress → Hero → Build Arm Course.</summary>
+        [MenuItem("Fortress/Hero/Build Arm Course (полигон руки)")]
+        public static void BuildArmCourse()
+        {
+            if (EditorApplication.isPlaying) { Debug.LogWarning("[Hero] полигон руки: выйди из Play"); return; }
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            proneBody = false;
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            FillArm();
+            EditorSceneManager.SaveScene(scene, HeroArmCourse.ScenePath);
+            const string Unt = "Assets/Settings/HDRP/Scenes/Untitled_Atmosphere.asset", Own = "Assets/Settings/HDRP/Scenes/HeroArmCourse_Atmosphere.asset";
+            if (AssetDatabase.LoadMainAssetAtPath(Unt) != null)
+            {
+                if (AssetDatabase.LoadMainAssetAtPath(Own) != null) AssetDatabase.DeleteAsset(Own);
+                AssetDatabase.MoveAsset(Unt, Own);
+                AssetDatabase.SaveAssets();
+            }
+            Debug.Log("[Hero] полигон руки: " + HeroArmCourse.ScenePath);
+        }
+
+        static void FillArm()
+        {
+            walls = new GameObject("Арена: стены").transform;
+            surf = new GameObject("Арена: поверхность").transform;
+            decor = new GameObject("Арена: декор (не опора)").transform;
+            float xEnd = HeroArmCourse.X(10) + 2.5f;
+            Box("Земля", -1.5f, xEnd, -0.05f, 0f, -1.5f, 7f, GroundC, decor);
+            float X(int i) => HeroArmCourse.X(i);
+            var st = HeroArmCourse.Stations;
+            for (int i = 0; i < st.Length; i++)
+            {
+                Sign(st[i].name, new Vector3(X(i), 0f, 0.25f), 0.8f);
+                Box($"Разметка {i + 1}", X(i) - 0.25f, X(i) + 0.25f, 0f, 0.004f, HeroArmCourse.SpawnZ - 0.25f, HeroArmCourse.SpawnZ + 0.25f, LineC, decor);
+            }
+            // 1 — столб у плеча, за ним кубик
+            { float x = X(0); Box("1 столб", x + 0.15f, x + 0.37f, 0f, 1.2f, 1.45f, 1.67f, WallC, walls);
+              Item("1 кубик за столбом", x + 0.26f, 1.95f, new Vector3(0.12f, 0.12f, 0.12f), ItemC2, 0.5f); }
+            // 2 — высокий блок 0.6, предмет сверху и за ним
+            { float x = X(1); Box("2 блок 0.6", x - 0.2f, x + 0.2f, 0f, 0.6f, 1.55f, 1.95f, StepA, walls);
+              Item("2 кубик на блоке", x, 1.75f, new Vector3(0.14f, 0.14f, 0.14f), ItemC, 0.5f, 0.6f);
+              Item("2 кубик за блоком", x, 2.15f, new Vector3(0.12f, 0.12f, 0.12f), ItemC3, 0.5f); }
+            // 3 — тумбы 0.15–0.60 дугой перед плечом, на каждой мелкий предмет
+            for (int k = 0; k < HeroArmCourse.TumbaH.Length; k++)
+            {
+                var c = HeroArmCourse.TumbaCenter(2, k); float h = HeroArmCourse.TumbaH[k];
+                Box($"3 тумба {h:0.00}", c.x - 0.09f, c.x + 0.09f, 0f, h, c.z - 0.09f, c.z + 0.09f, StepA, walls);
+                Item($"3 кубик на тумбе {h:0.00}", c.x, c.z, new Vector3(0.08f, 0.08f, 0.08f), k % 2 == 0 ? ItemC : ItemC2, 0.3f, h);
+            }
+            // 4 — стопка из трёх и соседи вплотную (зазор 2 см)
+            { float x = X(3);
+              for (int k = 0; k < 3; k++) Item($"4 стопка {k + 1}", x + 0.15f, 1.6f, new Vector3(0.15f, 0.15f, 0.15f), k == 1 ? ItemC3 : ItemC, 1f, 0.15f * k);
+              Item("4 сосед слева", x - 0.02f, 1.6f, new Vector3(0.15f, 0.15f, 0.15f), ItemC2, 1f);
+              Item("4 сосед справа", x + 0.32f, 1.6f, new Vector3(0.15f, 0.15f, 0.15f), ItemC2, 1f); }
+            // 5 — предмет за спиной и у бока тела
+            { float x = X(4);
+              Item("5 за спиной", x, 0.65f, new Vector3(0.14f, 0.14f, 0.14f), ItemC3, 1f);
+              Item("5 у бока сзади", x + 0.3f, 0.8f, new Vector3(0.12f, 0.12f, 0.12f), ItemC, 0.5f); }
+            // 6 — щель 0.2 между блоками 0.25, кубик в щели
+            { float x = X(5);
+              Box("6 блок запад", x, x + 0.1f, 0f, 0.25f, 1.5f, 1.8f, StepA, walls);
+              Box("6 блок восток", x + 0.3f, x + 0.4f, 0f, 0.25f, 1.5f, 1.8f, StepA, walls);
+              Item("6 кубик в щели", x + 0.2f, 1.65f, new Vector3(0.08f, 0.08f, 0.08f), ItemC2, 0.3f); }
+            // 7 — стена 1.0 с полкой 0.75, предмет на полке
+            { float x = X(6);
+              Box("7 стена", x - 0.6f, x + 0.8f, 0f, 1.0f, 2.0f, 2.3f, WallC, walls);
+              Box("7 полка 0.75", x, x + 0.5f, 0f, 0.75f, 1.82f, 2.0f, StepA, walls);
+              Item("7 кубик на полке", x + 0.25f, 1.91f, new Vector3(0.1f, 0.1f, 0.1f), ItemC, 0.5f, 0.75f); }
+            // 8 — уступы 0.3 / 0.4 / 0.5 (подъём не выше 0.4)
+            { float x = X(7); float[] hs = { 0.3f, 0.4f, 0.5f };
+              for (int k = 0; k < 3; k++) { float xc = x + (k - 1) * 0.9f; Box($"8 уступ {hs[k]:0.0}", xc - 0.4f, xc + 0.4f, 0f, hs[k], 1.8f, 3.0f, k % 2 == 0 ? StepA : StepB, surf); } }
+            // 9 — площадка 1.2 для спуска спиной (край на юге, z 2.0)
+            { float x = X(8); Box("9 площадка 1.2", x - 1.2f, x + 1.2f, 0f, 1.2f, 2.0f, 6.0f, StepB, surf); }
+            // 10 — стена 1.2 с камнями на южной грани
+            { float x = X(9);
+              Box("10 стена", x - 0.8f, x + 0.8f, 0f, 1.2f, 2.0f, 2.3f, WallC, walls);
+              foreach (var t in HeroArmCourse.Stations[9].targets) Nub($"10 камень {t.y:0.00}", t, new Vector3(0.14f, 0.05f, 0.06f), null); }
+            // 11 — поручень 0.55 на стойках
+            { float x = X(10);
+              Rail("11 поручень", new Vector3(x - 0.8f, 0.55f, 1.6f), new Vector3(x + 0.8f, 0.55f, 1.6f));
+              Post("11 стойка запад", x - 0.8f, 1.6f, 0f, 0.55f, false); Post("11 стойка восток", x + 0.8f, 1.6f, 0f, 0.55f, false); }
+            var sun = new GameObject("Свет").AddComponent<Light>();
+            sun.type = LightType.Directional; sun.intensity = 1.1f; sun.shadows = LightShadows.Soft;
+            sun.transform.rotation = Quaternion.Euler(55f, -35f, 0f);
+            PlaceHero(st[0].spawn, 0f);
+        }
+
         // ================= ОДНА АРЕНА «ВСЁ СРАЗУ» (шаг 4 долга) =================
         public const string SceneAllPath = "Assets/Scenes/HeroArena.unity";
 
