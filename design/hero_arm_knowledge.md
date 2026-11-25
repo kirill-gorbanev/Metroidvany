@@ -88,8 +88,11 @@
 
 ## Грабли Unity и инструментов
 
-- **Unity CLI 1.0** стоит: `C:\Users\Kirill\AppData\Local\Unity\bin\unity.exe`. Для управления открытым редактором нужен пакет Pipeline (`com.unity.pipeline`) в проекте — на 2026-11-25 ещё не поставлен (`unity pipeline install --project-path D:\Metroidvany\MetroidvanyGame`). Руководство для агентов: `unity skill show`. Само руководство CLI советует его вместо MCP, когда есть оболочка.
-- **Unity MCP** (сервер на 127.0.0.1:8080) отклоняет соединение, пока Unity закрыт или перезапускается; после перезапуска Unity поднимается сам.
+- **Unity CLI 1.0** стоит: `C:\Users\Kirill\AppData\Local\Unity\bin\unity.exe`. Пакет Pipeline (`com.unity.pipeline` 1.0.1) стоит в проекте с 2026-11-25 — CLI управляет открытым редактором. Руководство для агентов: `unity skill show`. Само руководство CLI советует его вместо MCP, когда есть оболочка.
+  - Проверено: `unity status` (state `ready`, порт 7800), `unity recompile`, `unity command script eval --code '<C#>'`.
+  - Сервер Pipeline стартует сам, но если Unity не в фокусе, старт может не произойти — меню **Window → Pipeline → Start Server** или `unity pipeline editors` (колонка `serverReachable`).
+  - `script eval` удобнее звать из bash: PowerShell портит кавычки в `--code`. Длинный код — `--file <путь.cs>`.
+- **Unity MCP отключён для Claude Code с 2026-11-25** (автор: один канал управления редактором — CLI). Сервер остаётся в `.mcp.json`; выключен строкой `"disabledMcpjsonServers": ["UnityMCP"]` в `.claude/settings.json` — убрать её, чтобы включить (например, для работы с картой). Сам сервер на 127.0.0.1:8080 по-прежнему поднимает Unity, им пользуются скрипты `tools/herosim/*.sh` (через curl). Он отклоняет соединение, пока Unity закрыт или перезапускается.
 
 - **Unity MCP:** каждый скрипт симуляции начинается с проверки `EditorApplication.isPlaying` и того, что герой запущен (`shoulderLift > 0`), иначе прогон портит сохранённую сцену. Ставить `Application.runInBackground = true`. Компилировать только при остановленном Play и ждать `isCompiling == false`. Сцена испортилась — пересобрать сборщиком.
 - **MCP часто отваливается** (соединение отклоняется). Тогда — аккуратная правка кода и передача автору; не гонять повторные вызовы.

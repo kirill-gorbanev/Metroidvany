@@ -23,15 +23,15 @@
 
 ## Инструменты Unity
 
-- **Основной — Unity CLI** (`unity`, уже стоит: `C:\Users\Kirill\AppData\Local\Unity\bin\unity.exe`). Прочитай `unity skill show` — это его руководство для агентов. Нужен пакет Pipeline в проекте (`unity pipeline install --project-path D:\Metroidvany\MetroidvanyGame`; если его нет — попроси автора поставить).
+- **Основной — Unity CLI** (`unity`, уже стоит: `C:\Users\Kirill\AppData\Local\Unity\bin\unity.exe`). Прочитай `unity skill show` — это его руководство для агентов. Пакет Pipeline в проекте уже стоит. Если `unity status` пуст — сервер не стартовал: `unity pipeline editors`, меню **Window → Pipeline → Start Server**.
   - `unity status --until-ready --project-path <проект>` — редактор готов;
   - `unity recompile` — перекомпиляция и ошибки;
   - `unity command editor.playmode start` / `stop` — Play;
-  - `unity command script eval '<C#>'` — запуск C# в редакторе (замеры, бот);
+  - `unity command script eval --code '<C#>'` (или `--file <путь.cs>`) — запуск C# в редакторе (замеры, бот); из bash, не PowerShell;
   - `unity test` — тесты EditMode / PlayMode;
   - поиск команд: `unity commands --grep <слова>`, не grep по help.
   - Перед выводом «в игре работает» — рецепт проверки Play из руководства CLI (редактор без фокуса может стоять на первом кадре).
-- **Запасной — Unity MCP** (сервер на 127.0.0.1:8080). Отваливается, когда Unity перезапускается.
+- **Unity MCP для Claude Code отключён** (`.claude/settings.json`): один канал управления редактором — CLI. Не включай его сам; если CLI чего-то не умеет — скажи автору.
 
 ## Герой
 
@@ -130,7 +130,7 @@
 
 ## Правила работы
 
-- **Unity CLI и Unity MCP разрешены** для компиляции, симуляции и сборки сцен (CLI — первым).
+- **Unity CLI разрешён** для компиляции, симуляции и сборки сцен.
   - Каждый скрипт симуляции начинается с проверки `EditorApplication.isPlaying` и того, что герой запущен. Иначе прогон портит сохранённую сцену.
   - Ставь `Application.runInBackground = true`.
   - Компилируй только при остановленном Play, жди `isCompiling == false`. Новый `.cs` — полное обновление ассетов.
