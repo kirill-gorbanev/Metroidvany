@@ -74,7 +74,7 @@ namespace Fortress.Hero.Proto
             if (!target) return;
             var m = HeroProto.ManualTick ? null : Mouse.current;
             // ПКМ (зажать) + мышь вверх/вниз — наклон камеры; вправо/влево не крутит (это делает тело на ЛКМ)
-            Orbiting = m != null && m.rightButton.isPressed && !HeroProto.ItemTurning;   // ПКМ на предмете — кручение предмета, не камера
+            Orbiting = m != null && m.rightButton.isPressed;
             if (m != null)
             {
                 if (Orbiting)

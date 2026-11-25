@@ -50,19 +50,8 @@ namespace Fortress.Hero.Proto
             return !float.IsInfinity(h) && h < groundY - maxDrop;
         }
 
-        float fallClearNow = -1f, fallClearTimeNow;                     // отступ этого падения (м) и за сколько (с); −1 — обычный fallClearDist
-
-        /// <summary>Падение с отступом от стенки ровно на clearDist (м) за clearTime (с) — без «выстрела» (отпустил вис).</summary>
-        void StartFall(string cause, Vector3 vel, Vector3 clearDir, float clearDist, float clearTime)
-        {
-            StartFall(cause, vel, clearDist > 1e-3f ? clearDir : Vector3.zero);
-            if (!falling || clearDist <= 1e-3f) return;
-            fallClearNow = clearDist; fallClearTimeNow = Mathf.Max(0.05f, clearTime); fallClearT = fallClearTimeNow;
-        }
-
         void StartFall(string cause, Vector3 vel, Vector3 clearDir)
         {
-            fallClearNow = -1f;
             if (!allowFall || falling || float.IsInfinity(groundY + climbLift)) return;
             if (mode == Mode.Grip) ReleaseGrip("падение: " + cause);
             falling = true; fallCause = cause; fallCount++;
@@ -72,7 +61,6 @@ namespace Fortress.Hero.Proto
             fallClearT = fallClearDir.sqrMagnitude > 0f ? fallClearTime : 0f;
             rideMover = null; slideV = 0f; steepTimer = 0f; fallPx = 0f;
             hand = Flat(Shoulder + Face * 0.35f);                          // кисть сразу перед плечом: не тянется через тело с пола
-            SetBodyY(fallY + bodyLift);                                    // в кадре старта — на высоте, с которой падает (не мигает к полу)
         }
 
         /// <summary>СПИНОЙ С КРАЯ: жест «от себя» ведёт тело назад (от лица), тело упёрлось в обрыв — копим px, дожал — сорвался.
@@ -84,9 +72,6 @@ namespace Fortress.Hero.Proto
             if (away.sqrMagnitude < 1e-6f) return false;
             away.Normalize();
             if (Vector3.Dot(away, Face) >= 0f) { fallPx = 0f; return false; }   // лицом вперёд — край стена
-            // ДЕРЖИШЬСЯ — НЕ СРЫВАЕШЬСЯ (автор 2026-11-25, спуск, кусок 1: «плавно, без рывков»): кисть на верху твоего уступа — за край
-            // уходишь в вис (TickLogic), рука выпрямилась раньше края — упор; падение — только отпустив (кусок 3)
-            if (!gripHold && gripTop >= groundY + climbLift - 0.03f) { fallPx = 0f; return false; }
             bool drop = DropAt(Body + away * (BodyReach + 0.08f));
             if (!drop) { fallPx = 0f; return false; }
             if (fallPx <= 0f) fallPushFrom = Body;
@@ -127,11 +112,7 @@ namespace Fortress.Hero.Proto
             hand = Flat(Shoulder + Face * 0.35f);                          // кисть перед плечом и в отступе, и в полёте (не через тело)
             // горизонталь: отступ от кромки + перенесённая скорость; стены — препятствия и всё выше текущей высоты
             Vector3 move = fallVel * dt;
-            if (fallClearT > 0f)
-            {
-                float dist = fallClearNow >= 0f ? fallClearNow : fallClearDist, time = fallClearNow >= 0f ? fallClearTimeNow : fallClearTime;
-                float k = Mathf.Min(dt, fallClearT); move += fallClearDir * (dist / time) * k; fallClearT -= dt;
-            }
+            if (fallClearT > 0f) { float k = Mathf.Min(dt, fallClearT); move += fallClearDir * (fallClearDist / fallClearTime) * k; fallClearT -= dt; }
             if (move.sqrMagnitude > 1e-12f)
             {
                 Vector3 b = Body;
@@ -162,7 +143,7 @@ namespace Fortress.Hero.Proto
 
         bool FlyBlocked(Vector3 p)
         {
-            foreach (var o in tallWalls) if (boxBody ? BoxHitsRect(p, o, 0.001f) : InObstacle(p, bodyRadius)) return true;
+            foreach (var o in obstacles) if (boxBody ? BoxHitsRect(p, o, 0.001f) : InObstacle(p, bodyRadius)) return true;
             if (!HasSurface) return false;
             return float.IsInfinity(LevelHeight(p, fallY, 0.02f));        // внутри сплошного выше текущей высоты — стена
         }

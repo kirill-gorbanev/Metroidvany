@@ -47,7 +47,7 @@ namespace Fortress.Hero.Proto
         public float bodyDepenSpeed = 2f;
 
         public static Collider BodyCollider { get; private set; }
-        Rigidbody bodyRb; BoxCollider bodyBox; int ignoredColliders = -1, ignoredWallVersion = -1;
+        Rigidbody bodyRb; BoxCollider bodyBox; int ignoredColliders = -1;
 
         /// <summary>Тело в физике всегда (шаг 6): на опоре (земля, платформа, карусель — ход опоры кладёт логика в желаемое место),
         /// в падении (горизонталь — к месту, что считает блок Fall) и в висе на кромке / камне (высота — climbLift логики).
@@ -164,14 +164,14 @@ namespace Fortress.Hero.Proto
         }
 
         /// <summary>Стена (препятствие арены): коллайдер под obstaclesRoot.</summary>
-        bool IsWallCollider(Collider c) => c && obstaclesRoot && c.transform.IsChildOf(obstaclesRoot) && !IsLowWallTop(c.bounds.max.y);   // не выше опоры + climbUp — рельеф (логика)
+        bool IsWallCollider(Collider c) => c && obstaclesRoot && c.transform.IsChildOf(obstaclesRoot);
 
         /// <summary>Тело в физике сталкивается с предметами и СТЕНАМИ (шаг 4 плана, 2026-11-23); рельеф, ступени, платформы — логика.</summary>
         void IgnoreWorld()
         {
             var all = FindObjectsByType<Collider>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            if (all.Length == ignoredColliders && wallClassVersion == ignoredWallVersion) return;   // стена стала рельефом (или обратно) — пересчёт
-            ignoredColliders = all.Length; ignoredWallVersion = wallClassVersion;
+            if (all.Length == ignoredColliders) return;
+            ignoredColliders = all.Length;
             foreach (var c in all)
             {
                 if (!c || c == bodyBox) continue;

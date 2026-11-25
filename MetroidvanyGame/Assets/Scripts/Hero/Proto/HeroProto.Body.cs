@@ -124,7 +124,7 @@ namespace Fortress.Hero.Proto
                 if (InBodyZone(S + Quaternion.AngleAxis(mid, Vector3.up) * fc * len)) hi = mid; else lo = mid;
             }
             Vector3 q = Flat(S + Quaternion.AngleAxis(lo, Vector3.up) * fc * len);
-            return InObstacleAbove(q, HandGap, BodyLevel + climbUp) ? h : q;   // невысокая стена (тумба) — не преграда для кисти
+            return InObstacle(q, HandGap) ? h : q;
         }
 
         /// <summary>Пробы кубика тела для уступов и обрывов: 4 угла и 4 середины сторон (на boxProbe от центра).</summary>
