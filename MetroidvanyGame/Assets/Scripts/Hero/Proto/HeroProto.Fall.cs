@@ -83,21 +83,31 @@ namespace Fortress.Hero.Proto
         // логика снова ставит тело прямо на эту опору (цена — как была, по высоте падения).
         [Tooltip("Падение — физика Unity (гравитация, вращение, столкновения). Выкл — прежний скриптовый полёт.")]
         public bool physicsFall = true;
+        [Tooltip("Затухание вращения тела в физическом падении: выше — меньше кувырков.")]
+        public float fallSpinDamping = 2f;
         bool PhysFallOn => physicsFall && itemPhysics && bodyRb;
         float physFallT; bool physFallInit; float physStillT; PhysicsMaterial fallMat, slipMat;
+        Vector3 physStableAt; bool physStableSet;                           // физика оставила тело на той же высоте — здесь устоит
         Quaternion rightFrom; float rightT = 1f, rightYaw; const float RightTime = 0.3f;
+        Vector3 rightOff, rightOffShown;                                    // посадка отодвинула от стенки — рисунок догоняет плавно
 
         /// <summary>После физического падения тело встаёт прямо плавно: рисунок кубика — от позы, в которой легло, к прямой (логика уже
         /// считает его прямым). Вызывается в конце шага, поверх логики.</summary>
         void RightingStep(float dt)
         {
-            if (rightT >= 1f || falling) return;
+            if (rightT >= 1f || falling) { rightOff = Vector3.zero; return; }
             rightT = Mathf.Min(1f, rightT + dt / RightTime);
             float k = rightT * rightT * (3f - 2f * rightT);
             bodyCube.rotation = Quaternion.Slerp(rightFrom, Quaternion.Euler(0f, rightYaw, 0f), k);   // только рисунок
+            rightOffShown = rightOff * (1f - k); bodyCube.position += rightOffShown;
+            if (rightT >= 1f) { rightOff = Vector3.zero; }
         }
         /// <summary>Начало шага: логика видит тело прямым (наклон подъёма — только рисунок конца шага).</summary>
-        void RightingUndo() { if (rightT < 1f && !falling) bodyCube.rotation = Quaternion.Euler(0f, rightYaw, 0f); }
+        void RightingUndo()
+        {
+            if (rightOffShown != Vector3.zero) { bodyCube.position -= rightOffShown; rightOffShown = Vector3.zero; }
+            if (rightT < 1f && !falling) bodyCube.rotation = Quaternion.Euler(0f, rightYaw, 0f);
+        }
 
         /// <summary>Шаг физики в падении (вместо обычного): тело — Rigidbody с гравитацией; после шага кубик тела — по физике;
         /// затих на опоре — посадка.</summary>
@@ -116,7 +126,7 @@ namespace Fortress.Hero.Proto
                 bodyRb.rotation = bodyCube.rotation;
                 bodyRb.linearVelocity = new Vector3(fallVel.x, -fallVy, fallVel.z);
                 bodyRb.angularVelocity = Vector3.zero;
-                bodyRb.angularDamping = 0.5f;
+                bodyRb.angularDamping = fallSpinDamping;                    // опрокидывается, а не кувыркается от малейшего толчка
                 slipMat = bodyBox.sharedMaterial;                           // у стен тело скользкое; в падении — обычное трение (затихает)
                 if (fallMat == null) fallMat = new PhysicsMaterial("Тело (падение)") { dynamicFriction = 0.6f, staticFriction = 0.7f, bounciness = 0.05f,
                     frictionCombine = PhysicsMaterialCombine.Average, bounceCombine = PhysicsMaterialCombine.Minimum };
@@ -147,8 +157,22 @@ namespace Fortress.Hero.Proto
             float ground = LevelHit(Body, low + 0.1f, 0.15f, out var mover, out var n);
             if (float.IsInfinity(ground)) ground = low;
             RestoreBodyRb();
+            // легло вплотную к стенке наклонённым — выпрямленное вошло бы в уступ: отодвинуть ровно на перекрытие (рисунок — плавно)
+            {
+                Vector3 b0 = Body; float save = groundY, saveL = climbLift; groundY = ground; climbLift = 0f;
+                Vector3 best = b0; bool clear = !HangOverlaps(b0);
+                for (float r = 0.01f; !clear && r <= 0.2f; r += 0.01f)
+                    for (int k = 0; k < 16 && !clear; k++)
+                    {
+                        Vector3 q = b0 + Quaternion.AngleAxis(k * 22.5f, Vector3.up) * Vector3.forward * r;
+                        if (!HangOverlaps(q)) { best = q; clear = true; }
+                    }
+                groundY = save; climbLift = saveL;
+                if ((best - b0).sqrMagnitude > 1e-8f) { rightOff = b0 - best; MoveBodyXZ(best.x, best.z); }
+            }
+            physStableSet = fallStartY - ground < 0.05f; physStableAt = Body;   // не упало — стоит устойчиво (не перепроверять на месте)
             Land(ground, mover, n);
-            if (!falling && rightT < 1f) bodyCube.rotation = rightFrom;      // в кадре посадки рисунок — как легло (выпрямится плавно)
+            if (!falling && rightT < 1f) { bodyCube.rotation = rightFrom; bodyCube.position += rightOff; rightOffShown = rightOff; }   // в кадре посадки рисунок — как легло
         }
 
         /// <summary>Тело снова «логическое»: без гравитации, высоту ставит логика, вращение — только логикой.</summary>
