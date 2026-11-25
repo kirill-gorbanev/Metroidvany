@@ -266,9 +266,6 @@ namespace Fortress.Hero.Proto
                     Vector3 m = Shoulder + v * (k / 8f);
                     float armY = Mathf.Lerp(ShoulderY, q.y, k / 8f);
                     if (obstacles[i].Contains(new Vector2(m.x, m.z)) && obstacleTop[i] > armY + 0.01f) return false;
-                    // за стеной ниже её верха — не достать (как пустая кисть, BehindWallBelowTop; автор 2026-11-25: «опять по задней части»)
-                    if (obstacles[i].Contains(new Vector2(m.x, m.z)) && obstacleTop[i] > q.y + 0.01f
-                        && !obstacles[i].Contains(new Vector2(q.x, q.z))) return false;
                 }
             return true;
         }

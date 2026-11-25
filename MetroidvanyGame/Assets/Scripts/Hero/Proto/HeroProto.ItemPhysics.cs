@@ -47,7 +47,7 @@ namespace Fortress.Hero.Proto
         public float bodyDepenSpeed = 2f;
 
         public static Collider BodyCollider { get; private set; }
-        Rigidbody bodyRb; BoxCollider bodyBox; int ignoredColliders = -1, ignoredWallVersion = -1, ignoredLevelKey = int.MinValue; bool ignoredFallAll;
+        Rigidbody bodyRb; BoxCollider bodyBox; int ignoredColliders = -1, ignoredWallVersion = -1;
 
         /// <summary>Тело в физике всегда (шаг 6): на опоре (земля, платформа, карусель — ход опоры кладёт логика в желаемое место),
         /// в падении (горизонталь — к месту, что считает блок Fall) и в висе на кромке / камне (высота — climbLift логики).
@@ -97,7 +97,6 @@ namespace Fortress.Hero.Proto
             }
             IgnoreWorld();
             bodyRb.mass = Mathf.Max(0.1f, bodyMass);
-            if (falling && PhysFallOn) { PhysFallStep(dt); return; }       // падение — физика Unity (блок Fall)
             bodyRb.maxDepenetrationVelocity = bodyDepenSpeed;                      // угол на повороте вошёл в стену — отодвинуть быстро
             Vector3 target = BodyTarget(out Quaternion rot);
             bodyRb.rotation = rot;                                                   // поворот ставит логика
@@ -160,34 +159,25 @@ namespace Fortress.Hero.Proto
             float top = bodyCube.position.y + Mathf.Abs(bodyCube.lossyScale.y) * 0.5f;
             float hgt = Mathf.Max(0.05f, top - bottom);
             if (bodyBox) bodyBox.size = new Vector3(half.x * 2f, hgt, half.y * 2f);
-            rot = Quaternion.Euler(0f, rightT < 1f && !falling ? rightYaw : bodyCube.eulerAngles.y, 0f);   // встаёт после падения — поворот логики, не рисунка
+            rot = Quaternion.Euler(0f, bodyCube.eulerAngles.y, 0f);
             return new Vector3(Body.x, bottom + hgt * 0.5f, Body.z);
         }
 
         /// <summary>Стена (препятствие арены): коллайдер под obstaclesRoot.</summary>
-        // ХОД ПО ПОЛУ — ФИЗИКА (кусок 4; автор 2026-11-25: «больше на физику Unity»): блок, который для тела уже не ступенька (верх выше
-        // уровня тела больше порога шага), — для физического тела стена: упор и скольжение вдоль — силами физики, не правилами углов
-        // (на них тело застревало у углов блоков). Ступенька (не выше порога) — логика (шаг на неё), перевал — логика.
-        bool IsWallCollider(Collider c) => c && obstaclesRoot && c.transform.IsChildOf(obstaclesRoot) && c.bounds.max.y > BodyLevel + maxStep + 0.001f;
+        bool IsWallCollider(Collider c) => c && obstaclesRoot && c.transform.IsChildOf(obstaclesRoot) && !IsLowWallTop(c.bounds.max.y);   // не выше опоры + climbUp — рельеф (логика)
 
         /// <summary>Тело в физике сталкивается с предметами и СТЕНАМИ (шаг 4 плана, 2026-11-23); рельеф, ступени, платформы — логика.</summary>
         void IgnoreWorld()
         {
             var all = FindObjectsByType<Collider>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            int levelKey = Mathf.RoundToInt(BodyLevel * 50f);                   // уровень тела сменился на 2 см — стены / ступени заново
-            if (all.Length == ignoredColliders && wallClassVersion == ignoredWallVersion && (falling && PhysFallOn) == ignoredFallAll && levelKey == ignoredLevelKey) return;
-            ignoredLevelKey = levelKey;
-            ignoredFallAll = falling && PhysFallOn;   // стена стала рельефом (или обратно) — пересчёт
+            if (all.Length == ignoredColliders && wallClassVersion == ignoredWallVersion) return;   // стена стала рельефом (или обратно) — пересчёт
             ignoredColliders = all.Length; ignoredWallVersion = wallClassVersion;
             foreach (var c in all)
             {
                 if (!c || c == bodyBox) continue;
                 var rb = c.attachedRigidbody;
                 if (rb && rb.GetComponent<ProtoItem>()) continue;
-                // в падении на физике — со всем твёрдым (пол, уступы, стены), кроме частей самого героя
-                bool fallAll = falling && PhysFallOn;
-                bool ignore = fallAll ? (c.isTrigger || (bodyCube && c.transform.IsChildOf(bodyCube.root))) : !IsWallCollider(c);
-                Physics.IgnoreCollision(bodyBox, c, ignore);
+                Physics.IgnoreCollision(bodyBox, c, !IsWallCollider(c));
             }
         }
     }

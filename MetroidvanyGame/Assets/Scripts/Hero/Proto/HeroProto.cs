@@ -752,7 +752,8 @@ namespace Fortress.Hero.Proto
 
         [Tooltip("Опора по центру (м): тело стоит, пока под пятном этого радиуса вокруг центра есть опора; щель уже пятна — не обрыв.")]
         public float centerSupport = 0.06f;
-        float stepInT;                       // после перевала — тело надвигается на опору, пока центр не над ней (не дольше 1 с)
+        [Tooltip("Утвердиться на верху: под центром пусто, край пятна опоры на верху — тело садится на опору с этой скоростью (м/с).")]
+        public float settleSpeed = 0.4f;
         /// <summary>Под кубиком тела (пятно + углы и бока) есть опора на уровне level: направление к ней от центра (0 — нет).</summary>
         Vector3 FootSupportDir(float level)
         {
@@ -1194,7 +1195,6 @@ namespace Fortress.Hero.Proto
         {
             dtNow = dt;
             pullWhy = "";
-            RightingUndo();                                           // после физического падения — логика видит тело прямым
             RefreshWallClass();                                       // стена / рельеф — от уровня, где стоишь
             gripAge = mode == Mode.Grip ? gripAge + dt : 0f;                // сколько держишься (окно после хвата — letGoGrace)
             Carry();
@@ -1560,7 +1560,7 @@ namespace Fortress.Hero.Proto
                     // угол на площадке выше — тело встаёт на неё, только если пятно под центром с той высоты — не обрыв (иначе встало бы
                     // и тут же упало: автор 2026-11-25 «прыгаю на месте» — центр над щелью, угол на тумбе)
                     if (!float.IsInfinity(hq) && hq > gWant + 0.02f && Vector3.Angle(qn, Vector3.up) < flatStepAngle
-                        && patchLevel >= hq - maxDrop - 0.02f) { gWant = hq; rm = qm; bn = qn; if ((float.IsInfinity(gCenter) || gCenter < hq - maxDrop - 0.02f) && stepInT <= 0f) stepInT = 1f; }   // встал на ступеньку углом — центр доводится на неё (кусок 2)
+                        && patchLevel >= hq - maxDrop - 0.02f) { gWant = hq; rm = qm; bn = qn; }
                 }
             if (rm != rideMover) { rideMover = rm; rideStep = rm ? rm.StepId : 0; }   // встал на платформу / сошёл
             // СПУСК, КУСОК 1 — С КРАЯ В ВИС (автор 2026-11-25: «спуск без рывков, плавно, спокойно»; «да, кусок 1»): кисть держит верх
@@ -1576,7 +1576,8 @@ namespace Fortress.Hero.Proto
             }
             // ОПОРА УШЛА (блок Fall): под центром перепад глубже maxDrop, а рука тело не держит — падение
             if (allowFall && !falling && !float.IsInfinity(gWant) && gWant < groundY + climbLift - maxDrop - 0.02f
-                && !(mode == Mode.Grip && !gripSlip && (ClimbGrip || gripHold)))
+                && !(mode == Mode.Grip && !gripSlip && (ClimbGrip || gripHold))
+                && !(mode == Mode.Free && climbLift <= 0.01f && FootSupportDir(groundY).sqrMagnitude > 1e-8f))   // кисть свободна, под кубиком опора — садится (ниже), не падает
             { StartFall("опора ушла", carryVel, Vector3.zero); return; }
             if (!float.IsInfinity(gWant))
             {
@@ -1584,38 +1585,26 @@ namespace Fortress.Hero.Proto
                 // ПЕРЕВАЛ: висел на кромке и центр тела уже над уступом — уровень тела = верх уступа, подъём докатывается плавно
                 // перевал — когда над уступом САМ центр (не край пятна опоры): вис у кромки после спуска не дребезжит «вис ↔ наверху»
                 if (climbLift > 0.01f && gWant > groundY + 0.05f && ((!float.IsInfinity(gCenter) && gCenter > groundY + 0.05f) || (!hangFromTop && groundY + climbLift >= gWant - 0.01f))) {   // центр над уступом — или тело уже поднято до верха и пятно на нём (не вис после спуска)
-                 float total = groundY + climbLift; groundY = gWant; climbLift = total - gWant; crestFlash = 0.4f; stepInT = 1f; }
+                 float total = groundY + climbLift; groundY = gWant; climbLift = total - gWant; crestFlash = 0.4f; }
                 else if (climbLift > 0.01f && gWant > groundY + 0.05f) { }       // край пятна на уступе, центр — над пустотой: висишь
                 else groundY = Mathf.Lerp(groundY, gWant, 1f - Mathf.Exp(-heightFollow * dtNow));
             }
-            // ПЕРЕВАЛ ДОВОДИТ ЦЕНТР НА ВЕРХ (кусок 2): после перевала, пока держишься, тело надвигается на опору, пока центр не над ней
-            // (иначе центр оставался над щелью / за краем, и физика честно роняла: автор — «залез на столбик и скатился»)
-            if (stepInT > 0f)
+            // УТВЕРДИТЬСЯ НА ВЕРХУ (автор 2026-11-25: «залез на столбик и скатился — сверху надо фиксировать; без цветовой подсказки не
+            // понять, почему свалился»): стоишь, под самим центром пусто, а край пятна опоры — на верху (столбик уже тела) — тело плавно
+            // садится на опору: центр сдвигается к опоре, пока не окажется над ней. Устойчиво, без зависания на краю пятна.
+            if (!falling && mode == Mode.Free && climbLift <= 0.01f && !float.IsInfinity(gWant) && (float.IsInfinity(gCenter) || gCenter < groundY - 0.02f))   // кисть свободна — держишься, правишь сам (спуск с края)
             {
-                stepInT -= dtNow;
-                bool centerOn = !float.IsInfinity(gCenter) && gCenter >= groundY - 0.02f;
-                Vector3 sup = centerOn ? Vector3.zero : FootSupportDir(groundY);
-                if (centerOn || falling || climbLift > 0.01f || sup.sqrMagnitude < 1e-8f) stepInT = 0f;
-                else
+                Vector3 toSup = FootSupportDir(groundY);
+                if (toSup.sqrMagnitude > 1e-8f)
                 {
-                    Vector3 np = Body + sup.normalized * mantleSpeed * dtNow;   // только упор тела (рука догонит — линия хода)
-                    if (Blocked(np, bodyRadius)) np = Slide(Body, np - Body);
+                    Vector3 np = Slide(Body, toSup.normalized * settleSpeed * dtNow);
                     if ((np - Body).sqrMagnitude > 1e-10f)
                     {
                         MoveBodyXZ(np.x, np.z);
                         if (mode == Mode.Grip) { float d0 = tTarget - t; RebuildLine(Shoulder); tTarget = Mathf.Clamp01(t + d0); }
                     }
-                    else stepInT = 0f;
-                    gCenter = LevelHit(Body, BodyLevel, maxStep, out _, out _);
                 }
             }
-            // ОПОРА — ФИЗИКА (кусок 2; автор 2026-11-25: «залез на столбик и скатился — сверху надо фиксировать, без цветовой подсказки
-            // не понять»; «больше на физику Unity»): кисть свободна, а под САМИМ центром тела пусто (край пятна ещё на опоре) — стоит ли
-            // тело, решает физика: центр масс над опорой — устоит (физика сразу затихнет, тело на том же верху), нет — опрокинется и упадёт
-            if (!falling && mode == Mode.Free && climbLift <= 0.01f && PhysFallOn && stepInT <= 0f
-                && (float.IsInfinity(gCenter) || gCenter < groundY - maxDrop - 0.02f)
-                && !(physStableSet && Flat(Body - physStableAt).magnitude < 0.01f))   // физика уже признала: здесь устоит
-            { StartFall("центр над краем", Vector3.zero, Vector3.zero); return; }
             if (!falling) SetBodyY(groundY + climbLift + bodyLift);   // падение началось в этом кадре (отпустил вис) — высоту ведёт Fall
             // кисть: поверхность своего уровня (или зацеп); под ней уступ выше досягаемости — остаётся на прежней высоте (не прыгает наверх).
             // Высота кисти догоняет плавно (без скачка на перила и со ступени).
@@ -1737,7 +1726,6 @@ namespace Fortress.Hero.Proto
 
         void Draw()
         {
-            RightingStep(dtNow);                                       // плавный подъём после физического падения (рисунок)
             Vector3 S = Shoulder;
             lnArm.enabled = drawArmLine;
             lnArm.positionCount = 3;
